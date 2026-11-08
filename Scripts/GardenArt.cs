@@ -1,0 +1,389 @@
+using Godot;
+
+namespace Mori;
+
+// Вся графика прототипа строится из простых фигур — без платных моделей.
+public static class GardenArt
+{
+    public static readonly Color Mint = new("8edac2");
+    public static readonly Color Cream = new("fff2cc");
+    public static readonly Color Ink = new("253e43");
+    public static readonly Vector3 Pond = new(-10,0,-10);
+    public const float GardenHalfWidth = 98;
+    public const float GardenHalfDepth = 64;
+    public const float PondRadius = 11.4f;
+    public const float PondDepth = .30f;
+    public static readonly Vector3 SwimExit = Pond + new Vector3(9.25f,0,9.2f);
+    public static readonly Vector3[] TreePositions = { new(-7,0,3), new(8,0,7), new(19,0,-7), new(-23,0,-4), new(7,0,-14), new(-17,0,7), new(17,0,2) };
+    public static readonly (Vector3 Center, Vector3 Size)[] Ledges = {
+        (new(-2,.4f,-10),new(2.8f,.8f,3.4f)),
+        (new(-2,.8f,-12.7f),new(3.0f,1.6f,3.4f)),
+        (new(-2.5f,1.2f,-15.3f),new(3.7f,2.4f,3.2f)),
+        (new(-4.5f,1.6f,-17.2f),new(4.3f,3.2f,3.2f)),
+        (new(-7,2,-18.3f),new(3.6f,4f,3.4f)),
+        (new(-9.1f,2.4f,-19.4f),new(3.1f,4.8f,3.3f)),
+    };
+    public static readonly Vector3 Balcony = new(-18.45f,5.52f,-16.48f);
+    public static readonly Vector3[] BalconySteps = {
+        new(-28.6f,.72f,-16.3f), new(-27.25f,1.42f,-16.45f),
+        new(-25.9f,2.12f,-16.55f), new(-24.55f,2.82f,-16.65f),
+        new(-23.20f,3.52f,-16.75f), new(-22.0f,4.22f,-16.78f),
+        new(-20.85f,4.92f,-16.72f)
+    };
+    public static Vector3 BalconyRail => Balcony+new Vector3(0,.55f,1.10f);
+    public static StandardMaterial3D Material(Color color, bool glow = false) => new()
+    {
+        AlbedoColor = color, Roughness = .85f, MetallicSpecular = .15f,
+        EmissionEnabled = glow, Emission = color, EmissionEnergyMultiplier = glow ? .45f : 0
+    };
+
+    public static MeshInstance3D Shape(Node3D parent, Mesh mesh, Vector3 position, Vector3 scale, Color color)
+    {
+        var node = new MeshInstance3D { Mesh = mesh, Position = position, Scale = scale, MaterialOverride = Material(color) };
+        parent.AddChild(node);
+        return node;
+    }
+
+    public static void StoneCollision(MeshInstance3D mesh)
+    {
+        mesh.CreateConvexCollision();
+        foreach (var node in mesh.GetChildren())
+            if (node is StaticBody3D body) body.SetMeta("stone",true);
+    }
+
+    public static MeshInstance3D Ball(Node3D parent, Vector3 pos, Vector3 scale, Color color) =>
+        Shape(parent, new SphereMesh { Radius = .5f, Height = 1, RadialSegments = 24, Rings = 12 }, pos, scale, color);
+
+    public static MeshInstance3D Cylinder(Node3D parent, Vector3 pos, float radius, float height, Color color) =>
+        Shape(parent, new CylinderMesh { TopRadius = radius, BottomRadius = radius, Height = height, RadialSegments = 48 }, pos, Vector3.One, color);
+
+    public static Label3D Sign(Node3D parent, string text, Vector3 pos, Color color)
+    {
+        var sign=new ProximitySign { Position=pos,Visible=false };
+        parent.AddChild(sign);
+        const int size=52;
+        const float pixels=.0045f;
+        float width=ThemeDB.FallbackFont.GetStringSize(text,fontSize:size).X*pixels+.095f;
+        var plate = Shape(sign,new QuadMesh { Size=new(width,.26f) },Vector3.Zero,Vector3.One,Colors.White);
+        plate.CastShadow=GeometryInstance3D.ShadowCastingSetting.Off;
+        var background=new ShaderMaterial { RenderPriority=-1, Shader=new Shader { Code="""
+            shader_type spatial;
+            render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
+            uniform vec2 card_size;
+            void vertex() {
+                MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1],
+                    INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+            }
+            void fragment() {
+                vec2 p=abs((UV-.5)*card_size)-(card_size*.5-vec2(.037));
+                float d=length(max(p,vec2(0)))+min(max(p.x,p.y),0.0)-.037;
+                ALBEDO=vec3(.035,.055,.064);
+                ALPHA=.52*(1.0-smoothstep(-.009,.002,d));
+            }
+            """ } };
+        background.SetShaderParameter("card_size",new Vector2(width,.26f));
+        plate.MaterialOverride=background;
+        var label=new Label3D { Text=text,FontSize=size,PixelSize=pixels,Modulate=new("fbf4df"),
+            OutlineSize=0,Billboard=BaseMaterial3D.BillboardModeEnum.Enabled,RenderPriority=1 };
+        sign.AddChild(label);
+        return label;
+    }
+
+    public static Node3D Creature(Node3D parent, bool player, string form = "seed")
+    {
+        if (!player) return ImportedChao.Build(parent,form);
+        var root = new Node3D();
+        parent.AddChild(root);
+        AvatarArt.Build(root);
+        return root;
+    }
+
+    public static Node3D LifeShell(Node3D parent, bool egg)
+    {
+        var root = new Node3D();
+        parent.AddChild(root);
+        if (egg) GardenEgg.DrawShell(root,GardenEgg.Pigment("White"),new(.42f,.55f,.42f),.275f);
+        else
+        {
+            Ball(root,new(0,.72f,0),new(1.12f,1.48f,1.04f),new("b8d7c9"));
+            Shape(root,new TorusMesh { InnerRadius=.46f,OuterRadius=.53f },new(0,.55f,0),Vector3.One,new("dcebd2"));
+        }
+        return root;
+    }
+
+    public static void BuildGarden(Node3D root)
+    {
+        var ground = BuildPondTerrain(root);
+        ground.MaterialOverride = new ShaderMaterial { Shader = new Shader { Code = """
+            shader_type spatial;
+            varying vec3 world;
+            void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+            void fragment() {
+                vec2 p = world.xz;
+                float grain = fract(sin(dot(floor(p*13.0),vec2(127.1,311.7)))*43758.5453);
+                float patch = sin(p.x*.7+sin(p.y*.8))*sin(p.y*.44);
+                vec3 grass = mix(vec3(.16,.38,.08),vec3(.39,.57,.17), .46+.30*patch+.16*grain);
+                float path = 1.0-smoothstep(.65,1.6,abs(p.x-sin(p.y*.29)*.85));
+                path *= 1.0-smoothstep(6.0,11.0,p.y);
+                float side_path = (1.0-smoothstep(.6,1.55,abs(p.y+4.0+p.x*.54))) * smoothstep(1.0,5.0,p.x);
+                path = max(path,side_path);
+                float cross_path = (1.0-smoothstep(.65,1.85,abs(p.y-5.5-sin(p.x*.095)*2.3))) *
+                    smoothstep(9.0,18.0,abs(p.x)) * (1.0-smoothstep(90.0,110.0,abs(p.x)));
+                float long_path=(1.0-smoothstep(.65,1.6,abs(p.x-2.0-sin(p.y*.11)*4.5)))*
+                    smoothstep(13.0,26.0,abs(p.y));
+                path=max(max(path,cross_path*.75),long_path*.77);
+                ALBEDO = mix(grass,vec3(.48,.36,.20)+grain*.035,path*.88);
+                ROUGHNESS = 1.0;
+            }
+            """ } };
+        Vector3 pond = Pond;
+        var water = Shape(root,new PlaneMesh { Size = new(PondRadius*2,PondRadius*2) },
+            Pond+Vector3.Up*.004f,Vector3.One,Colors.White);
+        var pondWater = FlowMaterial(false,true);
+        pondWater.SetShaderParameter("pond_center",new Vector2(Pond.X,Pond.Z));
+        pondWater.SetShaderParameter("pond_radius",PondRadius);
+        water.MaterialOverride = pondWater;
+        var gravel = new RandomNumberGenerator { Seed=802 };
+        for (int i=0;i<58;i++)
+        {
+            float angle=gravel.Randf()*Mathf.Tau;
+            float radius=Mathf.Sqrt(gravel.Randf())*(PondRadius-1.4f);
+            var spot=Pond+new Vector3(Mathf.Cos(angle)*radius,-PondDepth+.023f,Mathf.Sin(angle)*radius);
+            Ball(root,spot,new(gravel.RandfRange(.13f,.36f),.08f,gravel.RandfRange(.11f,.32f)),
+                new(i%2==0?"797764":"aaa38b"));
+        }
+        for (int i=0;i<24;i++)
+        {
+            float angle = i*Mathf.Tau/24;
+            if (angle > .60f && angle < .96f) continue;
+            StoneCollision(Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
+                pond+new Vector3(Mathf.Cos(angle)*(PondRadius+.15f),.11f,Mathf.Sin(angle)*(PondRadius+.15f)),
+                new(.75f+(i%3)*.3f,.44f,.72f),new("777b6d")));
+        }
+        var strata = new ShaderMaterial { Shader = new Shader { Code = """
+            shader_type spatial;
+            varying vec3 world;
+            void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+            void fragment() {
+                vec2 gate=vec2(world.x+18.45,world.y-.43);
+                float arch=max(0.0,gate.y-2.53);
+                if (world.z>-17.65 && world.y<5.03 && gate.y>0.0 && length(vec2(gate.x,arch))<2.25) discard;
+                float layer = sin(world.y*10.0 + world.x*.85 + sin(world.z*3.0)*.65);
+                float flecks = fract(sin(dot(floor(world*19.0),vec3(12.99,78.23,45.61)))*43758.5453);
+                float seam = smoothstep(.78, .98, layer);
+                ALBEDO = vec3(.31,.33,.31) + flecks*.065 - seam*.075;
+                ROUGHNESS = .94;
+            }
+            """ } };
+        for (int i=0;i<8;i++)
+        {
+            var rock = Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
+                new(-17+i*1.65f,3.0f,i<2 ? -21.6f : -19.60f),new(4.8f,8.4f+(i%3)*.9f,5.15f),
+                new(i%2==0?"565d61":"71766f"));
+            rock.RotationDegrees = new(0,i*39,0);
+            rock.MaterialOverride = strata;
+            StoneCollision(rock);
+
+        }
+        // One continuous stone mass behind the fall and its doorway.
+        for (int i=0;i<6;i++)
+        {
+            var backWall=Shape(root,new SphereMesh { RadialSegments=5,Rings=3 },
+                new(-23.2f+i*3.8f,2.8f+(i%3)*.43f,-22.1f+(i%2)*.42f),
+                new(7.9f,10.35f+(i%3)*1.2f,6.6f),new("626d64"));
+            backWall.RotationDegrees=new(4-i*2,19+i*23,i%2==0 ? -11 : 14);
+            backWall.MaterialOverride=strata;
+            StoneCollision(backWall);
+        }
+        var doorLintel=Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
+            ZoneArt.GardenLobbyGate+new Vector3(0,5.95f,-2.65f),new(7.2f,3.6f,4.4f),new("6c776c"));
+        doorLintel.MaterialOverride=strata;
+        StoneCollision(doorLintel);
+        void BalconyStone(Vector3 top,Vector3 size)
+        {
+            var slab=Shape(root,new BoxMesh(),top-Vector3.Up*size.Y*.5f,size,new("777c70"));
+            slab.MaterialOverride=strata;
+            StoneCollision(slab);
+        }
+        foreach (var step in BalconySteps) BalconyStone(step,new(1.57f,.44f,1.57f));
+        BalconyStone(Balcony,new(4.08f,.48f,2.84f));
+        BalconyStone(BalconyRail,new(4.08f,.55f,.61f));
+        BalconyStone(Balcony+new Vector3(1.79f,.55f,0),new(.50f,.55f,1.76f));
+        for (int i=0;i<3;i++)
+        {
+            var support=Shape(root,new PrismMesh { LeftToRight=.25f+i*.2f },
+                Balcony+new Vector3(-1.42f+i*1.42f,-.68f,-.79f),new(1.1f,1.05f,1.36f),new("6b7368"));
+            support.MaterialOverride=strata;
+        }
+        var fallBack=Shape(root,new BoxMesh(),new(-11,3.54f,-17.11f),
+            new(4.65f,7.1f,.57f),new("526158"));
+        fallBack.MaterialOverride=strata;
+        StoneCollision(fallBack);
+        // A split rock shelf feeds the visible sheet from behind the cliff.
+        var crest = Shape(root,new BoxMesh(),new(-11,6.88f,-17.48f),new(5.05f,.46f,2.23f),new("657065"));
+        crest.MaterialOverride=strata;
+        StoneCollision(crest);
+        var inlet=Shape(root,new PlaneMesh { Size=new(4.32f,1.78f) },
+            new(-11,7.13f,-17.48f),Vector3.One,Colors.White);
+        inlet.MaterialOverride=FlowMaterial(false);
+        for(int i=0;i<4;i++)
+        {
+            var rim=Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
+                new(i%2==0 ? -13.64f : -8.36f,7.05f+i/2*.16f,-17.49f-i/2*.6f),
+                new(1.5f,1.8f,2.25f),new("636d62"));
+            rim.MaterialOverride=strata;
+            StoneCollision(rim);
+        }
+        for (int i=0;i<10;i++)
+        {
+            float x=-13.25f+i*.49f;
+            var sourceRock=Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
+                new(x,7.105f+(i%3)*.055f,-17.12f+(i%2)*.095f),
+                new(.71f,.45f+(i%3)*.085f,.80f),new("6b7569"));
+            sourceRock.MaterialOverride=strata;
+        }
+        for (int i=0;i<5;i++)
+        {
+            Mesh cap=i%2==0 ? new PrismMesh { LeftToRight=.34f+i*.07f } :
+                new SphereMesh { RadialSegments=6,Rings=3 };
+            var rock=Shape(root,cap,new(-13.1f+i*.97f,7.58f+(i%3)*.19f,-18.0f-i%2*.38f),
+                new(1.44f,1.17f+(i%2)*.50f,1.60f),new("6b7569"));
+            rock.RotationDegrees=new(9-i*5,i*34,i%2==0 ? 13 : -19);
+            rock.MaterialOverride=strata;
+            StoneCollision(rock);
+        }
+        WaterfallArt.Build(root,new(-11,0,-16.64f),FlowMaterial(true));
+        foreach (var (center,size) in Ledges)
+        {
+            Shape(root,new BoxMesh(),center,size,new("74796e")).MaterialOverride = strata;
+            ZoneArt.Solid(root,center,size,stone:true);
+            for (int i=0;i<3;i++)
+                Shape(root,new SphereMesh { RadialSegments=7,Rings=3 },
+                    center+new Vector3((i-1)*size.X*.32f,-size.Y*.15f,size.Z*.47f),
+                    new(size.X*.43f,size.Y*.76f,.57f),new(i%2==0?"616861":"838579"));
+        }
+        foreach (var position in TreePositions)
+        {
+            root.AddChild(new FruitTree { Position=position });
+            ZoneArt.Solid(root,position+Vector3.Up*2.65f,new(.95f,5.3f,.95f));
+        }
+        GardenLandscape.Build(root);
+        var details = new RandomNumberGenerator { Seed = 731 };
+        for (int i=0;i<28;i++)
+        {
+            float angle = details.RandfRange(0,Mathf.Tau);
+            if (Mathf.Sin(angle)<-.65f || Mathf.Cos(angle)>.74f) continue;
+            var shore = Pond + new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*details.RandfRange(PondRadius+.05f,PondRadius+1.05f);
+            for (int reed=0;reed<4;reed++)
+            {
+                float height = details.RandfRange(.28f,.83f);
+                var blade = Shape(root,new CylinderMesh { TopRadius=.005f,BottomRadius=.035f,Height=height,RadialSegments=4 },
+                    shore+new Vector3(reed*.11f,height*.5f,details.RandfRange(-.2f,.2f)),
+                    Vector3.One,new(reed%2==0?"506247":"697755"));
+                blade.RotationDegrees = new(0,0,details.RandfRange(-23,23));
+            }
+        }
+        foreach (var tree in TreePositions)
+        {
+            for (int i=0;i<6;i++)
+            {
+                float angle = i*Mathf.Tau/6;
+                var rootKnot = Ball(root,tree+new Vector3(Mathf.Cos(angle)*.6f,.09f,Mathf.Sin(angle)*.6f),
+                    new(1.35f,.20f,.24f),new("574d3d"));
+                rootKnot.Rotation = new(0,-angle,0);
+            }
+        }
+        // A worn trail marker at the fork.
+        Shape(root,new BoxMesh(),new(2,.72f,-5.15f),new(.15f,1.44f,.15f),new("514638"));
+        Shape(root,new BoxMesh(),new(2,1.40f,-5),new(.98f,.38f,.13f),new("72634e"));
+        var boardText=new Label3D { Text="MORI GARDEN",Position=new(2,1.4f,-4.927f),
+            FontSize=54,PixelSize=.0018f,Modulate=Cream,OutlineSize=0 };
+        root.AddChild(boardText);
+        ZoneArt.Solid(root,new(2,.72f,-5.15f),new(.15f,1.44f,.15f));
+        // Кормушка слева спереди.
+        Cylinder(root, new(-5, .13f, 4), 1, .26f, new("736956"));
+        Cylinder(root, new(-5, .31f, 4), 1.12f, .13f, new("a29878")).CreateConvexCollision();
+        for (int i=0;i<3;i++)
+            root.AddChild(new FruitTree { IsFeeder=true, Position=new(-5.46f+i*.46f,.37f,4) });
+
+        // Мягкая постель питомца.
+        Cylinder(root, new(5, .12f, 4), 1.6f, .23f, new("706e5f")).CreateConvexCollision();
+        Ball(root, new(5, .26f, 4), new(2.8f, .35f, 2.4f), new("9a9277")).CreateConvexCollision();
+        var blanket=Ball(root,new(5,.325f,4.20f),new(2.28f,.25f,1.82f),new("a6b8a8"));
+        blanket.CreateConvexCollision();
+        for (int i=-2;i<=2;i++)
+            Ball(root,new(5+i*.35f,.398f,4.71f),new(.29f,.038f,.45f),new("b2c2b1"));
+        foreach (int side in new[]{-1,1})
+        {
+            var pillow=Ball(root,new(5+side*.53f,.413f,3.36f),new(1.02f,.29f,.66f),new("e0cfac"));
+            pillow.RotationDegrees=new(0,side*10,0);
+            pillow.CreateConvexCollision();
+        }
+
+    }
+    private static MeshInstance3D BuildPondTerrain(Node3D root)
+    {
+        const int sides=144;
+        Vector3 Ring(int i,int ring)
+        {
+            float a=i*Mathf.Tau/sides;
+            var direction=new Vector3(Mathf.Cos(a),0,Mathf.Sin(a));
+            if (ring == 2) return Pond+direction*(PondRadius-1.15f)-Vector3.Up*PondDepth;
+            if (ring == 1) return Pond+direction*(PondRadius+.55f);
+            float toX=(direction.X>=0 ? GardenHalfWidth+4-Pond.X : GardenHalfWidth+4+Pond.X)/Mathf.Max(.0001f,Mathf.Abs(direction.X));
+            float toZ=(direction.Z>=0 ? GardenHalfDepth+4-Pond.Z : GardenHalfDepth+4+Pond.Z)/Mathf.Max(.0001f,Mathf.Abs(direction.Z));
+            return Pond+direction*Mathf.Min(toX,toZ);
+        }
+
+        var turf=new SurfaceTool();
+        turf.Begin(Mesh.PrimitiveType.Triangles);
+        var bed=new SurfaceTool();
+        bed.Begin(Mesh.PrimitiveType.Triangles);
+        for(int i=0;i<sides;i++)
+        {
+            for(int ring=0;ring<2;ring++)
+            {
+                var surface=ring==0 ? turf : bed;
+                var a=Ring(i,ring); var b=Ring(i+1,ring);
+                var c=Ring(i,ring+1); var d=Ring(i+1,ring+1);
+                surface.AddVertex(a); surface.AddVertex(b); surface.AddVertex(c);
+                surface.AddVertex(b); surface.AddVertex(d); surface.AddVertex(c);
+            }
+            bed.AddVertex(Ring(i,2)); bed.AddVertex(Ring(i+1,2));
+            bed.AddVertex(Pond-Vector3.Up*PondDepth);
+        }
+        turf.GenerateNormals();
+        bed.GenerateNormals();
+        var grass=Shape(root,turf.Commit(),Vector3.Zero,Vector3.One,Colors.White);
+        grass.CreateTrimeshCollision();
+        var bottom=Shape(root,bed.Commit(),Vector3.Zero,Vector3.One,new("a49b7d"));
+        bottom.CreateTrimeshCollision();
+        return grass;
+    }
+
+    private static ShaderMaterial FlowMaterial(bool waterfall,bool transparentPond=false)
+    {
+        var material = new ShaderMaterial { Shader = new Shader { Code = """
+            shader_type spatial;
+            uniform bool waterfall = false;
+            uniform bool transparent_pond = false;
+            uniform vec2 pond_center;
+            uniform float pond_radius;
+            varying vec3 world;
+            void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+            void fragment() {
+                float bands = sin(world.x*12.0 + sin(world.x*2.8)*3.0);
+                float streak = waterfall ? sin(world.y*1.8+TIME*9.0+bands*.45) : sin(world.z*7.0-TIME*2.0+bands*1.8);
+                float whitewater = waterfall ? smoothstep(-.25,.92,bands*.78+streak*.22) : smoothstep(.3,1.0,streak*.65+bands*.35);
+                ALBEDO = mix(vec3(.19,.38,.43),vec3(.67,.79,.79),whitewater*(waterfall ? .87 : .36));
+                if (transparent_pond && distance(world.xz,pond_center)>pond_radius) { discard; }
+                ALPHA = transparent_pond ? .39+whitewater*.13 : waterfall ? .61+whitewater*.25 : 1.0;
+                ROUGHNESS = .35;
+            }
+            """ } };
+        material.SetShaderParameter("waterfall",waterfall);
+        material.SetShaderParameter("transparent_pond",transparentPond);
+        return material;
+    }
+
+}

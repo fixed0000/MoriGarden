@@ -1,0 +1,13 @@
+.godot/
+.tools/
+bin/
+obj/
+Tests/bin/
+Tests/obj/
+artifacts/
+*.user
+__pycache__/
+*.blend1
+Assets/player.glb
+Assets/player-rig.glb
+Assets/player-rig.blend
