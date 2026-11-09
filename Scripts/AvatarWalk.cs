@@ -83,6 +83,16 @@ internal sealed class AvatarWalk
         }
     }
 
+    public void Crouch(float amount)
+    {
+        foreach (string side in new[]{"_L","_R"})
+        {
+            AimRotation("UpperLeg"+side,new Quaternion(Vector3.Right,-.83f*amount));
+            AimRotation("LowerLeg"+side,new Quaternion(Vector3.Right,.65f*amount));
+            AimRotation("Foot"+side,Quaternion.Identity);
+        }
+    }
+
     public void ReachWithHands(Vector3 contact,Vector3 across,float blend,float spacing)
     {
         for (int side=-1;side<=1;side+=2)

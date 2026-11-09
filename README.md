@@ -4,9 +4,9 @@
 
 ## Запуск
 
-Дважды нажми **Play.cmd**. Он собирает C# и открывает игру. Для редактора — **Editor.cmd**, затем F6 для текущей сцены или F5 для проекта.
+Дважды нажми **Play.cmd** в папке проекта. Он собирает C# и открывает игру. При первом запуске он скачает Godot, если движка ещё нет. Для редактора Godot запусти **Editor.cmd**, затем нажми F6 для текущей сцены или F5 для проекта.
 
-На этом компьютере движок находится в `.tools/Godot_v4.5.1-stable_mono_win64/`. Он скачан с официального репозитория Godot. `.tools` не включён в Git. Для нового компьютера нужны [.NET SDK 8](https://dotnet.microsoft.com/download/dotnet/8.0) и [Godot 4.5.1 .NET для Windows](https://github.com/godotengine/godot/releases/tag/4.5.1-stable). Распакуй архив движка в `.tools` с сохранением структуры папок. Самостоятельный экспортированный exe пока не создавался.
+Для запуска нужен [.NET SDK 8](https://dotnet.microsoft.com/download/dotnet/8.0). Лаунчер сохраняет [Godot 4.5.1 .NET для Windows](https://github.com/godotengine/godot/releases/tag/4.5.1-stable) в папке `.tools`.
 
 ## Как играть
 

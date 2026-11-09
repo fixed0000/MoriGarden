@@ -16,21 +16,58 @@ public partial class EmotionOrb : Node3D
     private Label3D? question;
     private bool thinking;
     private bool upset;
-    public void SetThinking(bool value)
+    private bool mealUpset;
+    private float heartTime;
+    private string symbol="?";
+    private string displayed="";
+    public void Celebrate() { heartTime=1.1f; Refresh(); }
+    public void SetMealUpset(bool value) { mealUpset=value; Refresh(); }
+    public void SetHappy(bool value)
     {
-        if (value && question==null)
+        SetSymbol(value,"♥");
+    }
+    public void SetAlert(bool value)
+    {
+        SetSymbol(value,"!");
+    }
+    public void SetThinking(bool value) => SetSymbol(value,"?");
+
+    private void SetSymbol(bool value,string glyph)
+    {
+        thinking=value;
+        symbol=glyph;
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        string next=thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "";
+        if (next==displayed) return;
+        displayed=next;
+        if (next.Length>0 && next!="spring" && question==null)
         {
             question=new Label3D { Text="?", FontSize=76, PixelSize=.0019f,
                 Billboard=BaseMaterial3D.BillboardModeEnum.Enabled, Modulate=new Color("fff1ad"),OutlineSize=10 };
             AddChild(question);
         }
-        thinking=value;
-        SetUpset(upset);
+        if (next=="spring" && spring==null) BuildSpring();
+        foreach (var node in GetChildren())
+            if (node is MeshInstance3D mesh) mesh.Visible=mesh==spring ? next=="spring" : next.Length==0;
+        if (question!=null)
+        {
+            question.Visible=next.Length>0 && next!="spring";
+            if (question.Visible) question.Text=next;
+        }
+        if (next.Length>0) ChaoSounds.Play(this,"mood");
     }
     public void SetUpset(bool upset)
     {
         this.upset=upset;
-        if (upset && spring==null)
+        Refresh();
+    }
+
+    private void BuildSpring()
+    {
         {
             var mesh=new SurfaceTool();
             mesh.Begin(Mesh.PrimitiveType.Triangles);
@@ -53,14 +90,12 @@ public partial class EmotionOrb : Node3D
             spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One,new("d58a9b"));
             ((StandardMaterial3D)spring.MaterialOverride).CullMode=BaseMaterial3D.CullModeEnum.Disabled;
         }
-        foreach (var node in GetChildren())
-            if (node is MeshInstance3D meshNode) meshNode.Visible=!thinking && (meshNode==spring ? upset : !upset);
-        if (question!=null) question.Visible=thinking;
     }
 
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
+        if (heartTime>0) { heartTime=Mathf.Max(0,heartTime-dt); if (heartTime==0) Refresh(); }
         Vector3 target = ((Node3D)GetParent()).ToGlobal(rest);
         if (!initialized || previousTarget.DistanceTo(target) > .75f)
         {

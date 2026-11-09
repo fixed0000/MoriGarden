@@ -6,29 +6,50 @@ internal sealed class ChaoRest
 {
     public static readonly Vector3 Bed = new(5,0,4);
     public const float MinimumSleep = 35;
+    private static readonly Vector3[] Slots={
+        new(-.39f,0,.33f),new(.39f,0,.33f),new(-.39f,0,-.36f),new(.39f,0,-.36f)
+    };
+    public System.Collections.Generic.Dictionary<int,ChaoRest> Spaces { get; set; }=new();
+    private int slot=-1;
     private Vector3 approach;
     private Vector3 destination;
     private Vector3 hopStart;
     private float hop;
     private float timeout;
+    private readonly ChaoMotion walk=new();
     public bool Requested { get; private set; }
 
     public void Request(Vector3 actor)
     {
-        if (Requested) return;
+        if (Requested || slot>=0) return;
+        float nearest=float.MaxValue;
+        for (int i=0;i<Slots.Length;i++)
+        {
+            float distance=actor.DistanceSquaredTo(Bed+Slots[i]);
+            if (Spaces.ContainsKey(i) || distance>=nearest) continue;
+            slot=i; nearest=distance;
+        }
+        if (slot<0) return;
+        Spaces[slot]=this;
         Vector3 direction=actor-Bed;
         direction.Y=0;
         direction=direction.LengthSquared()<.02f ? Vector3.Back : direction.Normalized();
         approach=Bed+direction*1.86f;
-        destination=Bed+direction*.20f+Vector3.Up*.43f;
+        destination=Bed+Slots[slot]+Vector3.Up*.43f;
         hop=0;
+        walk.Reset();
         timeout=18;
         Requested=true;
     }
 
-    public void Cancel() { Requested=false; hop=0; }
+    public void Cancel()
+    {
+        Requested=false; hop=0;
+        if (slot>=0 && Spaces.TryGetValue(slot,out var owner) && owner==this) Spaces.Remove(slot);
+        slot=-1;
+    }
 
-    public bool Step(CharacterBody3D actor,float dt,out bool reached)
+    public bool Step(CharacterBody3D actor,PetState chao,float dt,out bool reached)
     {
         reached=false;
         if (!Requested) return false;
@@ -37,9 +58,7 @@ internal sealed class ChaoRest
         Vector3 delta=approach-actor.Position; delta.Y=0;
         if (hop<=0 && delta.Length()>.26f)
         {
-            actor.Rotation=new(0,Mathf.Atan2(delta.X,delta.Z),0);
-            var hit=actor.MoveAndCollide(delta.Normalized()*Mathf.Min(delta.Length(),dt*1.8f));
-            if (hit!=null) actor.MoveAndCollide(hit.GetRemainder().Slide(hit.GetNormal()));
+            walk.Step(actor,delta,chao,false,false,dt,false,out _);
             return true;
         }
         if (hop<=0) hopStart=actor.Position;
@@ -51,7 +70,8 @@ internal sealed class ChaoRest
             var query=PhysicsRayQueryParameters3D.Create(destination+Vector3.Up,destination-Vector3.Up*.3f,1);
             var hit=actor.GetWorld3D().DirectSpaceState.IntersectRay(query);
             if (hit.Count>0) actor.Position=(Vector3)hit["position"];
-            Cancel(); reached=true;
+            actor.Rotation=Vector3.Zero;
+            Requested=false; hop=0; reached=true;
         }
         return true;
     }

@@ -43,20 +43,33 @@ public partial class FruitTree : Node3D
         thrown = true;
         tossVelocity = velocity;
     }
+    public void Place(Vector3 position)
+    {
+        fruit.GlobalPosition=position;
+        held=thrown=false;
+        dropped=settled=true;
+    }
     public bool CanInteract => CanShake || HasFruitOnGround;
-    public void SetHeldSize(float size) => fruit.Scale=Vector3.One*size;
+    public const int BiteCount=5;
+    public int Bites { get; private set; }
+    public void TakeBite()
+    {
+        Bites++;
+        fruit.Scale=Vector3.One*(1-.15f*Bites);
+        fruit.Visible=Bites<BiteCount;
+    }
     public Vector3 FruitPosition => fruit.GlobalPosition;
 
-    public (float Growth, Vector3? GroundPosition) CaptureGrowth() =>
-        (dropped && !HasFruitOnGround ? 0 : ripening, HasFruitOnGround ? FruitPosition : null);
+    public (float Growth, Vector3? GroundPosition, int Bites) CaptureGrowth() =>
+        (dropped && !HasFruitOnGround ? 0 : ripening, HasFruitOnGround ? FruitPosition : null,Bites);
 
-    public void RestoreGrowth(float growth, Vector3? groundPosition)
+    public void RestoreGrowth(float growth, Vector3? groundPosition,int bites)
     {
         ripening=growth;
         RefreshGrowth();
         if (groundPosition is not Vector3 position) return;
-        dropped=settled=true;
-        fruit.GlobalPosition=position;
+        Place(position);
+        while (Bites<bites) TakeBite();
     }
 
     public override void _Ready()
@@ -186,6 +199,8 @@ public partial class FruitTree : Node3D
         settled = IsFeeder;
         fallSpeed = 0;
         ripening=0;
+        Bites=0;
+        fruit.Visible=true;
         if (!IsFeeder && host==null) crown.Rotation = Vector3.Zero;
         fruit.Scale = Vector3.One;
         fruit.Position = branch;

@@ -27,6 +27,8 @@ public sealed class PetState
     public const int SecondsPerChaoYear = 192 * 60;
     public int AgeYears => (int)Math.Min(int.MaxValue,AgeSeconds/SecondsPerChaoYear);
     public bool LikesToyCars { get; set; } = true;
+    public bool Glutton { get; set; }
+    public bool Crybaby { get; set; }
     public float Fun { get; set; } = 65;
     public string Form { get; set; } = "seed";
 
@@ -97,6 +99,15 @@ public sealed class PetState
         Bond++;
         Stamina = Math.Min(990, Stamina + 2);
         return true;
+    }
+
+    public void FeedBite(bool last)
+    {
+        Fullness=Math.Min(100,Fullness+4.8f);
+        if (!last) return;
+        Care++;
+        Bond++;
+        Stamina=Math.Min(990,Stamina+2);
     }
 
     public void Pet()

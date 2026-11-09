@@ -21,15 +21,9 @@ public static class GardenArt
         (new(-2.5f,1.2f,-15.3f),new(3.7f,2.4f,3.2f)),
         (new(-4.5f,1.6f,-17.2f),new(4.3f,3.2f,3.2f)),
         (new(-7,2,-18.3f),new(3.6f,4f,3.4f)),
-        (new(-9.1f,2.4f,-19.4f),new(3.1f,4.8f,3.3f)),
+        (new(-8.55f,2.73f,-20.0f),new(3.1f,5.46f,3.3f)),
     };
-    public static readonly Vector3 Balcony = new(-18.45f,5.52f,-16.48f);
-    public static readonly Vector3[] BalconySteps = {
-        new(-28.6f,.72f,-16.3f), new(-27.25f,1.42f,-16.45f),
-        new(-25.9f,2.12f,-16.55f), new(-24.55f,2.82f,-16.65f),
-        new(-23.20f,3.52f,-16.75f), new(-22.0f,4.22f,-16.78f),
-        new(-20.85f,4.92f,-16.72f)
-    };
+    public static readonly Vector3 Balcony = new(-11.15f,7.49f,-17.74f);
     public static Vector3 BalconyRail => Balcony+new Vector3(0,.55f,1.10f);
     public static StandardMaterial3D Material(Color color, bool glow = false) => new()
     {
@@ -156,9 +150,12 @@ public static class GardenArt
         {
             float angle = i*Mathf.Tau/24;
             if (angle > .60f && angle < .96f) continue;
-            StoneCollision(Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
-                pond+new Vector3(Mathf.Cos(angle)*(PondRadius+.15f),.11f,Mathf.Sin(angle)*(PondRadius+.15f)),
-                new(.75f+(i%3)*.3f,.44f,.72f),new("777b6d")));
+            var stone=Shape(root,new CylinderMesh { RadialSegments=9,TopRadius=.13f,BottomRadius=.53f,
+                Height=.27f+(i%3)*.022f },
+                pond+new Vector3(Mathf.Cos(angle)*(PondRadius+.15f),.035f,Mathf.Sin(angle)*(PondRadius+.15f)),
+                new(1+(i%3)*.17f,1,.81f),new("777b6d"));
+            stone.RotationDegrees=new(0,i*19,0);
+            StoneCollision(stone);
         }
         var strata = new ShaderMaterial { Shader = new Shader { Code = """
             shader_type spatial;
@@ -178,7 +175,7 @@ public static class GardenArt
         for (int i=0;i<8;i++)
         {
             var rock = Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
-                new(-17+i*1.65f,3.0f,i<2 ? -21.6f : -19.60f),new(4.8f,8.4f+(i%3)*.9f,5.15f),
+                new(-17+i*1.65f,3.0f,i>=4 ? -24.5f : i<2 ? -21.6f : -19.60f),new(4.8f,8.4f+(i%3)*.9f,5.15f),
                 new(i%2==0?"565d61":"71766f"));
             rock.RotationDegrees = new(0,i*39,0);
             rock.MaterialOverride = strata;
@@ -189,7 +186,7 @@ public static class GardenArt
         for (int i=0;i<6;i++)
         {
             var backWall=Shape(root,new SphereMesh { RadialSegments=5,Rings=3 },
-                new(-23.2f+i*3.8f,2.8f+(i%3)*.43f,-22.1f+(i%2)*.42f),
+                new(-23.2f+i*3.8f,2.8f+(i%3)*.43f,(i>=3 ? -25.2f : -22.1f)+(i%2)*.42f),
                 new(7.9f,10.35f+(i%3)*1.2f,6.6f),new("626d64"));
             backWall.RotationDegrees=new(4-i*2,19+i*23,i%2==0 ? -11 : 14);
             backWall.MaterialOverride=strata;
@@ -205,10 +202,11 @@ public static class GardenArt
             slab.MaterialOverride=strata;
             StoneCollision(slab);
         }
-        foreach (var step in BalconySteps) BalconyStone(step,new(1.57f,.44f,1.57f));
-        BalconyStone(Balcony,new(4.08f,.48f,2.84f));
-        BalconyStone(BalconyRail,new(4.08f,.55f,.61f));
-        BalconyStone(Balcony+new Vector3(1.79f,.55f,0),new(.50f,.55f,1.76f));
+        BalconyStone(Balcony,new(4.58f,.37f,2.84f));
+        BalconyStone(BalconyRail,new(4.08f,.14f,.61f));
+        for (int i=-2;i<=2;i++)
+            BalconyStone(BalconyRail+new Vector3(i*.94f,-.11f,0),new(.19f,.46f,.24f));
+        BalconyStone(Balcony+new Vector3(-2.01f,.55f,0),new(.50f,.55f,1.76f));
         for (int i=0;i<3;i++)
         {
             var support=Shape(root,new PrismMesh { LeftToRight=.25f+i*.2f },
@@ -226,32 +224,6 @@ public static class GardenArt
         var inlet=Shape(root,new PlaneMesh { Size=new(4.32f,1.78f) },
             new(-11,7.13f,-17.48f),Vector3.One,Colors.White);
         inlet.MaterialOverride=FlowMaterial(false);
-        for(int i=0;i<4;i++)
-        {
-            var rim=Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
-                new(i%2==0 ? -13.64f : -8.36f,7.05f+i/2*.16f,-17.49f-i/2*.6f),
-                new(1.5f,1.8f,2.25f),new("636d62"));
-            rim.MaterialOverride=strata;
-            StoneCollision(rim);
-        }
-        for (int i=0;i<10;i++)
-        {
-            float x=-13.25f+i*.49f;
-            var sourceRock=Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
-                new(x,7.105f+(i%3)*.055f,-17.12f+(i%2)*.095f),
-                new(.71f,.45f+(i%3)*.085f,.80f),new("6b7569"));
-            sourceRock.MaterialOverride=strata;
-        }
-        for (int i=0;i<5;i++)
-        {
-            Mesh cap=i%2==0 ? new PrismMesh { LeftToRight=.34f+i*.07f } :
-                new SphereMesh { RadialSegments=6,Rings=3 };
-            var rock=Shape(root,cap,new(-13.1f+i*.97f,7.58f+(i%3)*.19f,-18.0f-i%2*.38f),
-                new(1.44f,1.17f+(i%2)*.50f,1.60f),new("6b7569"));
-            rock.RotationDegrees=new(9-i*5,i*34,i%2==0 ? 13 : -19);
-            rock.MaterialOverride=strata;
-            StoneCollision(rock);
-        }
         WaterfallArt.Build(root,new(-11,0,-16.64f),FlowMaterial(true));
         foreach (var (center,size) in Ledges)
         {
@@ -303,22 +275,11 @@ public static class GardenArt
         // Кормушка слева спереди.
         Cylinder(root, new(-5, .13f, 4), 1, .26f, new("736956"));
         Cylinder(root, new(-5, .31f, 4), 1.12f, .13f, new("a29878")).CreateConvexCollision();
-        for (int i=0;i<3;i++)
-            root.AddChild(new FruitTree { IsFeeder=true, Position=new(-5.46f+i*.46f,.37f,4) });
 
         // Мягкая постель питомца.
         Cylinder(root, new(5, .12f, 4), 1.6f, .23f, new("706e5f")).CreateConvexCollision();
         Ball(root, new(5, .26f, 4), new(2.8f, .35f, 2.4f), new("9a9277")).CreateConvexCollision();
-        var blanket=Ball(root,new(5,.325f,4.20f),new(2.28f,.25f,1.82f),new("a6b8a8"));
-        blanket.CreateConvexCollision();
-        for (int i=-2;i<=2;i++)
-            Ball(root,new(5+i*.35f,.398f,4.71f),new(.29f,.038f,.45f),new("b2c2b1"));
-        foreach (int side in new[]{-1,1})
-        {
-            var pillow=Ball(root,new(5+side*.53f,.413f,3.36f),new(1.02f,.29f,.66f),new("e0cfac"));
-            pillow.RotationDegrees=new(0,side*10,0);
-            pillow.CreateConvexCollision();
-        }
+        Ball(root, new(5, .4f, 3.3f), new(1.3f, .25f, .65f), new("ada78c")).CreateConvexCollision();
 
     }
     private static MeshInstance3D BuildPondTerrain(Node3D root)

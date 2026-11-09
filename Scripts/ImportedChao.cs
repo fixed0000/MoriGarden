@@ -97,6 +97,37 @@ public partial class ImportedChao : Node3D
                 paw.Rotation=new(-1.14f*reach,0,side*.30f*reach);
     }
 
+    public static void CryPose(Node3D art,float remaining)
+    {
+        ReceivePose(art,.88f);
+        art.Rotation=new(.22f,0,.07f*Mathf.Sin(remaining*23));
+        var tears=art.GetNodeOrNull<Node3D>("Tears");
+        if (tears==null)
+        {
+            tears=new Node3D { Name="Tears" };
+            art.AddChild(tears);
+            foreach (int side in new[]{-1,1})
+                GardenArt.Ball(tears,new(side*.052f,0,.131f),new(.019f,.038f,.019f),new("96dfff"));
+        }
+        tears.Visible=true;
+        tears.Position=Vector3.Up*(.225f-Mathf.PosMod(remaining*-.27f,.13f));
+    }
+
+    public static void StopCrying(Node3D art) => art.GetNodeOrNull<Node3D>("Tears")?.Hide();
+
+    public static void SetHappy(Node3D art,bool happy)
+    {
+        if (art.FindChild("MoodOrb",true,false) is EmotionOrb orb) orb.SetHappy(happy);
+    }
+
+    public static void PetAnimalPose(Node3D art,float remaining)
+    {
+        ReceivePose(art,.75f);
+        if (art.FindChild("PaddleR",true,false) is Node3D paw)
+            paw.Rotation=new(-1.18f+.38f*Mathf.Sin(remaining*17),-.25f,.21f);
+        SetHappy(art,true);
+    }
+
     public static void EndThink(Node3D art)
     {
         if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=Vector3.Zero;

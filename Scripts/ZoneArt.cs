@@ -56,6 +56,7 @@ public static class ZoneArt
         {
             GardenArt.BuildGarden(root);
             root.AddChild(new ToyCar { Name="ToyCar" });
+            root.AddChild(new ToyCar { Name="Rattle",IsRattle=true });
             GardenArt.Cylinder(root,MachineStep+Vector3.Up*.065f,.94f,.13f,new("91a99a")).CreateConvexCollision();
             GardenArt.Cylinder(root,ChaoMachine+Vector3.Up*.10f,1.0f,.20f,new("586c65")).CreateConvexCollision();
             var casing=GardenArt.Shape(root,new CapsuleMesh { Radius=.31f,Height=1.79f,RadialSegments=16,Rings=6 },
@@ -67,9 +68,9 @@ public static class ZoneArt
             foreach(int side in new[]{-1,1})
                 GardenArt.Shape(root,new BoxMesh(),ChaoMachine+new Vector3(side*.71f,.46f,-.21f),
                     new(.23f,.81f,.90f),new("647d77")).CreateConvexCollision();
-            var hatch=new Node3D { Name="MachineHatch",Position=ChaoMachine+new Vector3(0,.93f,.39f) };
+            var hatch=new Node3D { Name="MachineHatch",Position=ChaoMachine+new Vector3(0,.25f,.39f) };
             root.AddChild(hatch);
-            GardenArt.Shape(hatch,new BoxMesh(),new(0,-.34f,0),new(1.20f,.68f,.10f),new("91b7a9"));
+            GardenArt.Shape(hatch,new BoxMesh(),new(0,.34f,0),new(1.20f,.68f,.10f),new("91b7a9"));
             GardenArt.Shape(root,new BoxMesh(),ChaoMachine+new Vector3(0,1.51f,-.61f),
                 new(.15f,.49f,.18f),new("556357"));
             GardenArt.Shape(root,new BoxMesh(),ChaoMachine+new Vector3(0,1.89f,-.51f),
