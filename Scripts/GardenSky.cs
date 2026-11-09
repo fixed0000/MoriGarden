@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 
 namespace Mori;
@@ -46,6 +47,17 @@ internal partial class GardenSky : Node3D
     private DirectionalLight3D moon=null!;
     private readonly Node3D[] gulls=new Node3D[3];
     private readonly Node3D[,] wings=new Node3D[3,2];
+    private readonly MeshInstance3D[] gullShadows=new MeshInstance3D[3];
+    private readonly ShaderMaterial softShadow=new() { Shader=new Shader { Code="""
+        shader_type spatial;
+        render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
+        void fragment() {
+            vec2 p=(UV-.5)*2.0;
+            float blur=1.0-smoothstep(.05,1.0,length(p));
+            ALBEDO=vec3(.11,.14,.15);
+            ALPHA=blur*blur*.21;
+        }
+        """ } };
 
     public GardenSky(Environment environment) => this.environment=environment;
 
@@ -62,6 +74,10 @@ internal partial class GardenSky : Node3D
             var gull=new Node3D { Visible=false };
             gulls[i]=gull;
             AddChild(gull);
+            var shadow=new MeshInstance3D { Mesh=new QuadMesh { Size=new(3.9f,2.55f) },
+                MaterialOverride=softShadow, CastShadow=GeometryInstance3D.ShadowCastingSetting.Off,Visible=false };
+            AddChild(shadow);
+            gullShadows[i]=shadow;
             GardenArt.Ball(gull,Vector3.Zero,new(.26f,.23f,.82f),new("e8edf1"));
             for (int side=0;side<2;side++)
             {
@@ -72,6 +88,8 @@ internal partial class GardenSky : Node3D
                 GardenArt.Ball(wing,new(sign*.40f,0,0),new(.90f,.065f,.35f),new("e8edf1"));
                 GardenArt.Ball(wing,new(sign*.83f,0,-.09f),new(.48f,.05f,.19f),new("485268"));
             }
+            foreach (var mesh in gull.FindChildren("*","MeshInstance3D",true,false).OfType<MeshInstance3D>())
+                mesh.CastShadow=GeometryInstance3D.ShadowCastingSetting.Off;
         }
         Advance(0,true);
     }
@@ -103,12 +121,26 @@ internal partial class GardenSky : Node3D
         {
             var gull=gulls[i];
             gull.Visible=garden && light>.6f && flight<15;
-            if (!gull.Visible) continue;
+            if (!gull.Visible) { gullShadows[i].Hide(); continue; }
             gull.Position=new(-34+flight*4.4f-i*2.7f,24+i*1.4f+Mathf.Sin(flight*.6f+i)*.4f,-9+i*3.8f);
             gull.RotationDegrees=new(0,90,6*Mathf.Sin(flight*.6f));
+            MoveGullShadow(gullShadows[i],gull.GlobalPosition,sunDirection);
             float flap=Mathf.Sin(flight*9+i)*.45f;
             wings[i,0].Rotation=new(0,0,flap);
             wings[i,1].Rotation=new(0,0,-flap);
         }
     }
+    private void MoveGullShadow(MeshInstance3D shadow,Vector3 from,Vector3 towardSun)
+    {
+        var ray=PhysicsRayQueryParameters3D.Create(from,from-towardSun*80,1);
+        var surface=GetWorld3D().DirectSpaceState.IntersectRay(ray);
+        shadow.Visible=surface.Count>0;
+        if (!shadow.Visible) return;
+        var normal=(Vector3)surface["normal"];
+        var at=(Vector3)surface["position"];
+        shadow.GlobalPosition=at+normal*.027f;
+        shadow.Quaternion=new Quaternion(Vector3.Back,normal);
+        shadow.Scale=Vector3.One*Mathf.Clamp(from.DistanceTo(at)/23,.85f,1.55f);
+    }
+
 }

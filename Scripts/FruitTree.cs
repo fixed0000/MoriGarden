@@ -11,6 +11,7 @@ public partial class FruitTree : Node3D
     private CharacterBody3D fruit = null!;
     public bool IsFeeder { get; init; }
     public bool SingleUse { get; init; }
+    public bool IsHeartFruit { get; init; }
     private FruitTree? host;
     private readonly List<FruitTree> extras=new();
     private MeshInstance3D fruitSkin=null!;
@@ -115,9 +116,32 @@ public partial class FruitTree : Node3D
         fruit = new CharacterBody3D { Position = branch, CollisionLayer = 0, CollisionMask = 1 };
         fruit.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius=.18f } });
         AddChild(fruit);
-        fruitSkin=GardenArt.Ball(fruit,Vector3.Zero,new(.30f,.28f,.29f),new("ad7540"));
+        fruitSkin=IsHeartFruit
+            ? GardenArt.Shape(fruit,HeartMesh(),Vector3.Zero,Vector3.One,new("df486f"))
+            : GardenArt.Ball(fruit,Vector3.Zero,new(.30f,.28f,.29f),new("ad7540"));
         GardenArt.Ball(fruit,new(.05f,.15f,0),new(.12f,.035f,.07f),new("51663b"));
         RefreshGrowth();
+    }
+
+    private static Mesh HeartMesh()
+    {
+        var mesh=new SurfaceTool();
+        mesh.Begin(Mesh.PrimitiveType.Triangles);
+        Vector3 Point(int i)
+        {
+            float a=i*Mathf.Tau/32;
+            float x=Mathf.Sin(a);
+            float y=13*Mathf.Cos(a)-5*Mathf.Cos(2*a)-2*Mathf.Cos(3*a)-Mathf.Cos(4*a);
+            return new Vector3(16*x*x*x,y+2,0)*.0085f;
+        }
+        for (int i=0;i<32;i++)
+        {
+            var a=Point(i); var b=Point(i+1);
+            mesh.AddVertex(Vector3.Back*.098f); mesh.AddVertex(a); mesh.AddVertex(b);
+            mesh.AddVertex(Vector3.Forward*.098f); mesh.AddVertex(b); mesh.AddVertex(a);
+        }
+        mesh.GenerateNormals();
+        return mesh.Commit();
     }
 
     public void Shake()

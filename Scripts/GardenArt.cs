@@ -158,7 +158,7 @@ public static class GardenArt
         for (int i=0;i<24;i++)
         {
             float angle = i*Mathf.Tau/24;
-            if (angle > .60f && angle < .96f) continue;
+            if (angle > .46f && angle < 1.12f) continue;
             var stone=Shape(root,new CylinderMesh { RadialSegments=9,TopRadius=.13f,BottomRadius=.53f,
                 Height=.27f+(i%3)*.022f },
                 pond+new Vector3(Mathf.Cos(angle)*(PondRadius+.15f),.035f,Mathf.Sin(angle)*(PondRadius+.15f)),
@@ -310,7 +310,11 @@ public static class GardenArt
         ZoneArt.Solid(root,new(2,.72f,-5.15f),new(.15f,1.44f,.15f));
         // Кормушка слева спереди.
         Cylinder(root, new(-5, .13f, 4), 1, .26f, new("736956"));
-        Cylinder(root, new(-5, .31f, 4), 1.12f, .13f, new("a29878")).CreateConvexCollision();
+        Cylinder(root, new(-5, .31f, 4), 1.12f, .13f, new("a29878"));
+        var feeder=new StaticBody3D { Position=new(-5,.1875f,4) };
+        feeder.SetMeta("no_step",true);
+        feeder.AddChild(new CollisionShape3D { Shape=new CylinderShape3D { Radius=1.10f,Height=.375f } });
+        root.AddChild(feeder);
 
         // Мягкая постель питомца.
         Cylinder(root, new(5, .12f, 4), 1.6f, .23f, new("706e5f")).CreateConvexCollision();

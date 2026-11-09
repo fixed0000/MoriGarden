@@ -26,6 +26,9 @@ public sealed class PetState
     public int Agility { get; set; }
     public int Stars { get; set; }
     public int BagFruit { get; set; }
+    public int BagHeartFruit { get; set; }
+    public float CourtshipReadiness { get; set; }
+    public float BloomRemaining { get; set; }
     public System.Collections.Generic.List<GardenEggState> GardenEggs { get; set; } = new()
     {
         new GardenEggState { Color="White", X=-2, Z=6 }
@@ -100,6 +103,7 @@ public sealed class PetState
         Fullness = Math.Clamp(Fullness - seconds * .035f, 0, 100);
         Joy = Math.Clamp(Joy - seconds * .018f, 0, 100);
         Energy = Math.Clamp(Energy + seconds * (sleeping ? 5 : -.045f/(1+Stamina*.002f)), 0, 100);
+        if (CanAct) CourtshipReadiness=Math.Min(100,CourtshipReadiness+seconds/72);
         if (!sleeping) Fun=Math.Max(0,Fun-seconds*.07f);
     }
 
@@ -188,12 +192,15 @@ public sealed class PetState
         Name = string.IsNullOrWhiteSpace(Name) ? "Mori" : Name.Trim();
         if (Name.Length>18) Name=Name[..18];
         BagFruit = Math.Clamp(BagFruit,0,12);
+        BagHeartFruit=Math.Clamp(BagHeartFruit,0,12);
+        CourtshipReadiness=float.IsFinite(CourtshipReadiness) ? Math.Clamp(CourtshipReadiness,0,100) : 0;
+        BloomRemaining=float.IsFinite(BloomRemaining) ? Math.Clamp(BloomRemaining,0,300) : 0;
         CharacterRelationships ??= new();
         foreach (var value in CharacterRelationships.Values)
             if (!float.IsFinite(value) || value is < -100 or > 100)
                 throw new ArgumentException("Unsupported character relationship");
         GardenEggs ??= new();
-        if (GardenEggs.Count>12 || GardenEggs.Exists(egg=>egg==null || !float.IsFinite(egg.X) || !float.IsFinite(egg.Z)))
+        if (GardenEggs.Count>12 || GardenEggs.Exists(egg=>egg==null || !float.IsFinite(egg.X) || !float.IsFinite(egg.Y) || !float.IsFinite(egg.Z)))
             throw new ArgumentException("Unsupported garden egg data");
         Swim = Math.Clamp(Swim, 0, 990);
         Fly = Math.Clamp(Fly, 0, 990);
@@ -218,6 +225,7 @@ public sealed class GardenEggState
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Color { get; set; } = "White";
     public float X { get; set; }
+    public float Y { get; set; }
     public float Z { get; set; }
     public bool Hatched { get; set; }
     public PetState? Chao { get; set; }

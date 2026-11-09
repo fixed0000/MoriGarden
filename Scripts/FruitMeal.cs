@@ -22,7 +22,7 @@ internal sealed class FruitMeal
         from=start;
         startBites=fruit.Bites;
         Rejected=false;
-        fullAtStart=alreadyFull || chao.Fullness>=99.9f;
+        fullAtStart=!fruit.IsHeartFruit && (alreadyFull || chao.Fullness>=99.9f);
         if (fullAtStart)
         {
             plannedBites=startBites+(startBites<FruitTree.BiteCount-1 && GD.Randf()<.24f ? 1 : 0);
@@ -37,10 +37,10 @@ internal sealed class FruitMeal
         for (int i=startBites;i<plannedBites;i++)
         {
             float fullness=chao.Fullness+(i-startBites)*6;
-            float chewing=fullness>=75 ? 3 : (hungry || chao.Glutton) ? 1 : 2;
+            float chewing=fruit.IsHeartFruit ? .9f : fullness>=75 ? 3 : (hungry || chao.Glutton) ? 1 : 2;
             animationsAt[i]=time;
             bitesAt[i]=time+chewing;
-            time=bitesAt[i]+(i-startBites+1<quickBites ? 0 : hungry ? 2 : 5);
+            time=bitesAt[i]+(fruit.IsHeartFruit ? .5f : i-startBites+1<quickBites ? 0 : hungry ? 2 : 5);
         }
         duration=bitesAt[^1];
     }
@@ -62,7 +62,9 @@ internal sealed class FruitMeal
             fruit.TakeBite();
             if (!fullAtStart) chao.FeedBite(fruit.Bites==FruitTree.BiteCount);
             ChaoSounds.Play(art,"bite");
-            if (chao.Fullness>=100 && fruit.Bites<bitesAt.Length)
+            if (fruit.IsHeartFruit && fruit.Bites==FruitTree.BiteCount)
+                chao.CourtshipReadiness=100;
+            if (!fruit.IsHeartFruit && chao.Fullness>=100 && fruit.Bites<bitesAt.Length)
             {
                 Rejected=true;
                 duration=elapsed;

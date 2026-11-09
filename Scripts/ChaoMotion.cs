@@ -14,8 +14,13 @@ internal sealed class ChaoMotion
     private float climbGoalY;
     private bool clearLedgeBeforeMoving;
     private bool airborneJump, rebounded, landingTumble, rampApproach;
-    private float lockedHeading, bankTime, waterTime;
-    private Vector3 bankTangent;
+    private float lockedHeading, bankTime, waterTime, shoreRest;
+    private Vector3 bankTangent, deepWaterTarget;
+    private bool shoreExit;
+    private static readonly Vector3 Outlet=(GardenArt.SwimExit-GardenArt.Pond).Normalized();
+    private static readonly Vector3 OutletApproach=GardenArt.Pond+Outlet*(GardenArt.PondRadius-2.65f);
+    private static readonly Vector3 Island=new(-13.2f,0,-10.8f);
+    public bool LeavingPond => shoreExit;
     public bool Sprinting { get; private set; }
     public bool Airborne => airborne;
     public bool Flying => airborne && flying;
@@ -28,7 +33,8 @@ internal sealed class ChaoMotion
         airborne=flying=Sprinting=walking=false;
         climbing=balconyJump=false;
         airborneJump=rebounded=landingTumble=rampApproach=false;
-        lockedHeading=bankTime=waterTime=0;
+        lockedHeading=bankTime=waterTime=shoreRest=0;
+        shoreExit=false;
         GroundSpeed=BlockedTime=0;
         cliffLeg=-1;
     }
@@ -37,11 +43,11 @@ internal sealed class ChaoMotion
 
     public void LeapFromBed(CharacterBody3D actor,PetState chao)
     {
-        if (chao.Fly<120 || GD.Randf()>.65f) return;
         var direction=actor.Position-ChaoRest.Bed;
         direction.Y=0;
         Launch(actor,direction.LengthSquared()>.01f ? direction.Normalized() : Vector3.Back,
-            GD.Randf()<.65f,2.2f);
+            chao.Fly>=120 && GD.Randf()<.65f,3.4f);
+        vertical=4.3f;
     }
 
     private void Launch(CharacterBody3D actor,Vector3 heading,bool glide,float pace)
@@ -184,29 +190,51 @@ internal sealed class ChaoMotion
     {
         hardLanding=false;
         bool struggling=water && pet.Swim<100;
-        waterTime=water ? waterTime+dt : 0;
-        if (water && !airborne && (cliffLeg<0 || struggling))
+        shoreRest=Mathf.Max(0,shoreRest-dt);
+        var positionOnMap=new Vector3(body.Position.X,0,body.Position.Z);
+        if (water && !airborne)
         {
-            if (struggling) direction=GardenArt.SwimExit-body.Position;
-            var fromPond=body.Position-GardenArt.Pond;
-            fromPond.Y=0;
-            if (!GardenArt.IsPondWater(new Vector3(body.Position.X+direction.X,0,body.Position.Z+direction.Z)))
+            if (waterTime<=0)
             {
-                var towardExit=GardenArt.SwimExit-GardenArt.Pond;
-                var outlet=towardExit.Normalized();
-                if (fromPond.Length()>GardenArt.PondRadius-3.2f && fromPond.Normalized().Dot(outlet)<.994f)
-                {
-                    // Swim around the shallow ring before crossing the gap between its rocks.
-                    var radial=fromPond.Normalized();
-                    float side=Mathf.Sign(radial.Cross(outlet).Y);
-                    var waypoint=GardenArt.Pond+radial.Rotated(Vector3.Up,side*.26f)*(GardenArt.PondRadius-1.35f);
-                    direction=waypoint-body.Position;
-                }
-                else direction=GardenArt.SwimExit-body.Position;
-                direction.Y=0;
-                if (struggling && fromPond.Normalized().Dot(outlet)<.986f)
-                    direction=direction.Rotated(Vector3.Up,Mathf.Sin(waterTime*1.15f)*.37f);
+                var fromCenter=positionOnMap-GardenArt.Pond;
+                deepWaterTarget=GardenArt.Pond+(fromCenter.X>1 ? new Vector3(-2,0,6.2f) : new Vector3(5.5f,0,3.8f));
+                bankTime=0;
             }
+            waterTime+=dt;
+            if (struggling ? waterTime>=24 || (waterTime>=15 && positionOnMap.DistanceTo(deepWaterTarget)<.45f)
+                : cliffLeg<0 && !GardenArt.IsPondWater(positionOnMap+direction))
+                shoreExit=true;
+            if (shoreExit)
+            {
+                var radial=positionOnMap-GardenArt.Pond;
+                bool atOutlet=radial.Normalized().Dot(Outlet)>.997f && radial.Dot(Outlet)>GardenArt.PondRadius-3.5f;
+                var target=atOutlet ? GardenArt.SwimExit : OutletApproach;
+                direction=PondDirection(positionOnMap,target);
+            }
+            else if (struggling)
+            {
+                direction=PondDirection(positionOnMap,deepWaterTarget)
+                    .Rotated(Vector3.Up,Mathf.Sin(waterTime*1.23f)*.48f);
+            }
+        }
+        else if (!water)
+        {
+            waterTime=bankTime=0;
+            if (shoreExit)
+            {
+                direction=GardenArt.SwimExit-positionOnMap;
+                if (direction.Length()<.29f)
+                {
+                    shoreExit=false;
+                    shoreRest=6;
+                }
+                else if (!airborne && body.MoveAndCollide(Vector3.Down*.23f,testOnly:true) is { } shore &&
+                    shore.GetNormal().Y>.60f)
+                    body.MoveAndCollide(Vector3.Down*.23f);
+            }
+            else if (shoreRest>0 && (positionOnMap-GardenArt.SwimExit).Length()<2.3f &&
+                !direction.IsZeroApprox() && direction.Dot(Outlet)<0)
+                direction=Outlet*1.7f;
         }
         float distance=direction.Length();
         float stopDistance=rampApproach ? .065f : .16f;
@@ -216,13 +244,14 @@ internal sealed class ChaoMotion
         speed=Mathf.MoveToward(speed,distance>stopDistance ? pace : 0,dt*(2.6f+pet.Run*.004f));
         Sprinting=!water && pet.Run>=650 && speed>=3.15f && distance>.32f;
         float jumpSpeed=pet.Fly>0 && cliffLeg>=0 ? 10.6f : 6.9f;
-        bool jumpFromWater=water && !struggling && !airborne && ledges && cliffLeg>0 &&
+        bool jumpFromWater=water && !shoreExit && !struggling && !airborne && ledges && cliffLeg>0 &&
             climbGoalY-body.Position.Y>.42f && distance is >.18f and <2.1f;
         if (water && !airborne && !jumpFromWater)
         {
             bankTime=Mathf.Max(0,bankTime-dt);
             var travel=forward*Mathf.Min(distance,speed*dt);
-            if (bankTime>0 && forward.Dot(bankTangent)<.65f)
+            bool crossingOutlet=shoreExit && (positionOnMap-GardenArt.Pond).Normalized().Dot(Outlet)>.997f;
+            if (!crossingOutlet && bankTime>0 && forward.Dot(bankTangent)<.65f)
                 travel=travel.Lerp(bankTangent*travel.Length(),.68f);
             var bank=body.MoveAndCollide(travel);
             if (bank!=null)
@@ -250,6 +279,10 @@ internal sealed class ChaoMotion
 
         bool supported=jumpFromWater || (body.MoveAndCollide(Vector3.Down*.07f,testOnly:true) is { } floor &&
             floor.GetNormal().Y>.52f);
+        var bedOffset=body.Position-ChaoRest.Bed; bedOffset.Y=0;
+        if (!airborne && supported && ledges && body.Position.Y is >.24f and <.53f &&
+            bedOffset.LengthSquared()<1.45f*1.45f && (bedOffset+direction).LengthSquared()>1.7f*1.7f)
+            LeapFromBed(body,pet);
         if (!airborne && supported && balconyJump)
         {
             balconyJump=false;
@@ -349,6 +382,21 @@ internal sealed class ChaoMotion
                 travel=travel.LimitLength(Mathf.Max(0,direction.Dot(airDirection.Normalized())));
             body.MoveAndCollide(travel);
         }
+    }
+
+    private static Vector3 PondDirection(Vector3 at,Vector3 target)
+    {
+        var direct=target-at;
+        if (direct.LengthSquared()<.02f) return direct;
+        var fromIsland=at-Island;
+        float along=Mathf.Clamp(-fromIsland.Dot(direct)/direct.LengthSquared(),0,1);
+        const float clearance=3.60f;
+        if ((fromIsland+direct*along).LengthSquared()>clearance*clearance) return direct;
+        // The southern side of the island is open water, away from the waterfall rocks.
+        Vector3 waypoint=Island+new Vector3(at.X<Island.X ? -2.6f : 2.8f,0,4.0f);
+        if (at.Z>Island.Z+3.4f && Mathf.Abs(at.X-Island.X)<3.4f)
+            waypoint=Island+Vector3.Back*5.2f;
+        return waypoint-at;
     }
 
     private static bool HasLedge(CharacterBody3D body,Vector3 direction,float height)

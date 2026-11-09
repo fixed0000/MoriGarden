@@ -55,6 +55,7 @@ public static class ZoneArt
         if (zone == GardenZone.Garden)
         {
             GardenArt.BuildGarden(root);
+            root.AddChild(new WateringCan { Name="WateringCan" });
             root.AddChild(new ToyCar { Name="ToyCar" });
             root.AddChild(new ToyCar { Name="Rattle",IsRattle=true });
             root.AddChild(new ToyCar { Name="Flute",IsFlute=true });

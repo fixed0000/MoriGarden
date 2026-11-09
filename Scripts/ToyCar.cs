@@ -31,7 +31,6 @@ public partial class ToyCar : CharacterBody3D
         }
         if (IsFlute)
         {
-            GardenArt.Sign(this,"Flute",Vector3.Up*.41f,GardenArt.Cream);
             var tube=GardenArt.Cylinder(this,new(0,.039f,0),.023f,.31f,new("d5bd81"));
             tube.RotationDegrees=new(0,0,90);
             for (int i=0;i<5;i++)
@@ -141,9 +140,9 @@ public partial class ToyCar : CharacterBody3D
         float wobble=Mathf.Sin(playing*7);
         if (IsFlute)
         {
-            Position=actor.Position+playForward*.16f+Vector3.Up*(.22f+.006f*wobble);
+            Position=actor.Position+playForward*.16f+Vector3.Up*(.164f+.004f*wobble);
             Rotation=new(0,actor.Rotation.Y,.06f*wobble);
-            ImportedChao.ReceivePose(art,.93f);
+            ImportedChao.ReceivePose(art,.87f);
             int phrase=(int)(playing/1.24f);
             if (phrase!=lastShake) { ChaoSounds.Play(this,"flute"); lastShake=phrase; }
             return true;
