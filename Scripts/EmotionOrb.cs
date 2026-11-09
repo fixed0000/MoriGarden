@@ -4,6 +4,7 @@ namespace Mori;
 
 public partial class EmotionOrb : Node3D
 {
+    public static readonly Color OrbColor=new("f3cd59");
     private Vector3 rest;
     private Vector3 velocity;
     private Vector3 previousTarget;
@@ -44,10 +45,11 @@ public partial class EmotionOrb : Node3D
         string next=thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "";
         if (next==displayed) return;
         displayed=next;
+        if (GetParent() is Node3D chao) ImportedChao.SmileEyes(chao,next=="♥");
         if (next.Length>0 && next!="spring" && question==null)
         {
             question=new Label3D { Text="?", FontSize=76, PixelSize=.0019f,
-                Billboard=BaseMaterial3D.BillboardModeEnum.Enabled, Modulate=new Color("fff1ad"),OutlineSize=10 };
+                Billboard=BaseMaterial3D.BillboardModeEnum.Enabled, Modulate=OrbColor,OutlineSize=10 };
             AddChild(question);
         }
         if (next=="spring" && spring==null) BuildSpring();
@@ -87,7 +89,7 @@ public partial class EmotionOrb : Node3D
                     mesh.AddVertex(c); mesh.AddVertex(b); mesh.AddVertex(d);
                 }
             mesh.GenerateNormals();
-            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One,new("d58a9b"));
+            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One,OrbColor);
             ((StandardMaterial3D)spring.MaterialOverride).CullMode=BaseMaterial3D.CullModeEnum.Disabled;
         }
     }

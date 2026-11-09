@@ -57,6 +57,7 @@ public static class ZoneArt
             GardenArt.BuildGarden(root);
             root.AddChild(new ToyCar { Name="ToyCar" });
             root.AddChild(new ToyCar { Name="Rattle",IsRattle=true });
+            root.AddChild(new ToyCar { Name="Flute",IsFlute=true });
             GardenArt.Cylinder(root,MachineStep+Vector3.Up*.065f,.94f,.13f,new("91a99a")).CreateConvexCollision();
             GardenArt.Cylinder(root,ChaoMachine+Vector3.Up*.10f,1.0f,.20f,new("586c65")).CreateConvexCollision();
             var casing=GardenArt.Shape(root,new CapsuleMesh { Radius=.31f,Height=1.79f,RadialSegments=16,Rings=6 },

@@ -58,7 +58,11 @@ internal sealed class ChaoRest
         Vector3 delta=approach-actor.Position; delta.Y=0;
         if (hop<=0 && delta.Length()>.26f)
         {
-            walk.Step(actor,delta,chao,false,false,dt,false,out _);
+            bool water=!walk.Airborne && GardenArt.IsPondWater(actor.Position);
+            if (water) actor.Position=new(actor.Position.X,Mathf.MoveToward(actor.Position.Y,0,dt*4),actor.Position.Z);
+            var route=walk.RouteOffUpperPlatform(actor.Position,approach)-actor.Position;
+            route.Y=0;
+            walk.Step(actor,route,chao,false,water,dt,true,out _);
             return true;
         }
         if (hop<=0) hopStart=actor.Position;

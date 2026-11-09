@@ -96,9 +96,13 @@ internal sealed class FruitReaction
             else if (remaining<=0 || direction.Length()>6) Confuse();
             else
             {
-                bool moving=motion.Step(actor,direction,chao,true,false,dt,true,out _);
+                bool water=!motion.Airborne && GardenArt.IsPondWater(actor.Position);
+                if (water) actor.Position=new(actor.Position.X,Mathf.MoveToward(actor.Position.Y,0,dt*4),actor.Position.Z);
+                var route=motion.RouteOffUpperPlatform(actor.Position,target)-actor.Position;
+                route.Y=0;
+                bool moving=motion.Step(actor,route,chao,true,water,dt,true,out _);
                 gait+=dt*15;
-                ImportedChao.MovePose(art,gait,moving,false,false,motion.Sprinting,motion.Airborne,motion.Flying);
+                ImportedChao.MovePose(art,gait,moving,water,chao.Swim>=100,motion.Sprinting,motion.Airborne,motion.Flying);
             }
         }
         else if (stage==Stage.Beg)

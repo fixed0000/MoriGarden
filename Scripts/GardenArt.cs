@@ -13,6 +13,8 @@ public static class GardenArt
     public const float GardenHalfDepth = 64;
     public const float PondRadius = 11.4f;
     public const float PondDepth = .30f;
+    public static bool IsPondWater(Vector3 at) =>
+        at.Y<.11f && new Vector2(at.X-Pond.X,at.Z-Pond.Z).LengthSquared()<PondRadius*PondRadius;
     public static readonly Vector3 SwimExit = Pond + new Vector3(9.25f,0,9.2f);
     public static readonly Vector3[] TreePositions = { new(-7,0,3), new(8,0,7), new(19,0,-7), new(-23,0,-4), new(7,0,-14), new(-17,0,7), new(17,0,2) };
     public static readonly (Vector3 Center, Vector3 Size)[] Ledges = {
@@ -24,6 +26,9 @@ public static class GardenArt
         (new(-8.55f,2.73f,-20.0f),new(3.1f,5.46f,3.3f)),
     };
     public static readonly Vector3 Balcony = new(-11.15f,7.49f,-17.74f);
+    public static readonly Vector3 BalconyRampStart=new(-8.64f,5.46f,-20.82f);
+    public static readonly Vector3 BalconyRampEnd=new(-11.12f,7.49f,-19.43f);
+    public static readonly Vector3 WaterfallExit=new(-9.15f,5.46f,-18.64f);
     public static Vector3 BalconyRail => Balcony+new Vector3(0,.55f,1.10f);
     public static StandardMaterial3D Material(Color color, bool glow = false) => new()
     {
@@ -203,6 +208,24 @@ public static class GardenArt
             StoneCollision(slab);
         }
         BalconyStone(Balcony,new(4.58f,.37f,2.84f));
+        BalconyStone(BalconyRampEnd,new(2.18f,.36f,1.16f));
+        Vector3 rampAxis=BalconyRampEnd-BalconyRampStart;
+        var ramp=Shape(root,new BoxMesh(),(BalconyRampEnd+BalconyRampStart)*.5f,
+            new(1.34f,.24f,rampAxis.Length()+.24f),new("777c70"));
+        ramp.LookAt(ramp.Position+rampAxis);
+        ramp.Position-=ramp.Basis.Orthonormalized().Y*.12f;
+        ramp.MaterialOverride=strata;
+        StoneCollision(ramp);
+        var ledgeBack=Shape(root,new BoxMesh(),new(-8.60f,7.52f,-22.12f),new(3.75f,4.56f,.78f),new("626d64"));
+        ledgeBack.MaterialOverride=strata;
+        StoneCollision(ledgeBack);
+        for (int i=0;i<3;i++)
+        {
+            var buttress=Shape(root,new SphereMesh { RadialSegments=5,Rings=3 },
+                new(-10.03f+i*1.40f,8.15f+(i%2)*.34f,-22.57f),new(2.15f,4.58f,1.20f),new("626d64"));
+            buttress.MaterialOverride=strata;
+            StoneCollision(buttress);
+        }
         BalconyStone(BalconyRail,new(4.08f,.14f,.61f));
         for (int i=-2;i<=2;i++)
             BalconyStone(BalconyRail+new Vector3(i*.94f,-.11f,0),new(.19f,.46f,.24f));

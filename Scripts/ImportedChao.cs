@@ -6,11 +6,74 @@ public partial class ImportedChao : Node3D
 {
     private float? sleepOffset;
     private readonly System.Collections.Generic.Dictionary<Node3D,Vector3> feet=new();
+    private readonly System.Collections.Generic.Dictionary<Node3D,(Node3D Sleep,Node3D Happy)> eyeShapes=new();
+    private bool eyesClosed, eyesHappy;
+
+    public static void CloseEyes(Node3D art,bool closed)
+    {
+        if (art is not ImportedChao model) return;
+        if (model.eyesClosed==closed) return;
+        model.eyesClosed=closed;
+        model.RefreshEyes();
+    }
+
+    public static void SmileEyes(Node3D art,bool happy)
+    {
+        if (art is not ImportedChao model || model.eyesHappy==happy) return;
+        model.eyesHappy=happy;
+        model.RefreshEyes();
+    }
+
+    private void RefreshEyes()
+    {
+        if ((eyesClosed || eyesHappy) && eyeShapes.Count==0)
+        {
+            foreach (var eye in FindChildren("*_Eye","MeshInstance3D",true,false))
+            {
+                if (eye is not MeshInstance3D mesh) continue;
+                var bounds=mesh.GetAabb();
+                var center=mesh.Transform*new Vector3(bounds.GetCenter().X,bounds.GetCenter().Y,bounds.End.Z+.006f);
+                var parent=(Node3D)mesh.GetParent();
+                eyeShapes[mesh]=(EyeLine(parent,center,false),EyeLine(parent,center,true));
+            }
+        }
+        foreach (var (eye,shapes) in eyeShapes)
+        {
+            eye.Visible=!eyesClosed && !eyesHappy;
+            shapes.Sleep.Visible=eyesClosed;
+            shapes.Happy.Visible=!eyesClosed && eyesHappy;
+        }
+    }
+
+    private static Node3D EyeLine(Node3D parent,Vector3 center,bool happy)
+    {
+        var line=new Node3D { Position=center };
+        parent.AddChild(line);
+        var ink=new Color("655649");
+        const float radius=.004f;
+        int segments=happy ? 2 : 8;
+        Vector3 previous=Vector3.Zero;
+        for (int i=0;i<=segments;i++)
+        {
+            float x=-1+2f*i/segments;
+            float y=happy ? .016f-.030f*Mathf.Abs(x) : .016f*x*x-.010f;
+            var point=new Vector3(x*.029f,y,0);
+            GardenArt.Ball(line,point,Vector3.One*(2*radius),ink);
+            if (i>0)
+            {
+                var bar=GardenArt.Cylinder(line,(previous+point)*.5f,radius,previous.DistanceTo(point),ink);
+                bar.Quaternion=new Quaternion(Vector3.Up,(point-previous).Normalized());
+            }
+            previous=point;
+        }
+        return line;
+    }
 
     public static void SleepPose(Node3D art)
     {
         const float roll=88;
         Gait(art,0,false,false);
+        CloseEyes(art,true);
         art.RotationDegrees=new(0,0,roll);
         if (art is ImportedChao model)
         {
@@ -55,6 +118,7 @@ public partial class ImportedChao : Node3D
 
     public static void MovePose(Node3D art,float phase,bool moving,bool water,bool swims,bool sprinting,bool airborne,bool flying)
     {
+        CloseEyes(art,false);
         Gait(art,phase,moving,water,sprinting);
         if (flying)
             foreach (var (suffix,side) in new[]{("L",-1),("R",1)})
@@ -64,6 +128,18 @@ public partial class ImportedChao : Node3D
             water && !swims ? Mathf.Sin(phase*2.3f)*17 : 0);
         art.Position=Vector3.Up*(water ? (swims ? .19f : -.025f)+Mathf.Sin(phase)*.012f :
             airborne ? .025f : moving ? Mathf.Abs(Mathf.Sin(phase))*(sprinting ? .025f : .009f) : 0);
+    }
+
+    public static void IslandNapPose(Node3D art)
+    {
+        Gait(art,0,false,false);
+        CloseEyes(art,true);
+        art.Rotation=new(.83f,0,0);
+        art.Position=Vector3.Up*.027f;
+        if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(-.20f,0,0);
+        for (int side=-1;side<=1;side+=2)
+            if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
+                paw.Rotation=new(-.88f,0,side*.22f);
     }
 
     public static void EatPose(Node3D art,float remaining)
@@ -154,7 +230,7 @@ public partial class ImportedChao : Node3D
         }
         var orb=new EmotionOrb { Name="MoodOrb", Position=new(0,.508f,-.015f) };
         model.AddChild(orb);
-        var orbColor=new Color("f3cd59");
+        var orbColor=EmotionOrb.OrbColor;
         GardenArt.Ball(orb,Vector3.Zero,new(.062f,.062f,.062f),orbColor).MaterialOverride=GardenArt.Material(orbColor,true);
         return model;
     }

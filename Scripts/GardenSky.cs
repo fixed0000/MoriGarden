@@ -10,6 +10,8 @@ internal partial class GardenSky : Node3D
         uniform float day=1.0;
         uniform float dusk=0.0;
         uniform float seconds=0.0;
+        uniform vec3 sun_dir;
+        uniform vec3 moon_dir;
         float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
         float noise(vec2 p) {
             vec2 i=floor(p), f=fract(p);
@@ -28,9 +30,20 @@ internal partial class GardenSky : Node3D
             vec2 stars=SKY_COORDS*vec2(490,245);
             float star=(1.0-smoothstep(.07,.19,length(fract(stars)-.5)))*step(.993,hash(floor(stars)));
             COLOR+=vec3(.85,.90,1.0)*star*(1.0-day)*(1.0-cover)*smoothstep(.05,.24,h);
+            float sun_distance=distance(EYEDIR,sun_dir);
+            float sun_disk=1.0-smoothstep(.023,.028,sun_distance);
+            float sun_glow=(1.0-smoothstep(.022,.17,sun_distance))*.37;
+            COLOR+=mix(vec3(1.0,.77,.43),vec3(1.0,.95,.77),day)*
+                (sun_disk+sun_glow)*(1.0-cover*.78)*smoothstep(-.032,.012,sun_dir.y);
+            float moon_distance=distance(EYEDIR,moon_dir);
+            float moon_disk=1.0-smoothstep(.028,.032,moon_distance);
+            float moon_mottling=.80+.20*noise(EYEDIR.xz*340.0+EYEDIR.y*198.0);
+            COLOR+=vec3(.76,.86,1.0)*moon_disk*moon_mottling*
+                (1.0-cover*.68)*(1.0-day*.62)*smoothstep(-.03,.014,moon_dir.y);
         }
         """ } };
     private DirectionalLight3D sun=null!;
+    private DirectionalLight3D moon=null!;
     private readonly Node3D[] gulls=new Node3D[3];
     private readonly Node3D[,] wings=new Node3D[3,2];
 
@@ -42,6 +55,8 @@ internal partial class GardenSky : Node3D
         environment.Sky=new Sky { SkyMaterial=sky, ProcessMode=Sky.ProcessModeEnum.Realtime };
         sun=new DirectionalLight3D { ShadowEnabled=true, DirectionalShadowMaxDistance=70 };
         AddChild(sun);
+        moon=new DirectionalLight3D { LightColor=new Color("889bd7"),ShadowEnabled=false };
+        AddChild(moon);
         for (int i=0;i<gulls.Length;i++)
         {
             var gull=new Node3D { Visible=false };
@@ -63,16 +78,24 @@ internal partial class GardenSky : Node3D
 
     public void Advance(float seconds,bool garden)
     {
-        float angle=Mathf.Tau*(seconds/600+.22f);
+        float cycle=Mathf.PosMod(seconds+145,600);
+        float fraction=cycle<410 ? .5f*cycle/410 : .5f+.5f*(cycle-410)/190;
+        float angle=Mathf.Tau*fraction;
         float altitude=Mathf.Sin(angle);
-        float light=Mathf.SmoothStep(-.22f,.25f,altitude);
-        float dusk=1-Mathf.SmoothStep(.02f,.35f,Mathf.Abs(altitude));
+        var sunDirection=new Vector3(Mathf.Cos(angle),altitude*.76f,-.25f).Normalized();
+        var moonDirection=new Vector3(-sunDirection.X,-sunDirection.Y,.15f).Normalized();
+        float light=Mathf.SmoothStep(-.07f,.09f,altitude);
+        float dusk=1-Mathf.SmoothStep(.012f,.13f,Mathf.Abs(altitude));
         sky.SetShaderParameter("day",light);
         sky.SetShaderParameter("dusk",dusk);
         sky.SetShaderParameter("seconds",seconds);
-        sun.RotationDegrees=new(-14-56*Mathf.Abs(altitude),angle*180/Mathf.Pi,0);
-        sun.LightEnergy=Mathf.Lerp(.19f,.68f,light);
-        sun.LightColor=new Color("889bd7").Lerp(new Color("fff3dd"),light).Lerp(new Color("ffad7a"),dusk*.35f);
+        sky.SetShaderParameter("sun_dir",sunDirection);
+        sky.SetShaderParameter("moon_dir",moonDirection);
+        sun.LookAt(-sunDirection);
+        moon.LookAt(-moonDirection);
+        sun.LightEnergy=.68f*light*Mathf.SmoothStep(-.025f,.065f,altitude);
+        moon.LightEnergy=.19f*(1-light);
+        sun.LightColor=new Color("fff3dd").Lerp(new Color("ffad7a"),dusk*.55f);
         environment.AmbientLightColor=new Color("9dabdd").Lerp(new Color("eaf3ff"),light);
         environment.AmbientLightEnergy=Mathf.Lerp(.27f,.53f,light);
         float flight=Mathf.PosMod(seconds+51,83);

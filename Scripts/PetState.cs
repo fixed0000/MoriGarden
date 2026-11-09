@@ -39,6 +39,9 @@ public sealed class PetState
     public int Stamina { get; set; }
     public int Luck { get; set; }
     public int Intelligence { get; set; }
+    public int Kindness { get; set; }
+    public int Aggressiveness { get; set; }
+    public int Curiosity { get; set; }
     public int Initiative { get; set; }
     public bool FindsFood => Intelligence>=80 && Initiative>=65;
 
@@ -103,7 +106,7 @@ public sealed class PetState
 
     public void FeedBite(bool last)
     {
-        Fullness=Math.Min(100,Fullness+4.8f);
+        Fullness=Math.Min(100,Fullness+6);
         if (!last) return;
         Care++;
         Bond++;
@@ -184,6 +187,9 @@ public sealed class PetState
         Stamina = Math.Clamp(Stamina, 0, 990);
         Luck = Math.Clamp(Luck, 0, 990);
         Intelligence = Math.Clamp(Intelligence, 0, 990);
+        Kindness = Math.Clamp(Kindness,-100,100);
+        Aggressiveness = Math.Clamp(Aggressiveness,-100,100);
+        Curiosity = Math.Clamp(Curiosity,-100,100);
         Initiative = Math.Clamp(Initiative,0,990);
         Fullness = Math.Clamp(Fullness, 0, 100);
         Joy = Math.Clamp(Joy, 0, 100);

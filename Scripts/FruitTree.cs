@@ -50,12 +50,12 @@ public partial class FruitTree : Node3D
         dropped=settled=true;
     }
     public bool CanInteract => CanShake || HasFruitOnGround;
-    public const int BiteCount=5;
+    public const int BiteCount=4;
     public int Bites { get; private set; }
     public void TakeBite()
     {
         Bites++;
-        fruit.Scale=Vector3.One*(1-.15f*Bites);
+        fruit.Scale=Vector3.One*(1-.19f*Bites);
         fruit.Visible=Bites<BiteCount;
     }
     public Vector3 FruitPosition => fruit.GlobalPosition;

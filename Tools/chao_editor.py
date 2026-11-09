@@ -92,7 +92,8 @@ class ChaoEditor:
         self.variables.clear()
         self.subject.set("Current Chao: " + self.snapshot["parameters"].get("Name", "Mori"))
         groups = {
-            "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Intelligence", "Luck", "Initiative", "Agility"},
+            "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Initiative", "Agility"},
+            "Hidden": {"Intelligence", "Luck", "Kindness", "Aggressiveness", "Curiosity"},
             "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
             "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
