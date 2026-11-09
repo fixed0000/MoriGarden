@@ -6,8 +6,23 @@ public partial class ImportedChao : Node3D
 {
     private float? sleepOffset;
     private readonly System.Collections.Generic.Dictionary<Node3D,Vector3> feet=new();
-    private readonly System.Collections.Generic.Dictionary<Node3D,(Node3D Sleep,Node3D Happy)> eyeShapes=new();
-    private bool eyesClosed, eyesHappy;
+    private readonly System.Collections.Generic.Dictionary<Node3D,(Node3D Sleep,Node3D Happy,Node3D Squint)> eyeShapes=new();
+    private readonly System.Collections.Generic.Dictionary<MeshInstance3D,(Material? Original,ShaderMaterial Half)> lids=new();
+    private static readonly Shader LidShader=new() { Code="""
+        shader_type spatial;
+        render_mode cull_disabled;
+        uniform sampler2D eye_texture : source_color, hint_default_white;
+        uniform vec4 eye_color : source_color = vec4(1.0);
+        uniform float midpoint;
+        varying float eye_y;
+        void vertex() { eye_y=VERTEX.y; }
+        void fragment() {
+            if (eye_y>midpoint) discard;
+            ALBEDO=(texture(eye_texture,UV)*eye_color).rgb;
+            ROUGHNESS=.82;
+        }
+        """ };
+    private bool eyesClosed, eyesHappy, eyesHalf, eyesSquint;
 
     public static void CloseEyes(Node3D art,bool closed)
     {
@@ -24,9 +39,16 @@ public partial class ImportedChao : Node3D
         model.RefreshEyes();
     }
 
+    public static void HalfEyes(Node3D art,bool half)
+    {
+        if (art is not ImportedChao model || model.eyesHalf==half) return;
+        model.eyesHalf=half;
+        model.RefreshEyes();
+    }
+
     private void RefreshEyes()
     {
-        if ((eyesClosed || eyesHappy) && eyeShapes.Count==0)
+        if ((eyesClosed || eyesHappy || eyesHalf || eyesSquint) && eyeShapes.Count==0)
         {
             foreach (var eye in FindChildren("*_Eye","MeshInstance3D",true,false))
             {
@@ -34,18 +56,38 @@ public partial class ImportedChao : Node3D
                 var bounds=mesh.GetAabb();
                 var center=mesh.Transform*new Vector3(bounds.GetCenter().X,bounds.GetCenter().Y,bounds.End.Z+.006f);
                 var parent=(Node3D)mesh.GetParent();
-                eyeShapes[mesh]=(EyeLine(parent,center,false),EyeLine(parent,center,true));
+                AddLid(mesh,bounds.GetCenter().Y);
+                foreach (var child in mesh.GetChildren())
+                    if (child is MeshInstance3D rim)
+                        AddLid(rim,(bounds.GetCenter().Y-rim.Position.Y)/rim.Scale.Y);
+                eyeShapes[mesh]=(EyeLine(parent,center,false),EyeLine(parent,center,true),
+                    EyeLine(parent,center,true,center.X<0 ? -1 : 1));
             }
         }
+        bool half=!eyesClosed && eyesHalf && !eyesSquint;
+        foreach (var (mesh,lid) in lids) mesh.MaterialOverride=half ? lid.Half : lid.Original;
         foreach (var (eye,shapes) in eyeShapes)
         {
-            eye.Visible=!eyesClosed && !eyesHappy;
+            eye.Visible=!eyesClosed && (!eyesHappy || half) && !eyesSquint;
             shapes.Sleep.Visible=eyesClosed;
-            shapes.Happy.Visible=!eyesClosed && eyesHappy;
+            shapes.Happy.Visible=!eyesClosed && eyesHappy && !half && !eyesSquint;
+            shapes.Squint.Visible=!eyesClosed && eyesSquint;
         }
     }
 
-    private static Node3D EyeLine(Node3D parent,Vector3 center,bool happy)
+    private void AddLid(MeshInstance3D eye,float midpoint)
+    {
+        var lid=new ShaderMaterial { Shader=LidShader };
+        if (eye.GetActiveMaterial(0) is StandardMaterial3D material)
+        {
+            if (material.AlbedoTexture!=null) lid.SetShaderParameter("eye_texture",material.AlbedoTexture);
+            lid.SetShaderParameter("eye_color",material.AlbedoColor);
+        }
+        lid.SetShaderParameter("midpoint",midpoint);
+        lids.Add(eye,(eye.MaterialOverride,lid));
+    }
+
+    private static Node3D EyeLine(Node3D parent,Vector3 center,bool happy,int squint=0)
     {
         var line=new Node3D { Position=center };
         parent.AddChild(line);
@@ -57,7 +99,8 @@ public partial class ImportedChao : Node3D
         {
             float x=-1+2f*i/segments;
             float y=happy ? .016f-.030f*Mathf.Abs(x) : .016f*x*x-.010f;
-            var point=new Vector3(x*.029f,y,0);
+            var point=squint==0 ? new Vector3(x*.029f,y,0) :
+                new Vector3(squint*(Mathf.Abs(x)-.5f)*.045f,x*.026f,0);
             GardenArt.Ball(line,point,Vector3.One*(2*radius),ink);
             if (i>0)
             {
@@ -96,9 +139,9 @@ public partial class ImportedChao : Node3D
         }
     }
 
-    public static void Gait(Node3D art,float phase,bool moving,bool swimming,bool sprinting=false)
+    public static void Gait(Node3D art,float phase,bool moving,bool swimming,bool sprinting=false,bool struggling=false)
     {
-        float swing=moving ? Mathf.Sin(phase) : 0;
+        float swing=moving ? Mathf.Sin(phase*(struggling ? 2.3f : 1)) : 0;
         for(int side=-1;side<=1;side+=2)
         {
             string suffix=side<0 ? "L" : "R";
@@ -106,28 +149,39 @@ public partial class ImportedChao : Node3D
             {
                 if (!model.feet.TryGetValue(foot,out var rest)) model.feet[foot]=rest=foot.Position;
                 float stride=side*swing;
-                foot.Rotation=new(stride*(swimming ? .55f : sprinting ? .92f : .70f),0,0);
-                foot.Position=rest+(swimming ? Vector3.Zero :
-                    new Vector3(0,Mathf.Max(0,stride)*.025f,stride*(sprinting ? .043f : .032f)));
+                float angle=stride*(swimming ? (struggling ? 1.05f : .55f) : sprinting ? .92f : .70f);
+                float heelClearance=swimming ? 0 : Mathf.Abs(Mathf.Sin(angle))*.077f;
+                foot.Rotation=new(angle,0,0);
+                foot.Position=rest+(swimming ? Vector3.Up*(struggling ? stride*.019f : 0) :
+                    new Vector3(0,heelClearance+Mathf.Max(0,stride)*.025f,stride*(sprinting ? .043f : .032f)));
             }
             if (art.FindChild("Paddle"+suffix,true,false) is Node3D paddle)
-                paddle.Rotation=new(sprinting ? -.98f+side*swing*.10f : -side*swing*(swimming ? 1.02f : .35f),
-                    0,side*(swimming ? .32f : sprinting ? .18f : .04f));
+                paddle.Rotation=new(sprinting ? -.98f+side*swing*.10f : -side*swing*(swimming ? (struggling ? 1.52f : 1.02f) : .49f),
+                    swimming ? side*.32f*Mathf.Cos(phase) : 0,
+                    side*(swimming ? .43f+.19f*side*swing : sprinting ? .18f : .04f));
         }
     }
 
     public static void MovePose(Node3D art,float phase,bool moving,bool water,bool swims,bool sprinting,bool airborne,bool flying)
     {
         CloseEyes(art,false);
-        Gait(art,phase,moving,water,sprinting);
+        bool struggling=water && !swims;
+        if (art is ImportedChao model && model.eyesSquint!=struggling)
+        {
+            model.eyesSquint=struggling;
+            model.RefreshEyes();
+        }
+        float pitch=water ? (swims ? 85 : 12+Mathf.Sin(phase*2.6f)*11) : sprinting ? 30 : airborne ? 20 : 0;
+        if (art.FindChild("HeadPivot",true,false) is Node3D head)
+            head.RotationDegrees=new(water ? -pitch+12 : 0,0,0);
+        Gait(art,phase,moving || water,water,sprinting,struggling);
         if (flying)
             foreach (var (suffix,side) in new[]{("L",-1),("R",1)})
                 if (art.FindChild("Paddle"+suffix,true,false) is Node3D paddle)
                     paddle.Rotation=new(-.24f,0,side*(.90f+Mathf.Sin(phase)*.16f));
-        art.RotationDegrees=new(water ? (swims ? 76 : 18) : sprinting ? 30 : airborne ? 20 : 0,0,
-            water && !swims ? Mathf.Sin(phase*2.3f)*17 : 0);
-        art.Position=Vector3.Up*(water ? (swims ? .19f : -.025f)+Mathf.Sin(phase)*.012f :
-            airborne ? .025f : moving ? Mathf.Abs(Mathf.Sin(phase))*(sprinting ? .025f : .009f) : 0);
+        art.RotationDegrees=new(pitch,0,struggling ? Mathf.Sin(phase*2.3f)*15 : 0);
+        art.Position=Vector3.Up*(water ? (swims ? .19f : -.085f)+Mathf.Sin(phase*(struggling ? 2.1f : 1))*(struggling ? .032f : .012f) :
+            airborne ? .025f : moving ? .008f+Mathf.Abs(Mathf.Sin(phase))*(sprinting ? .025f : .009f) : .008f);
     }
 
     public static void IslandNapPose(Node3D art)

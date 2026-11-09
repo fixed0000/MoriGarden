@@ -11,6 +11,15 @@ public sealed class PetState
     public float Joy { get; set; } = 65;
     public float Energy { get; set; } = 90;
     public int Bond { get; set; }
+    public const string CurrentHero = "player";
+    public System.Collections.Generic.Dictionary<string,float> CharacterRelationships { get; set; } = new();
+
+    public float RelationshipWith(string character = CurrentHero) =>
+        CharacterRelationships.TryGetValue(character,out float value) ? value : 0;
+
+    public void ChangeRelationship(float amount,string character = CurrentHero) =>
+        CharacterRelationships[character] = Math.Clamp(RelationshipWith(character)+amount,-100,100);
+
     public const int CallBondThreshold = 6;
     public bool RespondsToCall => Bond >= CallBondThreshold;
     public int Care { get; set; }
@@ -116,6 +125,7 @@ public sealed class PetState
     public void Pet()
     {
         if (!CanAct) return;
+        ChangeRelationship(.38f);
         Joy = Math.Min(100, Joy + 12);
         Bond++;
         Care++;
@@ -133,6 +143,7 @@ public sealed class PetState
             case "Power": Power = Math.Min(990, Power+xp); break;
             default: throw new ArgumentException("Unknown animal skill", nameof(skill));
         }
+        ChangeRelationship(.45f);
         RecentAnimalSkill = skill;
         Joy = Math.Min(100,Joy+4);
     }
@@ -177,6 +188,10 @@ public sealed class PetState
         Name = string.IsNullOrWhiteSpace(Name) ? "Mori" : Name.Trim();
         if (Name.Length>18) Name=Name[..18];
         BagFruit = Math.Clamp(BagFruit,0,12);
+        CharacterRelationships ??= new();
+        foreach (var value in CharacterRelationships.Values)
+            if (!float.IsFinite(value) || value is < -100 or > 100)
+                throw new ArgumentException("Unsupported character relationship");
         GardenEggs ??= new();
         if (GardenEggs.Count>12 || GardenEggs.Exists(egg=>egg==null || !float.IsFinite(egg.X) || !float.IsFinite(egg.Z)))
             throw new ArgumentException("Unsupported garden egg data");

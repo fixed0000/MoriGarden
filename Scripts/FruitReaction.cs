@@ -36,6 +36,7 @@ internal sealed class FruitReaction
         Vector3? fruitCarrier,float dt)
     {
         var orb=art.FindChild("MoodOrb",true,false) as EmotionOrb;
+        if (motion.Airborne || (stage!=Stage.Chase && GardenArt.IsPondWater(actor.Position))) return false;
         if (fruitCarrier==null) cooldown=0;
         else cooldown=Mathf.Max(0,cooldown-dt);
         if (stage==Stage.Idle)
@@ -92,16 +93,16 @@ internal sealed class FruitReaction
         }
         else if (stage==Stage.Chase)
         {
-            if (direction.Length()<1.27f) { stage=Stage.Beg; remaining=3.2f; }
+            if (direction.Length()<1.27f) { stage=Stage.Beg; remaining=10; }
             else if (remaining<=0 || direction.Length()>6) Confuse();
             else
             {
-                bool water=!motion.Airborne && GardenArt.IsPondWater(actor.Position);
-                if (water) actor.Position=new(actor.Position.X,Mathf.MoveToward(actor.Position.Y,0,dt*4),actor.Position.Z);
+                bool water=motion.IsSwimmingAt(actor.Position);
                 var route=motion.RouteOffUpperPlatform(actor.Position,target)-actor.Position;
                 route.Y=0;
                 bool moving=motion.Step(actor,route,chao,true,water,dt,true,out _);
-                gait+=dt*15;
+                water=motion.IsSwimmingAt(actor.Position);
+                gait+=dt*(water ? 7 : 15);
                 ImportedChao.MovePose(art,gait,moving,water,chao.Swim>=100,motion.Sprinting,motion.Airborne,motion.Flying);
             }
         }
@@ -109,7 +110,8 @@ internal sealed class FruitReaction
         {
             if (direction.LengthSquared()>.01f) actor.Rotation=new(0,Mathf.Atan2(direction.X,direction.Z),0);
             ImportedChao.ReceivePose(art,.68f+.24f*Mathf.Sin(remaining*11));
-            if (remaining<=0 || direction.Length()>2.2f) Confuse();
+            if (direction.Length()>2.2f) Confuse();
+            else if (remaining<=0) Disappoint(chao,art);
         }
         return true;
     }
@@ -119,6 +121,7 @@ internal sealed class FruitReaction
         ImportedChao.EndThink(art);
         stage=Stage.Upset; remaining=4.5f;
         chao.Joy=Mathf.Max(0,chao.Joy-4);
+        chao.ChangeRelationship(-.35f);
         chao.Bond=Mathf.Max(0,chao.Bond-1);
     }
 }

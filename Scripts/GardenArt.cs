@@ -25,9 +25,9 @@ public static class GardenArt
         (new(-7,2,-18.3f),new(3.6f,4f,3.4f)),
         (new(-8.55f,2.73f,-20.0f),new(3.1f,5.46f,3.3f)),
     };
-    public static readonly Vector3 Balcony = new(-11.15f,7.49f,-17.74f);
-    public static readonly Vector3 BalconyRampStart=new(-8.64f,5.46f,-20.82f);
-    public static readonly Vector3 BalconyRampEnd=new(-11.12f,7.49f,-19.43f);
+    public static readonly Vector3 Balcony = new(-11.72f,7.49f,-17.74f);
+    public static readonly Vector3 BalconyRampStart=new(-8.90f,5.46f,-19.67f);
+    public static readonly Vector3 BalconyRampEnd=new(-11.70f,7.49f,-19.67f);
     public static readonly Vector3 WaterfallExit=new(-9.15f,5.46f,-18.64f);
     public static Vector3 BalconyRail => Balcony+new Vector3(0,.55f,1.10f);
     public static StandardMaterial3D Material(Color color, bool glow = false) => new()
@@ -43,11 +43,15 @@ public static class GardenArt
         return node;
     }
 
-    public static void StoneCollision(MeshInstance3D mesh)
+    public static void StoneCollision(MeshInstance3D mesh,bool climbable=true)
     {
         mesh.CreateConvexCollision();
         foreach (var node in mesh.GetChildren())
-            if (node is StaticBody3D body) body.SetMeta("stone",true);
+            if (node is StaticBody3D body)
+            {
+                body.SetMeta("stone",true);
+                if (!climbable) body.SetMeta("unclimbable",true);
+            }
     }
 
     public static MeshInstance3D Ball(Node3D parent, Vector3 pos, Vector3 scale, Color color) =>
@@ -180,7 +184,7 @@ public static class GardenArt
         for (int i=0;i<8;i++)
         {
             var rock = Shape(root,new SphereMesh { RadialSegments=7,Rings=4 },
-                new(-17+i*1.65f,3.0f,i>=4 ? -24.5f : i<2 ? -21.6f : -19.60f),new(4.8f,8.4f+(i%3)*.9f,5.15f),
+                new(-17+i*1.65f,3.0f,i>=4 ? -24.5f : i==3 ? -23.55f : i<2 ? -21.6f : -19.60f),new(4.8f,8.4f+(i%3)*.9f,5.15f),
                 new(i%2==0?"565d61":"71766f"));
             rock.RotationDegrees = new(0,i*39,0);
             rock.MaterialOverride = strata;
@@ -208,23 +212,31 @@ public static class GardenArt
             StoneCollision(slab);
         }
         BalconyStone(Balcony,new(4.58f,.37f,2.84f));
-        BalconyStone(BalconyRampEnd,new(2.18f,.36f,1.16f));
+        BalconyStone(BalconyRampEnd+new Vector3(-.70f,0,.10f),new(1.42f,.36f,1.65f));
         Vector3 rampAxis=BalconyRampEnd-BalconyRampStart;
         var ramp=Shape(root,new BoxMesh(),(BalconyRampEnd+BalconyRampStart)*.5f,
-            new(1.34f,.24f,rampAxis.Length()+.24f),new("777c70"));
+            new(1.93f,.24f,rampAxis.Length()),new("777c70"));
         ramp.LookAt(ramp.Position+rampAxis);
         ramp.Position-=ramp.Basis.Orthonormalized().Y*.12f;
         ramp.MaterialOverride=strata;
         StoneCollision(ramp);
-        var ledgeBack=Shape(root,new BoxMesh(),new(-8.60f,7.52f,-22.12f),new(3.75f,4.56f,.78f),new("626d64"));
-        ledgeBack.MaterialOverride=strata;
-        StoneCollision(ledgeBack);
-        for (int i=0;i<3;i++)
+        // The rear edges of the upper terraces are embedded in the mountain.
+        for (int i=Ledges.Length-3;i<Ledges.Length;i++)
         {
-            var buttress=Shape(root,new SphereMesh { RadialSegments=5,Rings=3 },
-                new(-10.03f+i*1.40f,8.15f+(i%2)*.34f,-22.57f),new(2.15f,4.58f,1.20f),new("626d64"));
-            buttress.MaterialOverride=strata;
-            StoneCollision(buttress);
+            var (center,size)=Ledges[i];
+            float rear=center.Z-size.Z*.5f;
+            float top=center.Y+size.Y*.5f;
+            float wallHeight=top+5.4f+(i%2)*.6f;
+            var face=Shape(root,new BoxMesh(),new(center.X,wallHeight*.5f,rear-1.09f),
+                new(size.X,wallHeight,2.26f),new("626d64"));
+            face.MaterialOverride=strata;
+            StoneCollision(face,climbable:false);
+            var crown=Shape(root,new SphereMesh { RadialSegments=6,Rings=4 },
+                new(center.X-.25f,wallHeight-.40f,rear-1.65f),
+                new(size.X+.62f,2.6f+(i%2)*.55f,2.48f),new("626d64"));
+            crown.RotationDegrees=new(0,13+i*17,0);
+            crown.MaterialOverride=strata;
+            StoneCollision(crown,climbable:false);
         }
         BalconyStone(BalconyRail,new(4.08f,.14f,.61f));
         for (int i=-2;i<=2;i++)
@@ -250,8 +262,9 @@ public static class GardenArt
         WaterfallArt.Build(root,new(-11,0,-16.64f),FlowMaterial(true));
         foreach (var (center,size) in Ledges)
         {
-            Shape(root,new BoxMesh(),center,size,new("74796e")).MaterialOverride = strata;
-            ZoneArt.Solid(root,center,size,stone:true);
+            var terrace=Shape(root,TerraceMesh(size),center,Vector3.One,new("74796e"));
+            terrace.MaterialOverride=strata;
+            StoneCollision(terrace);
             for (int i=0;i<3;i++)
                 Shape(root,new SphereMesh { RadialSegments=7,Rings=3 },
                     center+new Vector3((i-1)*size.X*.32f,-size.Y*.15f,size.Z*.47f),
@@ -305,6 +318,28 @@ public static class GardenArt
         Ball(root, new(5, .4f, 3.3f), new(1.3f, .25f, .65f), new("ada78c")).CreateConvexCollision();
 
     }
+    private static Mesh TerraceMesh(Vector3 size)
+    {
+        var half=size*.5f;
+        Vector3[] edge={
+            new(-half.X,half.Y,-half.Z),new(half.X,half.Y,-half.Z),
+            new(half.X,half.Y,half.Z-.26f),new(half.X-.46f,half.Y,half.Z),
+            new(-half.X+.34f,half.Y,half.Z-.06f),new(-half.X,half.Y,half.Z-.42f)
+        };
+        var mesh=new SurfaceTool();
+        mesh.Begin(Mesh.PrimitiveType.Triangles);
+        var depth=Vector3.Down*size.Y;
+        for (int i=0;i<edge.Length;i++)
+        {
+            var a=edge[i]; var b=edge[(i+1)%edge.Length];
+            mesh.AddVertex(Vector3.Up*half.Y); mesh.AddVertex(a); mesh.AddVertex(b);
+            mesh.AddVertex(a); mesh.AddVertex(a+depth); mesh.AddVertex(b);
+            mesh.AddVertex(b); mesh.AddVertex(a+depth); mesh.AddVertex(b+depth);
+        }
+        mesh.GenerateNormals();
+        return mesh.Commit();
+    }
+
     private static MeshInstance3D BuildPondTerrain(Node3D root)
     {
         const int sides=144;

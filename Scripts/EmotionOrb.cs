@@ -13,10 +13,10 @@ public partial class EmotionOrb : Node3D
 
     public override void _Ready() => rest = Position;
 
-    private MeshInstance3D? spring;
+    private MeshInstance3D? spring, heart;
     private Label3D? question;
     private bool thinking;
-    private bool upset;
+    private bool upset, distressed;
     private bool mealUpset;
     private float heartTime;
     private string symbol="?";
@@ -42,30 +42,68 @@ public partial class EmotionOrb : Node3D
 
     private void Refresh()
     {
-        string next=thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "";
+        string next=distressed ? "spring" : thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "";
         if (next==displayed) return;
         displayed=next;
-        if (GetParent() is Node3D chao) ImportedChao.SmileEyes(chao,next=="♥");
-        if (next.Length>0 && next!="spring" && question==null)
+        if (GetParent() is Node3D chao)
         {
-            question=new Label3D { Text="?", FontSize=76, PixelSize=.0019f,
+            ImportedChao.SmileEyes(chao,next=="♥");
+            ImportedChao.HalfEyes(chao,next=="spring");
+        }
+        if (next.Length>0 && next is not ("spring" or "♥") && question==null)
+        {
+            question=new Label3D { Text="?", FontSize=76, PixelSize=.0024f,
                 Billboard=BaseMaterial3D.BillboardModeEnum.Enabled, Modulate=OrbColor,OutlineSize=10 };
             AddChild(question);
         }
         if (next=="spring" && spring==null) BuildSpring();
+        if (next=="♥" && heart==null) BuildHeart();
         foreach (var node in GetChildren())
-            if (node is MeshInstance3D mesh) mesh.Visible=mesh==spring ? next=="spring" : next.Length==0;
+            if (node is MeshInstance3D mesh) mesh.Visible=mesh==spring ? next=="spring" : mesh==heart ? next=="♥" : next.Length==0;
         if (question!=null)
         {
-            question.Visible=next.Length>0 && next!="spring";
+            question.Visible=next.Length>0 && next is not ("spring" or "♥");
             if (question.Visible) question.Text=next;
         }
         if (next.Length>0) ChaoSounds.Play(this,"mood");
     }
+    public void SetDistressed(bool value)
+    {
+        if (distressed==value) return;
+        distressed=value;
+        Refresh();
+    }
+
     public void SetUpset(bool upset)
     {
         this.upset=upset;
         Refresh();
+    }
+
+    private void BuildHeart()
+    {
+        var mesh=new SurfaceTool();
+        mesh.Begin(Mesh.PrimitiveType.Triangles);
+        Vector3 Edge(int step)
+        {
+            float t=step*Mathf.Tau/48;
+            float x=Mathf.Sin(t);
+            float y=13*Mathf.Cos(t)-5*Mathf.Cos(2*t)-2*Mathf.Cos(3*t)-Mathf.Cos(4*t);
+            return new Vector3(16*x*x*x,y+2,0)*.0049f;
+        }
+        for (int step=0;step<48;step++)
+        {
+            mesh.AddVertex(Vector3.Zero);
+            mesh.AddVertex(Edge(step));
+            mesh.AddVertex(Edge(step+1));
+        }
+        heart=new MeshInstance3D { Name="Heart", Mesh=mesh.Commit(),
+            MaterialOverride=new StandardMaterial3D
+            {
+                AlbedoColor=OrbColor, BillboardMode=BaseMaterial3D.BillboardModeEnum.Enabled,
+                CullMode=BaseMaterial3D.CullModeEnum.Disabled, ShadingMode=BaseMaterial3D.ShadingModeEnum.Unshaded
+            } };
+        AddChild(heart);
     }
 
     private void BuildSpring()
@@ -89,7 +127,7 @@ public partial class EmotionOrb : Node3D
                     mesh.AddVertex(c); mesh.AddVertex(b); mesh.AddVertex(d);
                 }
             mesh.GenerateNormals();
-            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One,OrbColor);
+            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One*1.24f,OrbColor);
             ((StandardMaterial3D)spring.MaterialOverride).CullMode=BaseMaterial3D.CullModeEnum.Disabled;
         }
     }

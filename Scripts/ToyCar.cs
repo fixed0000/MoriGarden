@@ -6,18 +6,20 @@ public partial class ToyCar : CharacterBody3D
 {
     private static readonly Vector3 Home=new(10,0,5);
     private CharacterBody3D? player;
+    private PetState? playChao;
     private float playing, cooldown;
+    private Vector3 placementFrom, placementTo, placementRotation;
     private Vector3 playOrigin, playForward, velocity;
     private bool held, inFlight;
     public bool IsRattle { get; init; }
     public bool IsFlute { get; init; }
     public string ItemName => IsFlute ? "flute" : IsRattle ? "rattle" : "toy car";
     private int lastShake;
-    public bool CanPickUp => !held && !inFlight && player==null;
+    public bool CanPickUp => !held && !inFlight;
 
     public override void _Ready()
     {
-        Position=IsFlute ? Home+new Vector3(-3.8f,0,-1.5f) : IsRattle ? Home+new Vector3(-3,0,.5f) : Home;
+        Position=IsFlute ? new Vector3(3.1f,0,1.7f) : IsRattle ? Home+new Vector3(-3,0,.5f) : Home;
         CollisionLayer=0;
         AddChild(new CollisionShape3D { Position=Vector3.Up*.055f,
             Shape=new BoxShape3D { Size=new(.15f,.10f,.27f) } });
@@ -29,7 +31,8 @@ public partial class ToyCar : CharacterBody3D
         }
         if (IsFlute)
         {
-            var tube=GardenArt.Cylinder(this,new(0,.039f,0),.021f,.27f,new("d5bd81"));
+            GardenArt.Sign(this,"Flute",Vector3.Up*.41f,GardenArt.Cream);
+            var tube=GardenArt.Cylinder(this,new(0,.039f,0),.023f,.31f,new("d5bd81"));
             tube.RotationDegrees=new(0,0,90);
             for (int i=0;i<5;i++)
                 GardenArt.Ball(this,new(-.066f+i*.034f,.060f,0),new(.013f,.003f,.013f),new("665540"));
@@ -52,11 +55,53 @@ public partial class ToyCar : CharacterBody3D
             return;
         }
         if (player==null) return;
-        playing+=dt;
-        if (playing>=4 || !IsInstanceValid(player) || player.Position.DistanceTo(playOrigin)>1)
+        if (!IsInstanceValid(player) || player.Position.DistanceTo(playOrigin)>1)
         {
-            player=null; cooldown=18;
+            EndPlay();
+            return;
         }
+        float before=playing;
+        playing+=dt;
+        if (playing<4) return;
+        if (before<4)
+        {
+            placementFrom=Position;
+            placementRotation=Rotation;
+            placementTo=PlacementPoint(player);
+        }
+        float progress=Mathf.SmoothStep(0,1,Mathf.Clamp((playing-4)/.45f,0,1));
+        Position=placementFrom.Lerp(placementTo,progress);
+        Rotation=placementRotation.Lerp(new(0,player.Rotation.Y,0),progress);
+        if (playing>=4.45f) EndPlay();
+    }
+
+    private Vector3 PlacementPoint(CharacterBody3D actor)
+    {
+        var space=GetWorld3D().DirectSpaceState;
+        var origin=actor.Position+Vector3.Up*.21f;
+        foreach (float angle in new[]{0f,.65f,-.65f})
+        {
+            var ahead=origin+playForward.Rotated(Vector3.Up,angle)*.78f;
+            if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(origin,ahead,1)).Count>0) continue;
+            var floor=space.IntersectRay(PhysicsRayQueryParameters3D.Create(ahead,ahead+Vector3.Down*.8f,1));
+            if (floor.Count>0) return (Vector3)floor["position"]+Vector3.Up*.009f;
+        }
+        return actor.Position+playForward*.64f;
+    }
+
+    private void EndPlay()
+    {
+        player=null;
+        playChao=null;
+        cooldown=18;
+    }
+
+    public bool TakeFromPlay()
+    {
+        if (playChao==null) return false;
+        playChao.ChangeRelationship(-.55f);
+        EndPlay();
+        return true;
     }
 
     public void Hold(Vector3 at)
@@ -75,7 +120,7 @@ public partial class ToyCar : CharacterBody3D
     public bool BeginPlay(CharacterBody3D actor,PetState chao)
     {
         if ((!IsRattle && !IsFlute && !chao.LikesToyCars) || chao.Fun>=100) return false;
-        player=actor; playing=0; held=inFlight=false;
+        player=actor; playChao=chao; playing=0; held=inFlight=false;
         lastShake=-1;
         playForward=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
         playOrigin=actor.Position+playForward*.30f;
@@ -87,6 +132,12 @@ public partial class ToyCar : CharacterBody3D
     public bool PlayPose(CharacterBody3D actor,Node3D art)
     {
         if (player!=actor) return false;
+        if (playing>=4)
+        {
+            ImportedChao.ReceivePose(art,.55f);
+            art.Rotation=new(.33f,0,0);
+            return true;
+        }
         float wobble=Mathf.Sin(playing*7);
         if (IsFlute)
         {
@@ -123,5 +174,5 @@ public partial class ToyCar : CharacterBody3D
     }
 
     public bool Available(CharacterBody3D actor,PetState chao) =>
-        chao.LikesToyCars && chao.Fun<72 && cooldown<=0 && CanPickUp && actor.Position.DistanceTo(Position)<7;
+        chao.LikesToyCars && chao.Fun<72 && cooldown<=0 && player==null && CanPickUp && actor.Position.DistanceTo(Position)<7;
 }

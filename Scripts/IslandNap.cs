@@ -48,15 +48,12 @@ internal sealed class IslandNap
             approach=0; cooldown=55;
             return false;
         }
-        var pond=actor.Position-GardenArt.Pond; pond.Y=0;
-        bool water=direction.Length()>3.15f && pond.Length()<GardenArt.PondRadius && !motion.Airborne;
-        if (water)
-            actor.Position=new(actor.Position.X,Mathf.MoveToward(actor.Position.Y,0,dt),actor.Position.Z);
+        bool water=motion.IsSwimmingAt(actor.Position);
         var route=motion.RouteOffUpperPlatform(actor.Position,Spot)-actor.Position;
         route.Y=0;
         bool moving=motion.Step(actor,route,chao,false,water,dt,true,out _);
-        if (moving) phase+=dt*9;
-        ImportedChao.MovePose(art,phase,moving,water,chao.Swim>=100,false,motion.Airborne,false);
+        if (moving || water) phase+=dt*9;
+        ImportedChao.MovePose(art,phase,moving,water,chao.Swim>=100,false,motion.Airborne,motion.Flying);
         return true;
     }
 }

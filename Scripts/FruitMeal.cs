@@ -54,7 +54,7 @@ internal sealed class FruitMeal
         float elapsedPause=fruit.Bites>startBites ? elapsed-bitesAt[fruit.Bites-1] : 0;
         float chewTime=Mathf.Max(0,elapsed-animationsAt[next]);
         float lean=pause ? 0 : Mathf.SmoothStep(0,.42f,chewTime);
-        var bite=mouth+forward*Mathf.Lerp(.205f,.175f,lean)+Vector3.Up*Mathf.Lerp(-.062f,.012f,lean);
+        var bite=mouth+forward*Mathf.Lerp(.175f,.112f,lean)+Vector3.Up*Mathf.Lerp(-.106f,-.079f,lean);
         float reach=Mathf.Clamp(elapsed/.28f,0,1);
         fruit.Hold(reach>=1 ? bite : from.Lerp(bite,reach)+forward*(Mathf.Sin(reach*Mathf.Pi)*.10f));
         while (fruit.Bites<plannedBites && elapsed>=bitesAt[fruit.Bites])

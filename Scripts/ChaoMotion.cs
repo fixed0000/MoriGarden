@@ -14,7 +14,8 @@ internal sealed class ChaoMotion
     private float climbGoalY;
     private bool clearLedgeBeforeMoving;
     private bool airborneJump, rebounded, landingTumble, rampApproach;
-    private float lockedHeading;
+    private float lockedHeading, bankTime, waterTime;
+    private Vector3 bankTangent;
     public bool Sprinting { get; private set; }
     public bool Airborne => airborne;
     public bool Flying => airborne && flying;
@@ -27,7 +28,7 @@ internal sealed class ChaoMotion
         airborne=flying=Sprinting=walking=false;
         climbing=balconyJump=false;
         airborneJump=rebounded=landingTumble=rampApproach=false;
-        lockedHeading=0;
+        lockedHeading=bankTime=waterTime=0;
         GroundSpeed=BlockedTime=0;
         cliffLeg=-1;
     }
@@ -87,14 +88,16 @@ internal sealed class ChaoMotion
             _ when cliffLeg<=ledges.Length=>ledges[cliffLeg-1].Center+
                 Vector3.Up*ledges[cliffLeg-1].Size.Y*.5f,
             _ when cliffLeg==rail-3=>GardenArt.BalconyRampStart,
-            _ when cliffLeg==rail-2=>GardenArt.BalconyRampEnd,
+            _ when cliffLeg==rail-2=>GardenArt.BalconyRampEnd+Vector3.Left*.21f,
             _ when cliffLeg==rail-1=>GardenArt.Balcony,
             _ when cliffLeg==rail=>GardenArt.BalconyRail,
             _=>GardenArt.BalconyRail+Vector3.Back*3.8f
         };
         var offset=target-at; offset.Y=0;
         climbGoalY=target.Y;
-        if (!airborne && offset.Length()<.39f && (cliffLeg==0 || at.Y>=target.Y-.16f))
+        float arrivalDistance=cliffLeg==rail-2 ? .13f : .39f;
+        float arrivalHeight=cliffLeg==rail-2 ? .055f : .16f;
+        if (!airborne && offset.Length()<arrivalDistance && (cliffLeg==0 || at.Y>=target.Y-arrivalHeight))
         {
             cliffLeg++;
             if (cliffLeg==rail+1) balconyJump=true;
@@ -128,24 +131,28 @@ internal sealed class ChaoMotion
         if (recovery<=0) return false;
         recovery=Mathf.Max(0,recovery-dt);
         float flat=Mathf.SmoothStep(0,1,recovery/.38f);
-        art.RotationDegrees=new(0,0,flat*85);
+        art.RotationDegrees=new(flat*85,0,0);
         art.Position=Vector3.Up*(flat*.22f);
         return true;
     }
+
+    public bool IsSwimmingAt(Vector3 at) => !airborne && GardenArt.IsPondWater(at);
 
     public bool Step(CharacterBody3D body,Vector3 direction,PetState pet,bool running,bool water,float dt,
         bool ledges,out bool hardLanding)
     {
         var start=body.Position;
         Advance(body,direction,pet,running,water,dt,ledges,out hardLanding);
+        if (water && !airborne && body.Position.Y<0 && GardenArt.IsPondWater(body.Position))
+            body.MoveAndCollide(Vector3.Up*Mathf.Min(-body.Position.Y,dt*3.2f));
         var travel=body.Position-start; travel.Y=0;
         float actualSpeed=travel.Length()/Mathf.Max(dt,.001f);
         GroundSpeed=Mathf.Lerp(GroundSpeed,actualSpeed,1-Mathf.Exp(-15*dt));
         walking=direction.LengthSquared()>.0256f && GroundSpeed>(walking ? .085f : .19f);
         BlockedTime=direction.LengthSquared()>.16f && GroundSpeed<.13f && !airborne ? BlockedTime+dt : 0;
         Sprinting=Sprinting && GroundSpeed>=3.15f;
-        var facing=airborne && direction.LengthSquared()>.0256f && lockedHeading<=0 ? direction : travel;
-        if ((walking && actualSpeed>.12f) || (airborne && facing.LengthSquared()>.00001f))
+        var facing=airborne ? airDirection : travel;
+        if ((!airborne && walking && actualSpeed>.12f) || (flying && facing.LengthSquared()>.00001f))
             body.Rotation=new(0,Mathf.LerpAngle(body.Rotation.Y,Mathf.Atan2(facing.X,facing.Z),1-Mathf.Exp(-10*dt)),0);
         return walking;
     }
@@ -176,29 +183,66 @@ internal sealed class ChaoMotion
         bool ledges,out bool hardLanding)
     {
         hardLanding=false;
+        bool struggling=water && pet.Swim<100;
+        waterTime=water ? waterTime+dt : 0;
+        if (water && !airborne && (cliffLeg<0 || struggling))
+        {
+            if (struggling) direction=GardenArt.SwimExit-body.Position;
+            var fromPond=body.Position-GardenArt.Pond;
+            fromPond.Y=0;
+            if (!GardenArt.IsPondWater(new Vector3(body.Position.X+direction.X,0,body.Position.Z+direction.Z)))
+            {
+                var towardExit=GardenArt.SwimExit-GardenArt.Pond;
+                var outlet=towardExit.Normalized();
+                if (fromPond.Length()>GardenArt.PondRadius-3.2f && fromPond.Normalized().Dot(outlet)<.994f)
+                {
+                    // Swim around the shallow ring before crossing the gap between its rocks.
+                    var radial=fromPond.Normalized();
+                    float side=Mathf.Sign(radial.Cross(outlet).Y);
+                    var waypoint=GardenArt.Pond+radial.Rotated(Vector3.Up,side*.26f)*(GardenArt.PondRadius-1.35f);
+                    direction=waypoint-body.Position;
+                }
+                else direction=GardenArt.SwimExit-body.Position;
+                direction.Y=0;
+                if (struggling && fromPond.Normalized().Dot(outlet)<.986f)
+                    direction=direction.Rotated(Vector3.Up,Mathf.Sin(waterTime*1.15f)*.37f);
+            }
+        }
         float distance=direction.Length();
+        float stopDistance=rampApproach ? .065f : .16f;
         Vector3 forward=direction.Normalized();
-        float pace=water ? (pet.Swim<100 ? .82f : 1.20f+pet.Swim*.0018f)
+        float pace=water ? (struggling ? .30f+pet.Swim*.001f : .65f+pet.Swim*.0019f)
             : (running ? 2.2f : .95f)+pet.Run*.0042f;
-        speed=Mathf.MoveToward(speed,distance>.16f ? pace : 0,dt*(2.6f+pet.Run*.004f));
+        speed=Mathf.MoveToward(speed,distance>stopDistance ? pace : 0,dt*(2.6f+pet.Run*.004f));
         Sprinting=!water && pet.Run>=650 && speed>=3.15f && distance>.32f;
         float jumpSpeed=pet.Fly>0 && cliffLeg>=0 ? 10.6f : 6.9f;
-        bool jumpFromWater=water && !airborne && ledges && cliffLeg>0 &&
+        bool jumpFromWater=water && !struggling && !airborne && ledges && cliffLeg>0 &&
             climbGoalY-body.Position.Y>.42f && distance is >.18f and <2.1f;
         if (water && !airborne && !jumpFromWater)
         {
+            bankTime=Mathf.Max(0,bankTime-dt);
             var travel=forward*Mathf.Min(distance,speed*dt);
+            if (bankTime>0 && forward.Dot(bankTangent)<.65f)
+                travel=travel.Lerp(bankTangent*travel.Length(),.68f);
             var bank=body.MoveAndCollide(travel);
             if (bank!=null)
             {
-                var normal=bank.GetNormal(); normal.Y=0;
-                if (normal.LengthSquared()>.01f)
+                var surface=bank.GetNormal();
+                var remainder=bank.GetRemainder();
+                if (surface.Y>.55f && surface.Y<.995f)
+                    body.MoveAndCollide(remainder.Slide(surface));
+                else
                 {
-                    normal=normal.Normalized();
-                    var slide=travel.Slide(normal);
-                    if (slide.LengthSquared()<travel.LengthSquared()*.12f)
-                        slide=normal.Cross(Vector3.Up)*travel.Length();
-                    body.MoveAndCollide(slide);
+                    var normal=new Vector3(surface.X,0,surface.Z).Normalized();
+                    var slide=remainder.Slide(normal);
+                    var tangent=normal.Cross(Vector3.Up);
+                    if (bankTime>0 ? tangent.Dot(bankTangent)<0 : tangent.Dot(slide)<0) tangent=-tangent;
+                    var offset=(tangent+normal*.28f).Normalized()*travel.Length();
+                    if (body.MoveAndCollide(offset,testOnly:true)!=null)
+                        offset=(-tangent+normal*.28f).Normalized()*travel.Length();
+                    body.MoveAndCollide(offset);
+                    bankTangent=offset.Normalized();
+                    bankTime=.48f;
                 }
             }
             return;
@@ -230,12 +274,12 @@ internal sealed class ChaoMotion
                 Mathf.Clamp(speed,1.55f,3.75f));
             lockedHeading=upper ? .55f : 0;
         }
-        if (!airborne && supported && distance>.16f)
+        if (!airborne && supported && distance>stopDistance)
         {
             var hit=body.MoveAndCollide(forward*Mathf.Min(distance,speed*dt));
             if (hit!=null)
             {
-                if (ledges && hit.GetCollider() is GodotObject stone && stone.HasMeta("stone") &&
+                if (ledges && !rampApproach && hit.GetCollider() is GodotObject stone && stone.HasMeta("stone") && !stone.HasMeta("unclimbable") &&
                     HasLedge(body,forward,jumpSpeed>7 ? 2.8f : 1.24f))
                 {
                     airborne=climbing=true; flying=false; peak=body.Position.Y;
@@ -251,7 +295,8 @@ internal sealed class ChaoMotion
             var support=body.MoveAndCollide(Vector3.Down*.07f,testOnly:true);
             if (support==null || support.GetNormal().Y<=.52f)
             {
-                airborne=true; peak=body.Position.Y; flying=false; vertical=0; airborneJump=false;
+                airborne=true; peak=body.Position.Y; flying=false; vertical=0;
+                airborneJump=rebounded=landingTumble=false;
                 airDirection=forward*Mathf.Clamp(speed,1.2f,4.2f);
             }
             else if (support.GetTravel().Y<-.003f)
@@ -260,6 +305,15 @@ internal sealed class ChaoMotion
         if (!airborne) return;
         peak=Mathf.Max(peak,body.Position.Y);
         vertical-=dt*(flying && vertical<0 ? 4.0f : 18f);
+        var position=body.Position;
+        if (ledges && vertical<=0 && !climbing && GardenArt.IsPondWater(position) &&
+            position.Y+vertical*dt<=.025f)
+        {
+            body.MoveAndCollide(Vector3.Up*Mathf.Min(0,.025f-position.Y));
+            airborne=flying=false;
+            vertical=lockedHeading=0;
+            return;
+        }
         if (flying) vertical=Mathf.Max(-1.65f,vertical);
         var impact=body.MoveAndCollide(Vector3.Up*vertical*dt);
         if (impact!=null)
@@ -277,6 +331,7 @@ internal sealed class ChaoMotion
                 {
                     hardLanding=landingTumble || (!rebounded && hard);
                     airborne=flying=climbing=false; vertical=0; lockedHeading=0;
+                    airborneJump=rebounded=landingTumble=false;
                     if (hardLanding) Tumble();
                 }
             }
@@ -286,7 +341,7 @@ internal sealed class ChaoMotion
         if (airborne)
         {
             lockedHeading=Mathf.Max(0,lockedHeading-dt);
-            if (!climbing && !rebounded && lockedHeading<=0 && distance>.23f)
+            if (flying && !climbing && !rebounded && lockedHeading<=0 && distance>.23f)
                 airDirection=airDirection.Lerp(forward*Mathf.Max(1.5f,airDirection.Length()),1-Mathf.Exp(-5*dt));
             if (climbing && clearLedgeBeforeMoving && vertical>0 && body.Position.Y<climbGoalY+.08f) return;
             Vector3 travel=airDirection*dt;
