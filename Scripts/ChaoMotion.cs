@@ -16,10 +16,11 @@ internal sealed class ChaoMotion
     private bool airborneJump, rebounded, landingTumble, rampApproach;
     private float lockedHeading, bankTime, waterTime, shoreRest;
     private Vector3 bankTangent, deepWaterTarget;
-    private bool shoreExit;
+    private bool shoreExit, driftingToIsland;
     private static readonly Vector3 Outlet=(GardenArt.SwimExit-GardenArt.Pond).Normalized();
     private static readonly Vector3 OutletApproach=GardenArt.Pond+Outlet*(GardenArt.PondRadius-2.65f);
     private static readonly Vector3 Island=new(-13.2f,0,-10.8f);
+    public bool Recovering => recovery>0;
     public bool OnCliffRoute => cliffLeg>=0;
     public bool LeavingPond => shoreExit;
     public bool Sprinting { get; private set; }
@@ -159,10 +160,10 @@ internal sealed class ChaoMotion
     public bool IsSwimmingAt(Vector3 at) => !airborne && GardenArt.IsPondWater(at);
 
     public bool Step(CharacterBody3D body,Vector3 direction,PetState pet,bool running,bool water,float dt,
-        bool ledges,out bool hardLanding)
+        bool ledges,out bool hardLanding,bool directIsland=false,bool leavingIsland=false,bool allowIslandDrift=false)
     {
         var start=body.Position;
-        Advance(body,direction,pet,running,water,dt,ledges,out hardLanding);
+        Advance(body,direction,pet,running,water,dt,ledges,out hardLanding,directIsland,leavingIsland,allowIslandDrift);
         if (water && !airborne && body.Position.Y<0 && GardenArt.IsPondWater(body.Position))
             body.MoveAndCollide(Vector3.Up*Mathf.Min(-body.Position.Y,dt*3.2f));
         var travel=body.Position-start; travel.Y=0;
@@ -200,7 +201,7 @@ internal sealed class ChaoMotion
     }
 
     private void Advance(CharacterBody3D body,Vector3 direction,PetState pet,bool running,bool water,float dt,
-        bool ledges,out bool hardLanding)
+        bool ledges,out bool hardLanding,bool directIsland,bool leavingIsland,bool allowIslandDrift)
     {
         hardLanding=false;
         bool struggling=water && pet.Swim<100;
@@ -212,11 +213,13 @@ internal sealed class ChaoMotion
             {
                 var fromCenter=positionOnMap-GardenArt.Pond;
                 deepWaterTarget=GardenArt.Pond+(fromCenter.X>1 ? new Vector3(-2,0,6.2f) : new Vector3(5.5f,0,3.8f));
+                driftingToIsland=allowIslandDrift && positionOnMap.DistanceTo(Island)<7.8f && GD.Randf()<.22f;
+                if (driftingToIsland) deepWaterTarget=Island+Vector3.Back*.65f;
                 bankTime=0;
             }
             waterTime+=dt;
-            if (struggling ? waterTime>=24 || (waterTime>=15 && positionOnMap.DistanceTo(deepWaterTarget)<.45f)
-                : cliffLeg<0 && !GardenArt.IsPondWater(positionOnMap+direction))
+            if (leavingIsland || (!directIsland && (struggling ? waterTime>=24 || (waterTime>=15 && positionOnMap.DistanceTo(deepWaterTarget)<.45f)
+                : cliffLeg<0 && !GardenArt.IsPondWater(positionOnMap+direction))))
                 shoreExit=true;
             if (shoreExit)
             {
@@ -225,15 +228,16 @@ internal sealed class ChaoMotion
                 var target=atOutlet ? GardenArt.SwimExit : OutletApproach;
                 direction=PondDirection(positionOnMap,target);
             }
-            else if (struggling)
+            else if (struggling && !directIsland)
             {
-                direction=PondDirection(positionOnMap,deepWaterTarget)
-                    .Rotated(Vector3.Up,Mathf.Sin(waterTime*1.23f)*.48f);
+                var course=driftingToIsland ? deepWaterTarget-positionOnMap : PondDirection(positionOnMap,deepWaterTarget);
+                direction=course.Rotated(Vector3.Up,Mathf.Sin(waterTime*1.23f)*(driftingToIsland ? .20f : .48f));
             }
         }
         else if (!water)
         {
             waterTime=bankTime=0;
+            driftingToIsland=false;
             if (shoreExit)
             {
                 direction=GardenArt.SwimExit-positionOnMap;

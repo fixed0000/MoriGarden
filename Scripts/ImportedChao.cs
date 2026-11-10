@@ -26,6 +26,7 @@ public partial class ImportedChao : Node3D
         lastPosition=at; lastVelocity=velocity; tracked=true;
     }
     private readonly System.Collections.Generic.Dictionary<Node3D,Vector3> feet=new();
+    private readonly System.Collections.Generic.Dictionary<Node3D,(Vector3 Position,Vector3 Scale)> paddleRest=new();
     private readonly System.Collections.Generic.Dictionary<Node3D,(Node3D Sleep,Node3D Happy,Node3D Squint)> eyeShapes=new();
     private readonly System.Collections.Generic.Dictionary<MeshInstance3D,(Material? Original,ShaderMaterial Half)> lids=new();
     private static readonly Shader LidShader=new() { Code="""
@@ -198,9 +199,18 @@ public partial class ImportedChao : Node3D
                     new Vector3(0,heelClearance+Mathf.Max(0,stride)*.025f,stride*(sprinting ? .043f : .032f)));
             }
             if (art.FindChild("Paddle"+suffix,true,false) is Node3D paddle)
+            {
+                if (art is ImportedChao imported)
+                {
+                    if (!imported.paddleRest.TryGetValue(paddle,out var restPaddle))
+                        imported.paddleRest[paddle]=restPaddle=(paddle.Position,paddle.Scale);
+                    paddle.Position=restPaddle.Position;
+                    paddle.Scale=restPaddle.Scale;
+                }
                 paddle.Rotation=new(sprinting ? -.98f+side*swing*.10f : -side*swing*(swimming ? (struggling ? 1.52f : 1.02f) : .49f),
                     swimming ? side*.32f*Mathf.Cos(phase) : 0,
                     side*(swimming ? .43f+.19f*side*swing : sprinting ? .18f : .04f));
+            }
         }
     }
 
@@ -253,18 +263,6 @@ public partial class ImportedChao : Node3D
         }
     }
 
-    public static void IslandNapPose(Node3D art)
-    {
-        Gait(art,0,false,false);
-        CloseEyes(art,true);
-        art.Rotation=new(.83f,0,0);
-        art.Position=Vector3.Up*.027f;
-        if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(-.20f,0,0);
-        for (int side=-1;side<=1;side+=2)
-            if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
-                paw.Rotation=new(-.88f,0,side*.22f);
-    }
-
     public static void EatPose(Node3D art,float remaining)
     {
         art.Rotation=new(.09f*Mathf.Sin(remaining*23),0,0);
@@ -274,6 +272,21 @@ public partial class ImportedChao : Node3D
             if (art.FindChild("Paddle"+suffix,true,false) is Node3D paddle)
                 paddle.Rotation=new(-.98f+.14f*Mathf.Sin(remaining*23),0,side*.29f);
         }
+    }
+
+    public static void HandshakePose(Node3D art,Vector3 grip)
+    {
+        MovePose(art,0,false,false,false,false,false,false);
+        if (art.FindChild("PaddleR",true,false) is not Node3D paw || paw.GetParent() is not Node3D shoulder)
+            return;
+        var direction=shoulder.ToLocal(grip)-paw.Position;
+        float length=direction.Length();
+        if (length<=.01f) return;
+        var reach=direction/length;
+        float advance=Mathf.Clamp(length-.106f,0,.078f);
+        paw.Quaternion=new Quaternion(Vector3.Down,reach);
+        paw.Position+=reach*advance;
+        paw.Scale*=new Vector3(.88f,Mathf.Clamp((length-advance)/.054f,1,2.24f),.88f);
     }
 
     public static void IdeaPose(Node3D art,float weight=1)

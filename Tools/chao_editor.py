@@ -13,6 +13,8 @@ class ChaoEditor:
         self.snapshot = None
         self.variables = {}
         self.roster = {}
+        self.relationship_rows = {}
+        self.relationship_peer = None
         self.selected = None
         self.pending = None
         self.status = tk.StringVar(value="Start Mori, then click Read from game.")
@@ -52,6 +54,7 @@ class ChaoEditor:
             for _, name in names:
                 self.list.insert("end", name)
         self.roster = roster
+        self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
         if self.selected not in roster:
             self.selected = next(iter(roster), None)
         if self.selected is not None:
@@ -85,7 +88,8 @@ class ChaoEditor:
             self.status.set("Waiting for the Chao list from Mori.")
             return
         self.snapshot = dict(session=snapshot["session"], target=self.selected,
-                             parameters=self.roster[self.selected])
+                             parameters=self.roster[self.selected],
+                             relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 0
         for widget in self.tabs.winfo_children():
             widget.destroy()
@@ -94,7 +98,7 @@ class ChaoEditor:
         groups = {
             "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Initiative", "Agility"},
             "Favorites": {"FavoriteToy", "FavoriteFruit", "FavoriteInstrument"},
-            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "Aggressiveness", "Curiosity"},
+            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "Sociability", "Aggressiveness", "Curiosity"},
             "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
             "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
@@ -135,8 +139,54 @@ class ChaoEditor:
                     control = ttk.Entry(fields, textvariable=var, width=15)
             control.grid(row=row, column=column + 1, sticky="w", padx=(10, 24), pady=4)
             self.variables[name] = var
+        self.build_relationships()
         self.tabs.select(tab_index)
         self.status.set("Edit the values you want to change. Applies to the running game.")
+
+    def build_relationships(self):
+        panel = ttk.Frame(self.tabs, padding=12)
+        self.tabs.add(panel, text="Relationships")
+        rows = self.snapshot["relationships"]
+        if not rows:
+            self.relationship_peer = None
+            ttk.Label(panel, text="No other hatched Chao.").pack(anchor="w")
+            return
+        ttk.Label(panel, text="Choose a Chao to inspect").pack(anchor="w")
+        picker = ttk.Combobox(panel, values=tuple(row["name"] for row in rows), state="readonly", width=32)
+        picker.pack(anchor="w", pady=(4, 12))
+        self.relation_status = tk.StringVar()
+        ttk.Label(panel, textvariable=self.relation_status).pack(anchor="w")
+        self.relation_meter = tk.DoubleVar(value=100)
+        ttk.Progressbar(panel, maximum=200, length=350, variable=self.relation_meter).pack(anchor="w", pady=(8, 0))
+        ttk.Label(panel, text="Hate                         Neutral                         Love").pack(anchor="w", pady=(0, 8))
+        controls = ttk.LabelFrame(panel, text="Details", padding=10)
+        controls.pack(anchor="w", fill="x", pady=6)
+        self.relation_met = tk.BooleanVar()
+        ttk.Checkbutton(controls, text="Introduced", variable=self.relation_met).pack(side="left", padx=(0, 15))
+        self.relation_score = tk.StringVar()
+        ttk.Label(controls, text="Affinity").pack(side="left")
+        ttk.Spinbox(controls, from_=-100, to=100, textvariable=self.relation_score, width=6).pack(side="left", padx=7)
+        self.relation_score.trace_add("write", self.update_relation_meter)
+
+        def select_peer(_event=None):
+            index = picker.current()
+            if index < 0:
+                return
+            row = rows[index]
+            self.relationship_peer = row["id"]
+            self.relation_status.set(row["status"])
+            self.relation_met.set(row["met"])
+            self.relation_score.set(str(row["score"]))
+
+        picker.bind("<<ComboboxSelected>>", select_peer)
+        picker.current(next((i for i, row in enumerate(rows) if row["id"] == self.relationship_peer), 0))
+        select_peer()
+
+    def update_relation_meter(self, *_args):
+        try:
+            self.relation_meter.set(max(-100, min(100, int(self.relation_score.get()))) + 100)
+        except ValueError:
+            pass
 
     def apply(self):
         if self.snapshot is None or self.pending is not None:
@@ -164,14 +214,29 @@ class ChaoEditor:
                     value = value or None
                 if value != old:
                     patch[key] = value
-            if not patch:
+            relationship = {}
+            old_relation = next((row for row in self.snapshot["relationships"]
+                                 if row["id"] == self.relationship_peer), None)
+            if old_relation is not None:
+                met = self.relation_met.get()
+                score = int(self.relation_score.get())
+                if not -100 <= score <= 100:
+                    raise ValueError("Affinity must be between -100 and 100.")
+                if met != old_relation["met"]:
+                    relationship["met"] = met
+                if score != old_relation["score"]:
+                    relationship["score"] = score
+            if not patch and not relationship:
                 self.status.set("No changes to apply.")
                 return
             request_id = uuid4().hex
             command = self.directory / "chao-editor-request.json"
             temporary = command.with_suffix(".tmp")
-            temporary.write_text(json.dumps({"session": current["session"], "id": request_id,
-                                             "target": self.snapshot["target"], "patch": patch}, allow_nan=False), encoding="utf-8")
+            request = {"session": current["session"], "id": request_id,
+                       "target": self.snapshot["target"], "patch": patch}
+            if relationship:
+                request["relationship"] = {"other": self.relationship_peer, **relationship}
+            temporary.write_text(json.dumps(request, allow_nan=False), encoding="utf-8")
             temporary.replace(command)
             self.pending = request_id
             self.status.set("Waiting for the game…")

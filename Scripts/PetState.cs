@@ -23,6 +23,20 @@ public sealed class PetState
 
     public const int CallBondThreshold = 6;
     public bool RespondsToCall => Bond >= CallBondThreshold;
+    public System.Collections.Generic.List<ChaoRelationship> SocialLinks { get; set; } = new();
+
+    public ChaoRelationship? SocialLink(string first,string second,bool create=false)
+    {
+        if (first==second) return null;
+        var link=SocialLinks.Find(entry=>entry.Matches(first,second));
+        if (link==null && create)
+        {
+            link=new ChaoRelationship { First=first, Second=second };
+            SocialLinks.Add(link);
+        }
+        return link;
+    }
+
     public int Care { get; set; }
     public int Agility { get; set; }
     public int Stars { get; set; }
@@ -58,6 +72,7 @@ public sealed class PetState
     public int Stamina { get; set; }
     public int Luck { get; set; }
     public int Intelligence { get; set; }
+    public int Sociability { get; set; } = 50;
     public int Manners { get; set; } = 50;
     public int Kindness { get; set; }
     public int Aggressiveness { get; set; }
@@ -206,6 +221,16 @@ public sealed class PetState
         BagHeartFruit=Math.Clamp(BagHeartFruit,0,12);
         CourtshipReadiness=float.IsFinite(CourtshipReadiness) ? Math.Clamp(CourtshipReadiness,0,100) : 0;
         BloomRemaining=float.IsFinite(BloomRemaining) ? Math.Clamp(BloomRemaining,0,300) : 0;
+        SocialLinks ??= new();
+        var known=new System.Collections.Generic.HashSet<(string,string)>();
+        SocialLinks.RemoveAll(link=>link==null || string.IsNullOrWhiteSpace(link.First) ||
+            string.IsNullOrWhiteSpace(link.Second) || link.First==link.Second ||
+            !known.Add(string.CompareOrdinal(link.First,link.Second)<0 ? (link.First,link.Second) : (link.Second,link.First)));
+        foreach (var link in SocialLinks)
+        {
+            link.Score=Math.Clamp(link.Score,-100,100);
+            link.Introduced|=link.Met;
+        }
         CharacterRelationships ??= new();
         foreach (var value in CharacterRelationships.Values)
             if (!float.IsFinite(value) || value is < -100 or > 100)
@@ -220,6 +245,7 @@ public sealed class PetState
         Stamina = Math.Clamp(Stamina, 0, 990);
         Luck = Math.Clamp(Luck, 0, 990);
         Intelligence = Math.Clamp(Intelligence, 0, 990);
+        Sociability=Math.Clamp(Sociability,0,100);
         Manners = Math.Clamp(Manners,0,100);
         Kindness = Math.Clamp(Kindness,-100,100);
         Aggressiveness = Math.Clamp(Aggressiveness,-100,100);
@@ -249,3 +275,20 @@ public sealed record GardenSaveLocation(int Zone,int MoriZone,float PlayerX,floa
 
 public sealed record GardenFruitSave(float X,float Z,GardenFruitSlotSave[] Slots);
 public sealed record GardenFruitSlotSave(float Growth,int Bites,float? X,float? Y,float? Z);
+
+
+public sealed class ChaoRelationship
+{
+    public string First { get; set; } = "";
+    public string Second { get; set; } = "";
+    public int Score { get; set; }
+    public bool Met { get; set; }
+    public bool Introduced { get; set; }
+    public bool Partner { get; set; }
+
+    public bool Matches(string first,string second) =>
+        First==first && Second==second || First==second && Second==first;
+
+    public string Status => Partner ? "Partner" : Score<=-60 ? "Enemy" : Score<=-25 ? "Rival" :
+        Score>=30 && Met ? "Friend" : Met ? "Acquaintance" : "Stranger";
+}

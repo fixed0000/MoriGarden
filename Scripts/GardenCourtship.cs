@@ -68,7 +68,7 @@ internal sealed class GardenCourtship
         return true;
     }
 
-    public void Advance(float dt,bool roomForEgg,Action<Vector3,string> layEgg)
+    public void Advance(float dt,bool roomForEgg,Action<Vector3,string> layEgg,Action<CharacterBody3D,CharacterBody3D>? pairBond=null)
     {
         if (pair==null && roomForEgg)
         {
@@ -117,6 +117,7 @@ internal sealed class GardenCourtship
         {
             meeting.Laid=true;
             meeting.First.Pet.CourtshipReadiness=meeting.Second.Pet.CourtshipReadiness=0;
+            pairBond?.Invoke(firstActor,secondActor);
             layEgg(meeting.Origin,GD.Randf()<.5f ? meeting.First.Color : meeting.Second.Color);
         }
         float jump=meeting.Laid ? Mathf.Abs(Mathf.Sin((time-2.68f)*8)) : Mathf.Sin(recoil*Mathf.Pi)*.85f;

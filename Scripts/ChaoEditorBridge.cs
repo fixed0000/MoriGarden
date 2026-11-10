@@ -16,7 +16,7 @@ internal sealed class ChaoEditorBridge
     private string status="Ready";
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
         .Where(p=>p.CanWrite && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
-            && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)).ToArray();
+            && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)).ToArray();
 
     public ChaoEditorBridge(string directory) => this.directory=directory;
 
@@ -51,6 +51,18 @@ internal sealed class ChaoEditorBridge
                         }
                         var next=values.Deserialize<PetState>() ?? throw new ArgumentException("Empty editor update");
                         next.Validate();
+                        if (request["relationship"] is JsonObject relationship)
+                        {
+                            string other=relationship["other"]?.GetValue<string>() ?? "";
+                            if (other==target || !roster.ContainsKey(other))
+                                throw new ArgumentException("Choose a different Chao in the garden.");
+                            bool? met=relationship["met"]?.GetValue<bool>();
+                            int? score=relationship["score"]?.GetValue<int>();
+                            var owner=target=="main" ? next : roster["main"];
+                            var link=owner.SocialLink(target,other,create:true)!;
+                            if (met is bool flag) { link.Met=flag; link.Introduced|=flag; }
+                            if (score is int value) link.Score=Math.Clamp(value,-100,100);
+                        }
                         next.GardenEggs=current.GardenEggs;
                         updated=next;
                         EditedTarget=target;
@@ -62,8 +74,15 @@ internal sealed class ChaoEditorBridge
             catch(Exception ex) when (ex is IOException or JsonException or ArgumentException or InvalidOperationException)
             { status=ex.Message; }
         }
+        var ownerState=roster["main"];
         var chao=roster.Select(entry=>new { id=entry.Key,
-            parameters=fields.ToDictionary(field=>field.Name,field=>field.GetValue(entry.Value)) }).ToArray();
+            parameters=fields.ToDictionary(field=>field.Name,field=>field.GetValue(entry.Value)),
+            relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
+            {
+                var link=ownerState.SocialLink(entry.Key,peer.Key);
+                return new { id=peer.Key, name=peer.Value.Name, met=link?.Met ?? false,
+                    score=link?.Score ?? 0, status=link?.Status ?? "Stranger" };
+            }).ToArray() }).ToArray();
         string path=Path.Combine(directory,"chao-editor-state.json");
         File.WriteAllText(path+".tmp",JsonSerializer.Serialize(new { session,status,lastRequest,chao }));
         File.Move(path+".tmp",path,true);

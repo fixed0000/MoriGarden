@@ -44,6 +44,10 @@ public partial class GardenEgg : CharacterBody3D
     private float swimBeat;
     public bool Asleep { get; private set; }
     public bool CanReceive => Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && !interests.HasMeal;
+    internal bool CanSocialize => Chao?.CanAct==true && CanReceive && !held && !islandNap.IsVisiting &&
+        !motion.Airborne && !motion.Recovering && !motion.LeavingPond && !motion.OnCliffRoute &&
+        !rest.Requested && !interests.Busy && !pillar.Active && !fruitReaction.Busy &&
+        callRemaining<=0 && petAnimation<=0 && !GardenArt.IsPondWater(Position);
     public bool CanPet => CanReceive && Chao?.CanAct==true && petCooldown<=0;
 
     public static Color Pigment(string name) => new(name switch
@@ -263,7 +267,7 @@ public partial class GardenEgg : CharacterBody3D
         if (cliff==null && !motion.LeavingPond && fruitReaction.Step(this,visual,state,motion,fruitCarrier,dt)) return false;
         callRemaining=Mathf.Max(0,callRemaining-dt);
         bool called=callRemaining>0 && Position.DistanceTo(callTarget)>1.2f;
-        if (cliff==null && !motion.LeavingPond && (islandNap.IsVisiting || (!called && !rest.Requested)) && islandNap.Step(this,visual,state,motion,dt)) return false;
+        if (cliff==null && (islandNap.IsVisiting || (!motion.LeavingPond && !called && !rest.Requested)) && islandNap.Step(this,visual,state,motion,dt)) return false;
         if (cliff==null && pillar.Step(this,visual,state,motion,dt,canChoose && state.Energy>=58)) return false;
         Vector3 beforeRest=Position;
         if (cliff==null && !motion.Airborne && !motion.LeavingPond && !inWater && !called && rest.Step(this,state,dt,out bool arrived))
@@ -300,7 +304,7 @@ public partial class GardenEgg : CharacterBody3D
             }
             offset=ChaoMotion.AvoidNeighbors(this,offset);
         }
-        bool moving=motion.Step(this,offset,state,false,inWater,dt,true,out bool hardLanding);
+        bool moving=motion.Step(this,offset,state,false,inWater,dt,true,out bool hardLanding,allowIslandDrift:!called);
         inWater=motion.IsSwimmingAt(Position);
         if (moving || inWater) gait+=dt*(inWater && !swimming ? 5.2f : Mathf.Clamp(motion.GroundSpeed*9,4,19));
         ImportedChao.MovePose(visual,gait,moving,inWater,swimming,motion.Sprinting,motion.Airborne,motion.Flying);

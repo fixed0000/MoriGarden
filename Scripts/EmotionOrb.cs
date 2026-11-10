@@ -169,7 +169,7 @@ public partial class EmotionOrb : Node3D
                     mesh.AddVertex(c); mesh.AddVertex(b); mesh.AddVertex(d);
                 }
             mesh.GenerateNormals();
-            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Zero,Vector3.One*1.24f,OrbColor);
+            spring=GardenArt.Shape(this,mesh.Commit(),Vector3.Up*.10f,new(1.36f,2.18f,1.36f),OrbColor);
             ((StandardMaterial3D)spring.MaterialOverride).CullMode=BaseMaterial3D.CullModeEnum.Disabled;
         }
     }

@@ -8,6 +8,7 @@ internal sealed class FruitReaction
     private Stage stage;
     private float remaining, cooldown, gait;
     private Vector3 lastCarrier;
+    public bool Busy => stage!=Stage.Idle;
     public bool IsConfused => stage==Stage.Confused;
     public bool AnticipatesFruit => stage is Stage.Alert or Stage.Chase or Stage.Beg or Stage.Waiting;
     public bool CanAcceptFruit(PetState chao) =>

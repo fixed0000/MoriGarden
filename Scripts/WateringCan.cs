@@ -165,6 +165,8 @@ public partial class WateringCan : Node3D
         return true;
     }
 
+    public bool IsUsing(CharacterBody3D actor) => owner==actor;
+
     public void Cancel(CharacterBody3D actor)
     {
         if (owner==actor) Finish();
