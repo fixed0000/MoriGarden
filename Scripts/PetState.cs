@@ -5,6 +5,7 @@ namespace Mori;
 // Чистые правила игры: этот класс ничего не знает о графике и клавиатуре.
 public sealed class PetState
 {
+    public GardenSaveLocation? ManualLocation { get; set; }
     public int Version { get; set; } = 1;
     public string Name { get; set; } = "Mori";
     public float Fullness { get; set; } = 72;
@@ -39,6 +40,12 @@ public sealed class PetState
     public const int SecondsPerChaoYear = 192 * 60;
     public int AgeYears => (int)Math.Min(int.MaxValue,AgeSeconds/SecondsPerChaoYear);
     public bool LikesToyCars { get; set; } = true;
+    public string FavoriteToy { get; set; } = "";
+    public string FavoriteFruit { get; set; } = "Garden Fruit";
+    public string FavoriteInstrument { get; set; } = "Flute";
+
+    public string PreferredToy => string.IsNullOrEmpty(FavoriteToy) ? (LikesToyCars ? "Toy Car" : "Rattle") : FavoriteToy;
+    public bool EnjoysToyCars => LikesToyCars || FavoriteToy=="Toy Car";
     public bool Glutton { get; set; }
     public bool Crybaby { get; set; }
     public float Fun { get; set; } = 65;
@@ -51,6 +58,7 @@ public sealed class PetState
     public int Stamina { get; set; }
     public int Luck { get; set; }
     public int Intelligence { get; set; }
+    public int Manners { get; set; } = 50;
     public int Kindness { get; set; }
     public int Aggressiveness { get; set; }
     public int Curiosity { get; set; }
@@ -191,6 +199,9 @@ public sealed class PetState
             throw new ArgumentException("Unsupported or corrupt life stage");
         Name = string.IsNullOrWhiteSpace(Name) ? "Mori" : Name.Trim();
         if (Name.Length>18) Name=Name[..18];
+        FavoriteToy=FavoriteToy is "Toy Car" or "Rattle" ? FavoriteToy : "";
+        FavoriteFruit=FavoriteFruit=="Heart Fruit" ? FavoriteFruit : "Garden Fruit";
+        FavoriteInstrument=FavoriteInstrument=="None" ? FavoriteInstrument : "Flute";
         BagFruit = Math.Clamp(BagFruit,0,12);
         BagHeartFruit=Math.Clamp(BagHeartFruit,0,12);
         CourtshipReadiness=float.IsFinite(CourtshipReadiness) ? Math.Clamp(CourtshipReadiness,0,100) : 0;
@@ -209,6 +220,7 @@ public sealed class PetState
         Stamina = Math.Clamp(Stamina, 0, 990);
         Luck = Math.Clamp(Luck, 0, 990);
         Intelligence = Math.Clamp(Intelligence, 0, 990);
+        Manners = Math.Clamp(Manners,0,100);
         Kindness = Math.Clamp(Kindness,-100,100);
         Aggressiveness = Math.Clamp(Aggressiveness,-100,100);
         Curiosity = Math.Clamp(Curiosity,-100,100);
@@ -230,3 +242,10 @@ public sealed class GardenEggState
     public bool Hatched { get; set; }
     public PetState? Chao { get; set; }
 }
+
+
+public sealed record GardenSaveLocation(int Zone,int MoriZone,float PlayerX,float PlayerY,float PlayerZ,
+    float MoriX,float MoriY,float MoriZ,GardenFruitSave[]? Trees=null);
+
+public sealed record GardenFruitSave(float X,float Z,GardenFruitSlotSave[] Slots);
+public sealed record GardenFruitSlotSave(float Growth,int Bites,float? X,float? Y,float? Z);

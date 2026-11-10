@@ -13,9 +13,12 @@ public partial class WateringCan : Node3D
     private CharacterBody3D? owner;
     private Node3D? ownerArt;
     private Stage stage;
+    private readonly ChaoWander detour=new();
     private float delay=80+GD.Randf()*60;
     private float elapsed, phase, lease, tripTime;
     private Vector3 tree, treeStand, putAway, lowerFrom;
+    private Vector3[] treeRoute=System.Array.Empty<Vector3>();
+    private int treeWaypoint;
     private Node3D water = null!;
     private CpuParticles3D drops = null!;
     private static readonly Vector3 Spout=new(0,.143f,.255f);
@@ -74,6 +77,8 @@ public partial class WateringCan : Node3D
             approach=approach.Normalized();
             treeStand=ClearShore(tree+approach*1.30f);
             putAway=ClearShore(treeStand+approach.Rotated(Vector3.Up,1.23f)*1.45f);
+            treeRoute=MakeTreeRoute(tree,treeStand);
+            treeWaypoint=0;
             owner=actor;
             ownerArt=art;
             stage=Stage.Approach;
@@ -126,7 +131,8 @@ public partial class WateringCan : Node3D
                 if (elapsed>=2) Next(Stage.ThinkAgain);
                 break;
             case Stage.Tree:
-                if (CarryTo(actor,art,pet,motion,treeStand,dt))
+                if (CarryTo(actor,art,pet,motion,treeRoute[treeWaypoint],dt,followWaypoints:true) &&
+                    ++treeWaypoint>=treeRoute.Length)
                 {
                     Face(actor,tree);
                     Next(Stage.Pour);
@@ -180,18 +186,59 @@ public partial class WateringCan : Node3D
     private void Next(Stage next) { stage=next; elapsed=0; }
     private static float Smooth(float t) => Mathf.SmoothStep(0,1,Mathf.Clamp(t,0,1));
 
-    private bool WalkTo(CharacterBody3D actor,Node3D art,PetState pet,ChaoMotion motion,Vector3 destination,float dt)
+    private bool WalkTo(CharacterBody3D actor,Node3D art,PetState pet,ChaoMotion motion,Vector3 destination,float dt,bool followWaypoints=false)
     {
         bool waterborne=motion.IsSwimmingAt(actor.Position);
         var goal=motion.RouteOffUpperPlatform(actor.Position,destination);
-        if (goal==destination && !waterborne) goal=DryRoute(actor.Position,destination);
+        if (goal==destination && !waterborne && !followWaypoints) goal=DryRoute(actor.Position,destination);
         var offset=goal-actor.Position; offset.Y=0;
         if (goal==destination && offset.Length()<.29f && !motion.Airborne && !waterborne) return true;
-        bool moving=motion.Step(actor,offset,pet,false,waterborne,dt,true,out _);
+        bool moving;
+        var radial=actor.Position-GardenArt.Pond; radial.Y=0;
+        if (!motion.Airborne && !waterborne && (destination==PondBank || goal==OuterBank) &&
+            radial.Length()<GardenArt.PondRadius+2.5f && radial.Normalized().Dot(PondSide)>.995f)
+        {
+            // Cross the shore's terrain seam at water level along the cleared approach.
+            if (actor.Position.Y<0) actor.MoveAndCollide(Vector3.Up*Mathf.Min(-actor.Position.Y,3*dt));
+            moving=actor.MoveAndCollide(offset.LimitLength(.92f*dt))==null;
+        }
+        else
+        {
+            if (!waterborne && !motion.Airborne) offset=detour.Steer(actor,offset,dt);
+            var before=actor.Position;
+            moving=motion.Step(actor,offset,pet,false,waterborne,dt,true,out _);
+            var moved=actor.Position-before; moved.Y=0;
+            if (!waterborne && !motion.Airborne && offset.LengthSquared()>.08f &&
+                moved.LengthSquared()<.000006f && actor.Position.Y is >-.065f and <.025f)
+            {
+                var raised=actor.GlobalTransform;
+                var lift=Vector3.Up*(.027f-actor.Position.Y);
+                raised.Origin+=lift;
+                var across=offset.LimitLength(.9f*dt);
+                if (!actor.TestMove(raised,across) && actor.MoveAndCollide(lift)==null)
+                    moving=actor.MoveAndCollide(across)==null;
+            }
+        }
         phase+=dt*9;
         ImportedChao.MovePose(art,phase,moving,motion.IsSwimmingAt(actor.Position),pet.Swim>=100,
             false,motion.Airborne,motion.Flying);
         return false;
+    }
+
+    private static Vector3[] MakeTreeRoute(Vector3 tree,Vector3 stand)
+    {
+        if (tree.X<-20)
+            return new[]{OuterBank,new Vector3(-2,0,3),new Vector3(-7.7f,0,6),new Vector3(-16,0,5.3f),
+                new Vector3(-22.5f,0,.8f),stand};
+        if (tree.X<-10)
+            return new[]{OuterBank,new Vector3(-2,0,3),new Vector3(-7.7f,0,6),stand};
+        if (tree.X<0)
+            return new[]{OuterBank,new Vector3(-2,0,1.8f),stand};
+        if (tree.Z<-10)
+            return new[]{OuterBank,new Vector3(3,0,-.6f),new Vector3(5,0,-5.5f),new Vector3(5.7f,0,-10.8f),stand};
+        if (tree.Z<0)
+            return new[]{OuterBank,new Vector3(4.2f,0,-.6f),stand};
+        return new[]{OuterBank,new Vector3(4.4f,0,.9f),stand};
     }
 
     private static Vector3 DryRoute(Vector3 start,Vector3 goal)
@@ -233,9 +280,9 @@ public partial class WateringCan : Node3D
         return center+radial.Rotated(Vector3.Up,turn*.31f)*(clearance+padding);
     }
 
-    private bool CarryTo(CharacterBody3D actor,Node3D art,PetState pet,ChaoMotion motion,Vector3 goal,float dt)
+    private bool CarryTo(CharacterBody3D actor,Node3D art,PetState pet,ChaoMotion motion,Vector3 goal,float dt,bool followWaypoints=false)
     {
-        bool arrived=WalkTo(actor,art,pet,motion,goal,dt);
+        bool arrived=WalkTo(actor,art,pet,motion,goal,dt,followWaypoints);
         ImportedChao.ReceivePose(art,.86f);
         Hold(actor,0,0);
         return arrived;

@@ -73,7 +73,6 @@ internal sealed class ChaoRest
             var query=PhysicsRayQueryParameters3D.Create(destination+Vector3.Up,destination-Vector3.Up*.3f,1);
             var hit=actor.GetWorld3D().DirectSpaceState.IntersectRay(query);
             if (hit.Count>0) actor.Position=(Vector3)hit["position"];
-            actor.Rotation=Vector3.Zero;
             Requested=false; hop=0; reached=true;
         }
         return true;

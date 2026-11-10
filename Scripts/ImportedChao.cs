@@ -4,7 +4,7 @@ namespace Mori;
 
 public partial class ImportedChao : Node3D
 {
-    private readonly System.Collections.Generic.Dictionary<Vector2,float> sleepOffsets=new();
+    private readonly System.Collections.Generic.Dictionary<int,float> sleepOffsets=new();
     private Node3D? softBody;
     private Vector3 lastPosition, lastVelocity, softness, softnessVelocity;
     private bool tracked;
@@ -132,25 +132,27 @@ public partial class ImportedChao : Node3D
         return line;
     }
 
-    public static void SleepPose(Node3D art,float elapsed=0)
+    public static void SleepPose(Node3D art,float elapsed=0,int manners=50)
     {
         float phase=Mathf.PosMod(elapsed,33);
         float back=Mathf.SmoothStep(0,1,Mathf.Clamp((phase-6)/1.4f,0,1));
         float otherSide=Mathf.SmoothStep(0,1,Mathf.Clamp((phase-18)/1.5f,0,1));
         float repeat=Mathf.SmoothStep(0,1,Mathf.Clamp((phase-30)/2.9f,0,1));
         float roll=Mathf.Lerp(Mathf.Lerp(88*(1-back),-88,otherSide),88,repeat);
-        float pitch=-88*back*(1-otherSide)*(1-repeat);
         Gait(art,0,false,false);
         CloseEyes(art,true);
-        art.RotationDegrees=new(pitch,0,roll);
+        var scale=art.Scale;
+        Basis LyingBasis(float angle) => new Basis(Vector3.Back,Mathf.DegToRad(angle))*
+            new Basis(Vector3.Right,-Mathf.Pi/2);
+        art.Basis=LyingBasis(roll).Scaled(scale);
         if (art is ImportedChao model)
         {
-            var key=new Vector2(Mathf.Round(pitch/6)*6,Mathf.Round(roll/6)*6);
+            int key=(int)Mathf.Round(roll/5)*5;
             if (!model.sleepOffsets.TryGetValue(key,out float offset))
             {
                 float bottom=0;
                 var inverse=art.GlobalTransform.AffineInverse();
-                var pose=Basis.FromEuler(new(Mathf.DegToRad(key.X),0,Mathf.DegToRad(key.Y))).Scaled(art.Scale);
+                var pose=LyingBasis(key).Scaled(scale);
                 foreach (var node in art.GetChild(0).FindChildren("*","MeshInstance3D",true,false))
                 {
                     if (node is not MeshInstance3D mesh || mesh.Mesh==null) continue;
@@ -159,21 +161,23 @@ public partial class ImportedChao : Node3D
                         foreach (var vertex in mesh.Mesh.SurfaceGetArrays(surface)[(int)Mesh.ArrayType.Vertex].AsVector3Array())
                             bottom=Mathf.Min(bottom,(pose*(relative*vertex)).Y);
                 }
-                model.sleepOffsets[key]=offset=-bottom-.008f;
+                model.sleepOffsets[key]=offset=-bottom+.005f;
             }
             art.Position=Vector3.Up*offset;
         }
+        if (manners>=50) return;
         float stretch=Mathf.SmoothStep(0,1,Mathf.Clamp((phase-9)/1.3f,0,1))*
             (1-Mathf.SmoothStep(0,1,Mathf.Clamp((phase-14)/1.2f,0,1)));
+        float scratch=phase is >22 and <24.5f ? Mathf.Sin(Mathf.Pi*(phase-22)/2.5f) : 0;
         for (int side=-1;side<=1;side+=2)
         {
             string suffix=side<0 ? "L" : "R";
             if (art.FindChild("Foot"+suffix,true,false) is Node3D foot)
-                foot.Rotation=new(-.30f*stretch,0,0);
+                foot.Rotation=new(-.28f*stretch,0,side*.57f*stretch);
             if (art.FindChild("Paddle"+suffix,true,false) is not Node3D paw) continue;
-            float scratch=side==1 && phase is >22 and <24.5f ?
-                Mathf.Sin(Mathf.Pi*(phase-22)/2.5f)*(.85f+.22f*Mathf.Sin(phase*23)) : 0;
-            paw.Rotation=new(-1.5f*scratch-.45f*stretch,0,side*(.08f+.83f*stretch-.34f*scratch));
+            var loose=new Vector3(-.40f*stretch,0,side*(.06f+.88f*stretch));
+            var behindBack=new Vector3(1.35f+.25f*Mathf.Sin(phase*23),-.35f,-.82f);
+            paw.Rotation=side==1 ? loose.Lerp(behindBack,scratch) : loose;
         }
     }
 
@@ -219,7 +223,18 @@ public partial class ImportedChao : Node3D
                     paddle.Rotation=new(-.24f,0,side*(.90f+Mathf.Sin(phase)*.16f));
         art.RotationDegrees=new(pitch,0,struggling ? Mathf.Sin(phase*2.3f)*15 : 0);
         art.Position=Vector3.Up*(water ? (swims ? .19f : -.085f)+Mathf.Sin(phase*(struggling ? 2.1f : 1))*(struggling ? .032f : .012f) :
-            airborne ? .025f : moving ? .008f+Mathf.Abs(Mathf.Sin(phase))*(sprinting ? .025f : .009f) : .008f);
+            airborne ? .025f : moving ? .039f+Mathf.Abs(Mathf.Sin(phase))*(sprinting ? .025f : .009f) : .034f);
+    }
+
+    public static void ClimbPose(Node3D art,float elapsed)
+    {
+        CloseEyes(art,false);
+        Gait(art,elapsed*11,true,false);
+        art.Position=Vector3.Up*.014f;
+        art.Rotation=new(.19f,0,0);
+        for (int side=-1;side<=1;side+=2)
+            if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
+                paw.Rotation=new(-1.62f+side*.58f*Mathf.Sin(elapsed*11),0,side*.22f);
     }
 
     public static void CourtshipPose(Node3D art,float rub,float jump)
@@ -259,6 +274,18 @@ public partial class ImportedChao : Node3D
             if (art.FindChild("Paddle"+suffix,true,false) is Node3D paddle)
                 paddle.Rotation=new(-.98f+.14f*Mathf.Sin(remaining*23),0,side*.29f);
         }
+    }
+
+    public static void IdeaPose(Node3D art,float weight=1)
+    {
+        Gait(art,0,false,false);
+        CloseEyes(art,false);
+        art.Rotation=Vector3.Zero;
+        art.Position=Vector3.Zero;
+        if (art.FindChild("HeadPivot",true,false) is Node3D head)
+            head.Rotation=new Vector3(-.40f,-.43f,-.10f)*weight;
+        if (art.FindChild("PaddleR",true,false) is Node3D paw)
+            paw.Rotation=new Vector3(-1.38f,-.44f,.47f)*weight;
     }
 
     public static void ThinkPose(Node3D art,float remaining)

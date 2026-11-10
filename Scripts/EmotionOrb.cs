@@ -14,10 +14,12 @@ public partial class EmotionOrb : Node3D
     public override void _Ready() => rest = Position;
 
     private MeshInstance3D? spring, heart;
-    private Label3D? question;
+    private MeshInstance3D? mark;
+    internal string CurrentGlyph => displayed;
     private bool thinking;
     private bool upset, distressed;
-    private bool mealUpset;
+    private bool mealUpset, ideaJoy;
+    private string? ideaSymbol;
     private float heartTime;
     private string symbol="?";
     private string displayed="";
@@ -40,31 +42,34 @@ public partial class EmotionOrb : Node3D
         Refresh();
     }
 
+    public void SetIdea(string? glyph,bool happy)
+    {
+        if (ideaSymbol==glyph && ideaJoy==happy) return;
+        ideaSymbol=glyph;
+        ideaJoy=happy;
+        Refresh();
+    }
+
     private void Refresh()
     {
-        string next=distressed ? "spring" : thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "";
-        if (next==displayed) return;
-        displayed=next;
+        string next=distressed ? "spring" : ideaSymbol ?? (thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "");
         if (GetParent() is Node3D chao)
         {
-            ImportedChao.SmileEyes(chao,next=="♥");
-            ImportedChao.HalfEyes(chao,next=="spring");
+            ImportedChao.SmileEyes(chao,(ideaJoy && !distressed) || next=="♥");
+            ImportedChao.HalfEyes(chao,next=="spring" && (!ideaJoy || distressed));
         }
-        if (next.Length>0 && next is not ("spring" or "♥") && question==null)
-        {
-            question=new Label3D { Text="?", FontSize=76, PixelSize=.0024f,
-                Billboard=BaseMaterial3D.BillboardModeEnum.Enabled, Modulate=OrbColor,OutlineSize=10 };
-            AddChild(question);
-        }
+        if (next==displayed) return;
+        displayed=next;
+        bool punctuation=next is "?" or "!";
+        if (punctuation && mark==null) BuildMark();
         if (next=="spring" && spring==null) BuildSpring();
         if (next=="♥" && heart==null) BuildHeart();
         foreach (var node in GetChildren())
-            if (node is MeshInstance3D mesh) mesh.Visible=mesh==spring ? next=="spring" : mesh==heart ? next=="♥" : next.Length==0;
-        if (question!=null)
-        {
-            question.Visible=next.Length>0 && next is not ("spring" or "♥");
-            if (question.Visible) question.Text=next;
-        }
+            if (node is MeshInstance3D mesh)
+                mesh.Visible=mesh==spring ? next=="spring" : mesh==heart ? next=="♥" :
+                    mesh==mark ? punctuation : next.Length==0 || punctuation;
+        if (punctuation)
+            ((ShaderMaterial)mark!.MaterialOverride).SetShaderParameter("question",next=="?");
         if (next.Length>0) ChaoSounds.Play(this,"mood");
     }
     public void SetDistressed(bool value)
@@ -80,6 +85,43 @@ public partial class EmotionOrb : Node3D
         Refresh();
     }
 
+    private void BuildMark()
+    {
+        var material=new ShaderMaterial { Shader=new Shader { Code="""
+            shader_type spatial;
+            render_mode unshaded, cull_disabled, depth_draw_never;
+            uniform bool question=true;
+            uniform vec4 ink : source_color;
+            void vertex() {
+                MODELVIEW_MATRIX=VIEW_MATRIX*mat4(INV_VIEW_MATRIX[0],INV_VIEW_MATRIX[1],
+                    INV_VIEW_MATRIX[2],MODEL_MATRIX[3]);
+            }
+            float segment(vec2 p,vec2 a,vec2 b) {
+                vec2 v=b-a;
+                return length(p-a-v*clamp(dot(p-a,v)/dot(v,v),0.0,1.0));
+            }
+            void fragment() {
+                vec2 p=vec2(UV.x,1.0-UV.y);
+                float d=segment(p,vec2(.5,.16),vec2(.5,.85));
+                if (question) {
+                    d=segment(p,vec2(.27,.72),vec2(.36,.88));
+                    d=min(d,segment(p,vec2(.36,.88),vec2(.59,.91)));
+                    d=min(d,segment(p,vec2(.59,.91),vec2(.76,.80)));
+                    d=min(d,segment(p,vec2(.76,.80),vec2(.77,.64)));
+                    d=min(d,segment(p,vec2(.77,.64),vec2(.65,.52)));
+                    d=min(d,segment(p,vec2(.65,.52),vec2(.51,.42)));
+                    d=min(d,segment(p,vec2(.51,.42),vec2(.49,.20)));
+                }
+                ALBEDO=ink.rgb;
+                ALPHA=1.0-smoothstep(.085,.101,d);
+            }
+            """ } };
+        material.SetShaderParameter("ink",OrbColor);
+        mark=new MeshInstance3D { Mesh=new QuadMesh { Size=new(.20f,.185f) },Position=Vector3.Up*.138f,
+            MaterialOverride=material,CastShadow=GeometryInstance3D.ShadowCastingSetting.Off };
+        AddChild(mark);
+    }
+
     private void BuildHeart()
     {
         var mesh=new SurfaceTool();
@@ -89,7 +131,7 @@ public partial class EmotionOrb : Node3D
             float t=step*Mathf.Tau/48;
             float x=Mathf.Sin(t);
             float y=13*Mathf.Cos(t)-5*Mathf.Cos(2*t)-2*Mathf.Cos(3*t)-Mathf.Cos(4*t);
-            return new Vector3(16*x*x*x,y+2,0)*.0049f;
+            return new Vector3(16*x*x*x*.0068f,(y+2)*.0088f,0);
         }
         for (int step=0;step<48;step++)
         {
@@ -97,7 +139,7 @@ public partial class EmotionOrb : Node3D
             mesh.AddVertex(Edge(step));
             mesh.AddVertex(Edge(step+1));
         }
-        heart=new MeshInstance3D { Name="Heart", Mesh=mesh.Commit(),
+        heart=new MeshInstance3D { Name="Heart", Position=Vector3.Up*.103f, Mesh=mesh.Commit(),
             MaterialOverride=new StandardMaterial3D
             {
                 AlbedoColor=OrbColor, BillboardMode=BaseMaterial3D.BillboardModeEnum.Enabled,

@@ -4,6 +4,25 @@ namespace Mori;
 
 public static class GardenLandscape
 {
+    internal static readonly Vector3[] IslandSteps={
+        new(-20.95f,.095f,-9.75f),new(-19.65f,.125f,-9.68f),
+        new(-18.35f,.15f,-9.78f),new(-17.05f,.18f,-9.93f),new(-15.73f,.21f,-10.09f)
+    };
+    internal static readonly Vector3 IslandBank=new(-22.52f,0,-9.75f);
+    internal static readonly Vector3 IslandLanding=new(-14.05f,.32f,-10.22f);
+    internal static readonly Vector3[] SouthPillars=MakeSouthPillars();
+
+    private static Vector3[] MakeSouthPillars()
+    {
+        var pillars=new Vector3[10];
+        for (int i=0;i<pillars.Length;i++)
+        {
+            float angle=i*Mathf.Tau/pillars.Length;
+            pillars[i]=new(6+Mathf.Cos(angle)*9,1.70f+(i%3)*.90f,27+Mathf.Sin(angle)*6);
+        }
+        return pillars;
+    }
+
     public static void Build(Node3D root)
     {
         var sand = new Color("b5a78b");
@@ -23,12 +42,14 @@ public static class GardenLandscape
             new(-13.2f,0,-10.8f),Vector3.One,new("6c7950"));
         island.CreateConvexCollision();
         Palm(root,new(-13.2f,.32f,-10.8f));
-        for (int i=0;i<4;i++)
+        for (int i=0;i<IslandSteps.Length;i++)
         {
-            var block = GardenArt.Shape(root,new CylinderMesh { BottomRadius=.79f,TopRadius=.26f,
-                Height=.40f+i%2*.03f,RadialSegments=7 },new(-17.15f-i*.99f,-.105f,-9.65f+i*.13f),
-                new(1,1,.87f),stone.Darkened(i*.05f));
-            block.RotationDegrees = new(0,i*17,0);
+            var top=IslandSteps[i];
+            float height=top.Y+.27f;
+            var block=GardenArt.Shape(root,new CylinderMesh { BottomRadius=.75f,TopRadius=.43f,
+                Height=height,RadialSegments=8 },top-Vector3.Up*height*.5f,
+                Vector3.One,stone.Darkened(i*.037f));
+            block.RotationDegrees=new(0,i*17,0);
             block.CreateConvexCollision();
         }
 
@@ -55,22 +76,21 @@ public static class GardenLandscape
         for (int i=0;i<10;i++)
             Palm(courtyard,new(42+i*7.5f,0,17+Mathf.Sin(i)*3));
         GardenArt.Sign(root,"NORTH GROVE",new(-7,1.5f,-32),GardenArt.Cream);
-        GardenArt.Sign(root,"SOUTH TERRACE",new(4,1.5f,31),GardenArt.Cream);
+        GardenArt.Sign(root,"SOUTH TERRACE",new(4,1.5f,16),GardenArt.Cream);
         for (int i=0;i<11;i++)
         {
             float a=i*Mathf.Tau/11;
             Palm(root,new(-9+Mathf.Cos(a)*13,0,-46+Mathf.Sin(a)*9));
         }
-        for (int i=0;i<10;i++)
+        foreach (var top in SouthPillars)
         {
-            float a=i*Mathf.Tau/10;
-            Vector3 at=new(6+Mathf.Cos(a)*10,.85f+(i%3)*.45f,44+Mathf.Sin(a)*8);
-            GardenArt.Cylinder(root,at,.65f,at.Y*2,stone).CreateConvexCollision();
+            GardenArt.Cylinder(root,new(top.X,top.Y*.5f,top.Z),.65f,top.Y,stone).CreateConvexCollision();
+            GardenArt.Cylinder(root,top+Vector3.Down*.06f,.72f,.12f,stone.Lightened(.06f));
         }
         for (int i=0;i<9;i++)
         {
             float height=.16f+(i%4)*.075f;
-            var slab=GardenArt.Shape(root,new BoxMesh(),new(1+i*1.1f,height*.5f,36+i*.82f),
+            var slab=GardenArt.Shape(root,new BoxMesh(),new(1+i*1.1f,height*.5f,18+i*.82f),
                 new(2.7f,height,2.1f),stone.Darkened((i%3)*.08f));
             slab.RotationDegrees=new(0,i*9,0);
             slab.CreateConvexCollision();

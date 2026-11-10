@@ -29,6 +29,20 @@ public static class SaveStore
         }
     }
 
+    public static PetState? LoadSlot(string path)
+    {
+        foreach (var candidate in new[]{path,path+".bak"})
+        {
+            if (!File.Exists(candidate)) continue;
+            try { return Read(candidate); }
+            catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException) { }
+        }
+        return null;
+    }
+
+    public static PetState Snapshot(PetState pet) =>
+        JsonSerializer.Deserialize<PetState>(JsonSerializer.SerializeToUtf8Bytes(pet))!;
+
     private static PetState Read(string path)
     {
         var pet = JsonSerializer.Deserialize<PetState>(File.ReadAllText(path))

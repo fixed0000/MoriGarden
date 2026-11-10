@@ -10,6 +10,12 @@ internal sealed class ChaoDistress
     public bool Upset => bounced || lying>0 || reacting>0 || wakeUpset>0 || sulking>0 || waterUpset>0;
     public bool Busy => lying>0 || reacting>0 || sulking>0;
 
+    public void Reset()
+    {
+        bounced=wokeWhileHeld=false;
+        lying=reacting=wakeUpset=sulking=waterUpset=0;
+    }
+
     public void Tick(float dt)
     {
         wakeUpset=Mathf.Max(0,wakeUpset-dt);
@@ -93,12 +99,20 @@ internal sealed class ChaoDistress
         {
             FaceDown(art);
             lying=Mathf.Max(0,lying-dt);
-            if (lying==0) reacting=4;
+            if (lying==0) reacting=2.4f;
             return true;
         }
         if (reacting>0)
         {
-            art.Position=Vector3.Zero;
+            if (reacting>2)
+            {
+                float flat=Mathf.SmoothStep(0,1,(reacting-2)/.4f);
+                art.RotationDegrees=new(flat*90,0,0);
+                art.Position=Vector3.Up*Mathf.Lerp(.034f,.16f,flat);
+                reacting=Mathf.Max(2,reacting-dt);
+                return true;
+            }
+            art.Position=Vector3.Up*.034f;
             if (chao.Aggressiveness>=25)
             {
                 ImportedChao.ReceivePose(art,.64f);

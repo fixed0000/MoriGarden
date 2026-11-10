@@ -43,7 +43,7 @@ public static class GardenArt
         return node;
     }
 
-    public static void StoneCollision(MeshInstance3D mesh,bool climbable=true)
+    public static void StoneCollision(MeshInstance3D mesh,bool climbable=false)
     {
         mesh.CreateConvexCollision();
         foreach (var node in mesh.GetChildren())
@@ -158,7 +158,7 @@ public static class GardenArt
         for (int i=0;i<24;i++)
         {
             float angle = i*Mathf.Tau/24;
-            if (angle > .46f && angle < 1.12f) continue;
+            if (angle is >.46f and <1.12f or >2.92f and <3.35f) continue;
             var stone=Shape(root,new CylinderMesh { RadialSegments=9,TopRadius=.13f,BottomRadius=.53f,
                 Height=.27f+(i%3)*.022f },
                 pond+new Vector3(Mathf.Cos(angle)*(PondRadius+.15f),.035f,Mathf.Sin(angle)*(PondRadius+.15f)),
@@ -209,7 +209,7 @@ public static class GardenArt
         {
             var slab=Shape(root,new BoxMesh(),top-Vector3.Up*size.Y*.5f,size,new("777c70"));
             slab.MaterialOverride=strata;
-            StoneCollision(slab);
+            StoneCollision(slab,climbable:true);
         }
         BalconyStone(Balcony,new(4.58f,.37f,2.84f));
         BalconyStone(BalconyRampEnd+new Vector3(-.70f,0,.10f),new(1.42f,.36f,1.65f));
@@ -264,7 +264,7 @@ public static class GardenArt
         {
             var terrace=Shape(root,TerraceMesh(size),center,Vector3.One,new("74796e"));
             terrace.MaterialOverride=strata;
-            StoneCollision(terrace);
+            StoneCollision(terrace,climbable:true);
             for (int i=0;i<3;i++)
                 Shape(root,new SphereMesh { RadialSegments=7,Rings=3 },
                     center+new Vector3((i-1)*size.X*.32f,-size.Y*.15f,size.Z*.47f),

@@ -7,6 +7,7 @@ public partial class ToyCar : CharacterBody3D
     private static readonly Vector3 Home=new(10,0,5);
     private CharacterBody3D? player;
     private PetState? playChao;
+    private Node3D? playArt;
     private float playing, cooldown;
     private Vector3 placementFrom, placementTo, placementRotation;
     private Vector3 playOrigin, playForward, velocity;
@@ -16,6 +17,16 @@ public partial class ToyCar : CharacterBody3D
     public string ItemName => IsFlute ? "flute" : IsRattle ? "rattle" : "toy car";
     private int lastShake;
     public bool CanPickUp => !held && !inFlight;
+    internal bool PlayedBy(CharacterBody3D actor) => player==actor;
+    internal bool IsFavorite(PetState chao) => IsFlute ? chao.FavoriteInstrument=="Flute" :
+        chao.PreferredToy==(IsRattle ? "Rattle" : "Toy Car");
+    internal void CancelPlay(CharacterBody3D actor)
+    {
+        if (!PlayedBy(actor)) return;
+        Position=PlacementPoint(actor);
+        Rotation=new(0,actor.Rotation.Y,0);
+        EndPlay();
+    }
 
     public override void _Ready()
     {
@@ -90,8 +101,10 @@ public partial class ToyCar : CharacterBody3D
 
     private void EndPlay()
     {
+        if (IsInstanceValid(playArt)) playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false);
         player=null;
         playChao=null;
+        playArt=null;
         cooldown=18;
     }
 
@@ -118,7 +131,7 @@ public partial class ToyCar : CharacterBody3D
 
     public bool BeginPlay(CharacterBody3D actor,PetState chao)
     {
-        if ((!IsRattle && !IsFlute && !chao.LikesToyCars) || chao.Fun>=100) return false;
+        if ((!IsRattle && !IsFlute && !chao.EnjoysToyCars) || chao.Fun>=100) return false;
         player=actor; playChao=chao; playing=0; held=inFlight=false;
         lastShake=-1;
         playForward=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
@@ -131,6 +144,7 @@ public partial class ToyCar : CharacterBody3D
     public bool PlayPose(CharacterBody3D actor,Node3D art)
     {
         if (player!=actor) return false;
+        playArt=art;
         if (playing>=4)
         {
             ImportedChao.ReceivePose(art,.55f);
@@ -140,7 +154,7 @@ public partial class ToyCar : CharacterBody3D
         float wobble=Mathf.Sin(playing*7);
         if (IsFlute)
         {
-            Position=actor.Position+playForward*.16f+Vector3.Up*(.164f+.004f*wobble);
+            Position=actor.Position+playForward*.16f+Vector3.Up*(.148f+.004f*wobble);
             Rotation=new(0,actor.Rotation.Y,.06f*wobble);
             ImportedChao.ReceivePose(art,.87f);
             int phrase=(int)(playing/1.24f);
@@ -173,5 +187,6 @@ public partial class ToyCar : CharacterBody3D
     }
 
     public bool Available(CharacterBody3D actor,PetState chao) =>
-        chao.LikesToyCars && chao.Fun<72 && cooldown<=0 && player==null && CanPickUp && actor.Position.DistanceTo(Position)<7;
+        (IsRattle || IsFlute || chao.EnjoysToyCars) && chao.Fun<(IsFavorite(chao) ? 92 : 72) &&
+        cooldown<=0 && player==null && CanPickUp && actor.Position.DistanceTo(Position)<(IsFavorite(chao) ? 12 : 7);
 }

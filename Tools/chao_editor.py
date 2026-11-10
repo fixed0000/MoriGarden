@@ -93,7 +93,8 @@ class ChaoEditor:
         self.subject.set("Current Chao: " + self.snapshot["parameters"].get("Name", "Mori"))
         groups = {
             "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Initiative", "Agility"},
-            "Hidden": {"Intelligence", "Luck", "Kindness", "Aggressiveness", "Curiosity"},
+            "Favorites": {"FavoriteToy", "FavoriteFruit", "FavoriteInstrument"},
+            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "Aggressiveness", "Curiosity"},
             "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
             "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
@@ -119,6 +120,14 @@ class ChaoEditor:
                 if name == "Form":
                     control = ttk.Combobox(fields, textvariable=var, state="readonly",
                                            values=("seed", "bloom", "comet", "tide", "swift", "stone"), width=13)
+                elif name in groups["Favorites"]:
+                    choices = {
+                        "FavoriteToy": ("", "Toy Car", "Rattle"),
+                        "FavoriteFruit": ("Garden Fruit", "Heart Fruit"),
+                        "FavoriteInstrument": ("Flute", "None"),
+                    }
+                    control = ttk.Combobox(fields, textvariable=var, state="readonly",
+                                           values=choices[name], width=14)
                 elif name == "RecentAnimalSkill":
                     control = ttk.Combobox(fields, textvariable=var, state="readonly",
                                            values=("", "Swim", "Fly", "Run", "Power"), width=13)

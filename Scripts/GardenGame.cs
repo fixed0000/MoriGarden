@@ -26,6 +26,7 @@ public partial class GardenGame : Node3D
     private Panel hintPanel = null!;
     private Control bagPanel = null!;
     private Label bagText = null!;
+    private Label favoritesLabel = null!;
     private ProgressBar readinessBar = null!;
     private Node3D? importedAvatar;
     private float offerTime, eatTime, thinkTime;
@@ -59,7 +60,7 @@ public partial class GardenGame : Node3D
     private bool zoneSwapped, carrying;
     private GardenZone petZone = GardenZone.Garden;
     private Vector3 petZonePosition = new(1.8f,0,3);
-    private Label stats = null!, formLabel = null!, hint = null!, toast = null!, raceLabel = null!, pauseLabel = null!;
+    private Label stats = null!, formLabel = null!, hint = null!, toast = null!, raceLabel = null!;
     private TrainingAnimal? heldAnimal;
     private GardenEgg? heldEgg, recentHatch, machineResident;
     private float recentCardTime, groundHold;
@@ -73,6 +74,15 @@ public partial class GardenGame : Node3D
     private float mainEggShake, upsetTime;
     private bool mainEggCracked;
     private bool shopOpen, pausedByFocus;
+    private const int SaveSlotCount=20;
+    private Panel pauseMenu = null!;
+    private ItemList saveSlots = null!;
+    private Panel slotMenu = null!;
+    private Label slotTitle = null!;
+    private Button slotAction = null!;
+    private enum SlotMode { Closed,Save,Load }
+    private SlotMode slotMode;
+    private Label slotMessage = null!;
     private readonly GardenCourtship courtship=new();
     private int shopColor;
     private const int HeartFruitPrice=2;
@@ -91,10 +101,12 @@ public partial class GardenGame : Node3D
     private readonly Dictionary<int,ChaoRest> bedSpaces=new();
     private readonly FruitReaction moriFruitReaction=new();
     private GardenSky gardenSky=null!;
-    private Vector3? FruitCarrier => heldFruit!=null && offerTime<=0 && eatTime<=0 && !selfEating
+    private Vector3? FruitCarrier => heldFruit!=null && offerTime<=0 && eatTime<=0
         ? player.Position : null;
-    private Vector3 selfFoodStart;
-    private bool selfEating;
+    private readonly ChaoInterests moriInterests=new();
+    private readonly ChaoPillarVisit moriPillar=new();
+    private readonly ChaoWander moriWander=new();
+    private float balconyDelay=40;
     private float machineLoad;
     private Vector3 machineTossStart;
     private bool machineThrowStarted;
@@ -321,6 +333,7 @@ public partial class GardenGame : Node3D
 
     private void OnLifeChanged()
     {
+        moriInterests.Cancel(friend,friendArt);
         friendArt.QueueFree();
         friendArt = BuildLifeArt();
         sleeping = false;
@@ -357,6 +370,7 @@ public partial class GardenGame : Node3D
     private Vector3 ThrowImpulse()
     {
         Vector3 direction = cameraRig.RelativeDirection(MovementAxes());
+        if (direction.IsZeroApprox()) direction=player.Basis.Z;
         return direction*6.2f+Vector3.Up*4.6f;
     }
 
@@ -680,7 +694,7 @@ public partial class GardenGame : Node3D
         if (!chaoMotion.IsSwimmingAt(friend.Position) && chaoMotion.Recover(friendArt,dt)) return;
         if (sleeping)
         {
-            ImportedChao.SleepPose(friendArt,ChaoRest.MinimumSleep-napRemaining);
+            ImportedChao.SleepPose(friendArt,ChaoRest.MinimumSleep-napRemaining,pet.Manners);
             napRemaining-=dt;
             if (napRemaining<=0 && pet.Energy>=100)
             {
@@ -690,30 +704,49 @@ public partial class GardenGame : Node3D
             return;
         }
 
-        if (zone==GardenZone.Garden && !chaoMotion.Airborne && courtship.Sit(friend,friendArt,pet,"White",world,dt))
+        if (zone==GardenZone.Garden && !chaoMotion.Airborne && !moriIslandNap.IsVisiting && !moriPillar.Active && courtship.Sit(friend,friendArt,pet,"White",world,dt))
         {
             moriRest.Cancel();
             return;
         }
-        if (CanInGarden?.Step(friend,friendArt,pet,chaoMotion,dt,
-            callTime<=0 && !moriRest.Requested && !moriIslandNap.IsNapping && !swimmingTrip)==true) return;
-        if (zone==GardenZone.Garden && !chaoMotion.LeavingPond && moriFruitReaction.Step(friend,friendArt,pet,chaoMotion,FruitCarrier,dt)) return;
-        if (zone==GardenZone.Garden && !chaoMotion.LeavingPond && callTime<=0 && !moriRest.Requested &&
+        balconyDelay=Mathf.Max(0,balconyDelay-dt);
+        bool startCliff=balconyDelay<=0 && !chaoMotion.OnCliffRoute && pet.Power>=100 && callTime<=0 && !swimmingTrip && !chaoMotion.Airborne &&
+            !chaoMotion.IsSwimmingAt(friend.Position) && !chaoMotion.LeavingPond && !moriRest.Requested &&
+            !moriIslandNap.IsVisiting && !moriPillar.Active && pet.Energy>=58;
+        Vector3? cliff=zone==GardenZone.Garden && callTime<=0 && !swimmingTrip
+            ? chaoMotion.CliffTarget(friend.Position,dt,startCliff) : null;
+        if (startCliff && cliff!=null)
+        {
+            balconyDelay=75;
+            moriInterests.Cancel(friend,friendArt);
+            CanInGarden?.Cancel(friend);
+        }
+        if (cliff==null && CanInGarden?.Step(friend,friendArt,pet,chaoMotion,dt,
+            callTime<=0 && !moriRest.Requested && !moriIslandNap.IsVisiting && !swimmingTrip)==true) return;
+        if (moriPillar.Active && moriPillar.Step(friend,friendArt,pet,chaoMotion,dt,false)) return;
+        bool canChoose=heldFruit==null && heldToy==null && heldAnimal==null && !chaoMotion.Airborne &&
+            !chaoMotion.LeavingPond && !chaoMotion.IsSwimmingAt(friend.Position) && callTime<=0 &&
+            !moriRest.Requested && !moriIslandNap.IsVisiting && !swimmingTrip;
+        if (zone==GardenZone.Garden && cliff==null && moriInterests.Step(friend,friendArt,pet,chaoMotion,dt,canChoose,
+            FruitSlots(),world.GetChildren().OfType<ToyCar>(),out bool fed))
+        {
+            if (fed) Save();
+            return;
+        }
+        if (zone==GardenZone.Garden && cliff==null && !chaoMotion.LeavingPond && moriFruitReaction.Step(friend,friendArt,pet,chaoMotion,FruitCarrier,dt)) return;
+        if (zone==GardenZone.Garden && cliff==null && !chaoMotion.LeavingPond && (moriIslandNap.IsVisiting || (callTime<=0 && !moriRest.Requested)) &&
             moriIslandNap.Step(friend,friendArt,pet,chaoMotion,dt)) return;
+        if (zone==GardenZone.Garden && cliff==null && moriPillar.Step(friend,friendArt,pet,chaoMotion,dt,
+            canChoose && !moriRest.Requested && pet.Energy>=58)) return;
         Vector3 beforeRest=friend.Position;
-        if (!chaoMotion.Airborne && !chaoMotion.LeavingPond && !chaoMotion.IsSwimmingAt(friend.Position) && moriRest.Step(friend,pet,dt,out bool arrived))
+        if (cliff==null && !chaoMotion.Airborne && !chaoMotion.LeavingPond && !chaoMotion.IsSwimmingAt(friend.Position) && moriRest.Step(friend,pet,dt,out bool arrived))
         {
             PoseChao(dt,!arrived && FlatDistance(beforeRest,friend.Position)>dt*.075f,false);
             friendArt.Rotation=Vector3.Zero;
-            friendArt.Position=Vector3.Zero;
-            if (arrived) { sleeping=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(friendArt); }
+            friendArt.Position=Vector3.Up*.034f;
+            if (arrived) { sleeping=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(friendArt,manners:pet.Manners); }
             return;
         }
-        bool startCliff=zone==GardenZone.Garden && callTime<=0 && !swimmingTrip && wanderTime<=0 &&
-            (pet.Fly>=120 ? activity%4==3 : activity%6==4);
-        if (startCliff) activity++;
-        Vector3? cliff=zone==GardenZone.Garden && callTime<=0 && !swimmingTrip
-            ? chaoMotion.CliffTarget(friend.Position,dt,startCliff) : null;
         if (cliff!=null) wanderTime=3;
         bool inWater = zone == GardenZone.Garden && chaoMotion.IsSwimmingAt(friend.Position);
         wake.Visible = inWater;
@@ -745,73 +778,46 @@ public partial class GardenGame : Node3D
         }
         else
         {
-            if (zone==GardenZone.Garden && pet.Power>=100 && pet.Fullness<72 && heldFruit==null)
+            wanderTime-=dt;
+            if (wanderTime<=0)
             {
-                var shakeable=world.GetChildren().OfType<FruitTree>().FirstOrDefault(tree=>
-                    !tree.IsFeeder && !tree.HasFruitOnGround && tree.CanInteract &&
-                    FlatDistance(friend.Position,tree.Position)<1.55f);
-                if (shakeable!=null) shakeable.Shake();
-            }
-            var fruit = zone==GardenZone.Garden && pet.Fullness<76 && pet.FindsFood
-                ? FruitSlots().Where(slot=>!slot.IsFeeder && slot.HasFruitOnGround &&
-                    FlatDistance(slot.FruitPosition,friend.Position)<12)
-                    .OrderBy(slot=>FlatDistance(slot.FruitPosition,friend.Position)).FirstOrDefault()
-                : null;
-            if (fruit != null)
-            {
-                target = fruit.FruitPosition;
-                if (FlatDistance(target,friend.Position)<.52f && heldFruit==null && heldAnimal==null && heldToy==null)
+                activity++;
+                if (zone==GardenZone.Garden && (pet.Energy<45 || (activity%5==0 && pet.Energy<62)))
                 {
-                    selfFoodStart=fruit.FruitPosition;
-                    fruit.Hold(selfFoodStart);
-                    heldFruit=fruit;
-                    selfEating=true;
-                    fruitMeal.Begin(fruit,pet,selfFoodStart);
-                    eatTime=fruitMeal.Duration;
-                    return;
+                    moriRest.Request(friend.Position);
+                    if (!inWater && !chaoMotion.LeavingPond) return;
                 }
-            }
-            else
-            {
-                wanderTime -= dt;
-                if (wanderTime <= 0)
+                if (zone==GardenZone.Garden && activity%4==2)
                 {
-                    activity++;
-                    if (zone == GardenZone.Garden && (pet.Energy<42 || (activity%5==0 && pet.Energy<96)))
-                    {
-                        moriRest.Request(friend.Position);
-                        if (!inWater && !chaoMotion.LeavingPond) return;
-                    }
-                    if (zone == GardenZone.Garden && activity%4==2)
-                    {
-                        swimmingTrip = true;
-                        leavingWater = false;
-                        swimTime = 0;
-                    }
-                    wanderTarget = activity%2==1 ? friend.Position : KeepInGarden(friend.Position +
-                        new Vector3(Mathf.Sin(time)*4,0,Mathf.Cos(time*.7f)*4));
-                    wanderTime = activity%2==1 ? 3 : 5;
+                    swimmingTrip=true;
+                    leavingWater=false;
+                    swimTime=0;
                 }
-                target = wanderTarget;
+                wanderTarget=KeepInGarden(ChaoWander.PickGoal(friend,friend.Position,5.4f));
+                wanderTime=4.5f+GD.Randf()*2;
             }
+            target=wanderTarget;
         }
 
-        if (!inWater && !following && !swimmingTrip && cliff==null && pet.Fullness>=76 &&
-            world.GetNodeOrNull<ToyCar>("ToyCar") is { } toy && toy.Available(friend,pet))
-        {
-            if (toy.Use(friend,friendArt,pet,out var toyTarget)) return;
-            target=toyTarget;
-        }
         target=chaoMotion.RouteOffUpperPlatform(friend.Position,target);
         var difference=FlatDistance(target,friend.Position)<.17f ? Vector3.Zero :
             KeepInGarden(target,allowWater:swimmingTrip || inWater || cliff!=null || following)-friend.Position;
         difference.Y=0;
-        if (cliff==null && !inWater) difference=ChaoMotion.AvoidNeighbors(friend,difference);
+        if (cliff==null && !inWater)
+        {
+            if (!following && !swimmingTrip && !chaoMotion.LeavingPond && !chaoMotion.Airborne)
+            {
+                var steered=moriWander.Steer(friend,difference,dt);
+                if (steered.IsZeroApprox() && !difference.IsZeroApprox()) wanderTime=0;
+                difference=steered;
+            }
+            difference=ChaoMotion.AvoidNeighbors(friend,difference);
+        }
         bool moving=chaoMotion.Step(friend,difference,pet,false,inWater,dt,zone==GardenZone.Garden,out bool hardLanding);
         if (!inWater && !chaoMotion.LeavingPond && chaoMotion.BlockedTime>.7f && !following && cliff==null)
         {
             if (swimmingTrip && !leavingWater) leavingWater=true;
-            else { swimmingTrip=false; wanderTime=0; }
+            else { swimmingTrip=false; wanderTime=0; chaoMotion.ClearBlocked(); }
         }
         inWater=zone==GardenZone.Garden && chaoMotion.IsSwimmingAt(friend.Position);
         wake.Visible=inWater;
@@ -820,7 +826,7 @@ public partial class GardenGame : Node3D
             upsetTime=9;
             pet.Joy=Math.Max(0,pet.Joy-5);
         }
-        if (moving || inWater) chaoGait+=dt*Mathf.Clamp(chaoMotion.GroundSpeed*9,4,19);
+        if (moving || inWater) chaoGait+=dt*(inWater && pet.Swim<100 ? 5.2f : Mathf.Clamp(chaoMotion.GroundSpeed*9,4,19));
         ImportedChao.MovePose(friendArt,chaoGait,moving,inWater,pet.Swim>=100,chaoMotion.Sprinting,chaoMotion.Airborne,chaoMotion.Flying);
         SetSplashes(petSplashes,inWater && (moving || pet.Swim<100),friend.Position.Y);
         SwimAudio.Paddle(mainSwimSound,dt,inWater && (moving || pet.Swim<100),ref mainSwimBeat);
@@ -846,7 +852,11 @@ public partial class GardenGame : Node3D
         }
         if (code == Key.Escape)
         {
-            paused = !paused; Save(); UpdateUi(); return;
+            if (slotMode!=SlotMode.Closed) { ShowSlotMenu(SlotMode.Closed); return; }
+            paused=!paused;
+            Save();
+            UpdateUi();
+            return;
         }
         if (paused || transition >= 0 || thinkTime>0) return;
         if (code == Key.M && music != null) music.StreamPaused = !music.StreamPaused;
@@ -892,6 +902,9 @@ public partial class GardenGame : Node3D
                 return;
             }
             CanInGarden?.Cancel(friend);
+            moriInterests.Cancel(friend,friendArt);
+            moriPillar.Cancel();
+            chaoMotion.StopCliffRoute();
             if (sleeping) chaoMotion.LeapFromBed(friend,pet);
             moriRest.Cancel(); moriIslandNap.Cancel(friendArt); ImportedChao.CloseEyes(friendArt,false);
             sleeping = false; following = true; callTime = 12;
@@ -921,6 +934,8 @@ public partial class GardenGame : Node3D
             Vector3.Back.Rotated(Vector3.Up,player.Rotation.Y).Dot(toward.Normalized())>.7f;
     }
 
+    private bool MoriMealNearby => moriInterests.HasMeal && CanReachMeal(friend.Position);
+
     private GardenEgg? ResidentMeal() => world.GetChildren().OfType<GardenEgg>()
         .FirstOrDefault(egg=>egg.HasMeal && CanReachMeal(egg.Position));
 
@@ -928,7 +943,7 @@ public partial class GardenGame : Node3D
         zone==GardenZone.Garden && !carrying && heldEgg==null && heldToy==null && heldAnimal==null &&
         !pickingItem && releasePose<=0 && offerTime<=0 && thinkTime<=0 && !machineOpen && !machineOpening && machineLoad<=0 &&
         (eatTime>0 && heldFruit!=null ? CanReachMeal(offeredResident?.Position ?? friend.Position)
-            : heldFruit==null && ResidentMeal()!=null);
+            : heldFruit==null && (MoriMealNearby || ResidentMeal()!=null));
 
     private void TakeMeal()
     {
@@ -941,13 +956,20 @@ public partial class GardenGame : Node3D
             else upsetTime=5;
             eatTime=0;
             FinishOffer();
-            selfEating=false;
+        }
+        else if (MoriMealNearby)
+        {
+            heldFruit=moriInterests.TakeMeal(friendArt,pet);
+            upsetTime=5;
         }
         else heldFruit=ResidentMeal()?.TakeMeal();
         if (heldFruit==null) return;
         BeginPickup(heldFruit.FruitPosition);
         Save();
     }
+
+    private bool IsPlayerAirborne() => verticalSpeed>.05f ||
+        player.MoveAndCollide(Vector3.Down*.10f,testOnly:true) is not { } floor || floor.GetNormal().Y<.58f;
 
     private void Interact()
     {
@@ -957,7 +979,8 @@ public partial class GardenGame : Node3D
             return;
         }
         if (pickingItem || machineOpening || machineLoad>0 || treeReachTime>0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return;
-        bool throwItem = MovementAxes().LengthSquared()>0;
+        bool throwItem=MovementAxes().LengthSquared()>0 ||
+            ((carrying && pet.CanAct || heldEgg?.Chao!=null) && IsPlayerAirborne());
         if (heldEgg!=null)
         {
             ReleaseObject(heldEgg.Position,throwItem,impulse=>
@@ -1079,6 +1102,8 @@ public partial class GardenGame : Node3D
         {
             CanInGarden?.Cancel(friend);
             courtship.Suspend(friend);
+            moriPillar.Cancel();
+            moriInterests.Cancel(friend,friendArt);
             moriDistress.PickUp(friendArt,sleeping || moriIslandNap.IsNapping);
             sleeping = false;
             moriRest.Cancel();
@@ -1218,7 +1243,7 @@ public partial class GardenGame : Node3D
                 .Where(egg=>egg.Chao is { CanAct:true } && egg.CanReceive &&
                     (heldFruit==null || heldFruit.IsHeartFruit || egg.CanAcceptFruit) && Faces(egg.Position,1.25f))
                 .OrderBy(egg=>player.Position.DistanceSquaredTo(egg.Position)).FirstOrDefault() : null;
-            bool mainReady=friend.Visible && !courtship.IsBlooming(friend) && !moriDistress.Busy && !sleeping && !moriIslandNap.IsNapping && pet.CanAct && !moriInFlight &&
+            bool mainReady=friend.Visible && !moriInterests.HasMeal && !courtship.IsBlooming(friend) && !moriDistress.Busy && !sleeping && !moriIslandNap.IsNapping && pet.CanAct && !moriInFlight &&
                 (heldFruit==null || heldFruit.IsHeartFruit || zone!=GardenZone.Garden || moriFruitReaction.CanAcceptFruit(pet)) &&
                 Faces(friend.Position,1.25f);
             if (candidate!=null && mainReady && player.Position.DistanceSquaredTo(friend.Position)<=
@@ -1241,6 +1266,7 @@ public partial class GardenGame : Node3D
                 if (candidate!=null) candidate.ReserveForOffer();
                 else
                 {
+                    moriInterests.Cancel(friend,friendArt);
                     moriFruitReaction.Interrupt(friendArt);
                     friendArt.Rotation=Vector3.Zero; friendArt.Position=Vector3.Zero;
                     wake.Hide(); petSplashes.Emitting=false;
@@ -1288,7 +1314,7 @@ public partial class GardenGame : Node3D
                 else if (heldFruit!=null)
                 {
                     fruitMeal.Begin(heldFruit,recipient,pawGrip,rejectFruit);
-                    eatTime=fruitMeal.Duration; selfEating=false;
+                    eatTime=fruitMeal.Duration;
                     (art.FindChild("MoodOrb",true,false) as EmotionOrb)?.Celebrate();
                 }
             }
@@ -1335,7 +1361,7 @@ public partial class GardenGame : Node3D
             {
                 int bites=heldFruit.Bites;
                 fruitMeal.Advance(dt,heldFruit,recipient,art,mouth);
-                if (!selfEating && heldFruit.Bites>bites) recipient.ChangeRelationship(.12f*(heldFruit.Bites-bites));
+                if (heldFruit.Bites>bites) recipient.ChangeRelationship(.12f*(heldFruit.Bites-bites));
             }
             eatTime=heldFruit!=null ? fruitMeal.Remaining : 0;
             if (heldFruit!=null && fruitMeal.Rejected)
@@ -1345,13 +1371,13 @@ public partial class GardenGame : Node3D
                 if (offeredResident!=null) offeredResident.ShowUpset();
                 else upsetTime=5;
                 Notify($"{recipient.Name} is full and threw the fruit away.");
-                FinishOffer(); selfEating=false;
+                FinishOffer();
                 Save();
             }
             else if (heldFruit is { Bites: FruitTree.BiteCount })
             {
                 eatTime=0;
-                if (welcomeFruit && !selfEating)
+                if (welcomeFruit)
                 {
                     ImportedChao.SetHappy(art,false);
                     recipient.Joy=Math.Min(100,recipient.Joy+6);
@@ -1359,7 +1385,7 @@ public partial class GardenGame : Node3D
                 Notify($"{recipient.Name} ate the fruit. Stamina +2 XP.");
                 Save();
                 heldFruit.Regrow(); heldFruit=null;
-                FinishOffer(); selfEating=false;
+                FinishOffer();
             }
         }
         else
@@ -1725,17 +1751,19 @@ public partial class GardenGame : Node3D
         if (transition >= .7f) { transition = -1; fade.Color = Colors.Transparent; }
     }
 
-    private void SwitchZone(GardenZone next)
+    private void SwitchZone(GardenZone next,bool restoring=false)
     {
         GardenZone previous = zone;
-        if (friend.Visible) petZonePosition = friend.Position;
-        if (previous==GardenZone.Garden)
+        if (!restoring && friend.Visible) petZonePosition = friend.Position;
+        if (!restoring && previous==GardenZone.Garden)
             foreach (var tree in world.GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder))
                 fruitGrowth[tree.Position]=tree.Slots.Select(slot=>slot.CaptureGrowth()).ToArray();
         courtship.Clear();
+        moriPillar.Cancel();
+        moriInterests.Cancel(friend,friendArt);
         RemoveChild(world); world.QueueFree();
         heldAnimal = null;
-        if (heldFruit is { IsHeartFruit:true,Bites:0 } && eatTime<=0) pet.BagHeartFruit++;
+        if (!restoring && heldFruit is { IsHeartFruit:true,Bites:0 } && eatTime<=0) pet.BagHeartFruit++;
         heldFruit = null;
         heldEgg = null; recentHatch=null; recentCardTime=0; shopOpen=false; machineLoad=0; moriRest.Cancel();
         bedSpaces.Clear(); sleeping=false; moriFruitReaction.Interrupt(friendArt);
@@ -1822,7 +1850,7 @@ public partial class GardenGame : Node3D
         zoneLabel = Text(ui, "", 13, new(40, 65, 320, 25), new("50685c"));
         Text(ui, "Right mouse drag / IJKL: Camera   ·   C: Recenter", 14, new(800, 28, 465, 28), GardenArt.Ink);
         details = new Control { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore }; ui.AddChild(details);
-        Panel(details, new(24,112,238,257),new("f9f3e5"));
+        Panel(details, new(24,112,254,323),new("f9f3e5"));
         formLabel=Text(details,"Mori",23,new(43,130,210,34),GardenArt.Ink);
         stats=Text(details,"",15,new(43,176,205,124),new("50685c"));
         readinessBar=new ProgressBar { Position=new(43,345), Size=new(198,10), ShowPercentage=false,
@@ -1830,6 +1858,7 @@ public partial class GardenGame : Node3D
         readinessBar.AddThemeStyleboxOverride("background",new StyleBoxFlat { BgColor=new("e4d3cb") });
         readinessBar.AddThemeStyleboxOverride("fill",new StyleBoxFlat { BgColor=new("cb6382") });
         details.AddChild(readinessBar);
+        favoritesLabel=Text(details,"",12,new(43,367,217,58),new("50685c"));
         raceLabel = Text(ui, "", 22, new(400, 110, 700, 38), GardenArt.Ink);
         hintPanel = Panel(ui, new(170,665,940,50),new Color(.98f,.96f,.89f,.96f));
         machinePanel=new Control { Visible=false };
@@ -1873,12 +1902,164 @@ public partial class GardenGame : Node3D
         Panel(ui, new(24, 741, 1232, 40), new("304e49"));
         Text(ui, "WASD Move   Shift Run   Space Jump   Ctrl Dash   B Inventory   Tab Mori   M Music   Esc Pause", 14,
             new(40, 752, 1205, 28), new("f3ecd8"));
-        pauseLabel = Text(ui, "PAUSED\nPress Esc to resume", 30, new(410, 260, 540, 180), GardenArt.Ink);
-        pauseLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        pauseLabel.AddThemeStyleboxOverride("normal", new StyleBoxFlat { BgColor = new("fff5df"), ContentMarginTop = 25 });
+        pauseMenu=Panel(ui,new(407,240,466,230),new("fff5df"));
+        pauseMenu.MouseFilter=Control.MouseFilterEnum.Stop;
+        Text(pauseMenu,"PAUSED",25,new(22,12,422,35),GardenArt.Ink);
+        AddPauseButton(pauseMenu,"Save Game",new(22,65),() => ShowSlotMenu(SlotMode.Save));
+        AddPauseButton(pauseMenu,"Load Game",new(236,65),() => ShowSlotMenu(SlotMode.Load));
+        AddPauseButton(pauseMenu,"Resume",new(22,124),() => { pausedByFocus=paused=false; UpdateUi(); });
+        AddPauseButton(pauseMenu,"Exit Game",new(236,124),() => { Save(); GetTree().Quit(); });
+
+        slotMenu=Panel(ui,new(365,123,550,530),new("fff5df"));
+        slotMenu.MouseFilter=Control.MouseFilterEnum.Stop;
+        slotTitle=Text(slotMenu,"",24,new(22,12,506,38),GardenArt.Ink);
+        saveSlots=new ItemList { Position=new(22,61),Size=new(506,330),MaxColumns=2,
+            SameColumnWidth=true,FixedColumnWidth=235 };
+        saveSlots.ItemSelected+=_=>RefreshSlotButton();
+        slotMenu.AddChild(saveSlots);
+        slotAction=AddPauseButton(slotMenu,"",new(22,411),() =>
+        {
+            if (slotMode==SlotMode.Save) SaveToSlot();
+            else if (slotMode==SlotMode.Load) LoadFromSlot();
+        });
+        AddPauseButton(slotMenu,"Back",new(316,411),() => ShowSlotMenu(SlotMode.Closed));
+        slotMessage=Text(slotMenu,"",14,new(22,468,506,40),GardenArt.Ink);
+        slotMessage.AutowrapMode=TextServer.AutowrapMode.WordSmart;
+        RefreshSaveSlots();
         fade = new ColorRect { Color = Colors.Transparent, MouseFilter = Control.MouseFilterEnum.Ignore };
         ui.AddChild(fade); fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
+    }
+
+    private Button AddPauseButton(Control parent,string title,Vector2 at,Action action)
+    {
+        var button=new Button { Text=title,Position=at,Size=new(208,42) };
+        button.Pressed+=action;
+        parent.AddChild(button);
+        return button;
+    }
+
+    private string SlotPath(int index) => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(savePath)!,
+        "slots",$"slot-{index+1:00}.json");
+
+    private static bool SlotExists(string path) => System.IO.File.Exists(path) || System.IO.File.Exists(path+".bak");
+
+    private int SelectedSlot => saveSlots.GetSelectedItems().FirstOrDefault();
+
+    private void ShowSlotMenu(SlotMode mode)
+    {
+        slotMode=mode;
+        if (mode!=SlotMode.Closed)
+        {
+            slotTitle.Text=mode==SlotMode.Save ? "SAVE GAME" : "LOAD GAME";
+            slotAction.Text=mode==SlotMode.Save ? "Save to Slot" : "Load Slot";
+            RefreshSaveSlots();
+        }
+        UpdateUi();
+        if (mode!=SlotMode.Closed) saveSlots.GrabFocus();
+    }
+
+    private void RefreshSaveSlots()
+    {
+        int selected=SelectedSlot;
+        saveSlots.Clear();
+        for (int i=0;i<SaveSlotCount;i++)
+        {
+            string path=SlotPath(i);
+            string summary=SlotExists(path) ? System.IO.File.GetLastWriteTime(
+                System.IO.File.Exists(path) ? path : path+".bak").ToString("yyyy-MM-dd HH:mm") : "Empty";
+            saveSlots.AddItem($"Slot {i+1:00}   ·   {summary}");
+        }
+        saveSlots.Select(selected);
+        RefreshSlotButton();
+    }
+
+    private void RefreshSlotButton()
+    {
+        slotAction.Disabled=slotMode==SlotMode.Load && !SlotExists(SlotPath(SelectedSlot));
+        slotMessage.Text="";
+    }
+
+    private void SaveToSlot()
+    {
+        int selected=SelectedSlot;
+        var snapshot=SaveStore.Snapshot(pet);
+        var mori=friend.Visible ? friend.Position : petZonePosition;
+        var at=player.Position;
+        var trees=new Dictionary<Vector3,(float Growth,Vector3? GroundPosition,int Bites)[]>(fruitGrowth);
+        if (zone==GardenZone.Garden)
+            foreach (var tree in world.GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder))
+                trees[tree.Position]=tree.Slots.Select(slot=>slot.CaptureGrowth()).ToArray();
+        var treeSaves=trees.Select(entry=>new GardenFruitSave(entry.Key.X,entry.Key.Z,entry.Value.Select(slot=>
+            new GardenFruitSlotSave(slot.Growth,slot.Bites,slot.GroundPosition?.X,slot.GroundPosition?.Y,slot.GroundPosition?.Z))
+            .ToArray())).ToArray();
+        snapshot.ManualLocation=new((int)zone,(int)petZone,at.X,at.Y,at.Z,mori.X,mori.Y,mori.Z,treeSaves);
+        foreach (var actor in world.GetChildren().OfType<GardenEgg>())
+        {
+            var entry=snapshot.GardenEggs.FirstOrDefault(egg=>egg.Id==actor.Data.Id);
+            if (entry==null || actor==heldEgg || actor.InFlight) continue;
+            entry.X=actor.Position.X; entry.Y=actor.Position.Y; entry.Z=actor.Position.Z;
+        }
+        if (heldFruit is { SingleUse:true,Bites:0 } && eatTime<=0)
+        {
+            if (heldFruit.IsHeartFruit) snapshot.BagHeartFruit++;
+            else snapshot.BagFruit++;
+        }
+        try
+        {
+            SaveStore.Save(SlotPath(selected),snapshot);
+            RefreshSaveSlots();
+            slotMessage.Text=$"Saved to slot {selected+1:00}.";
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            slotMessage.Text="Could not write this save slot.";
+        }
+    }
+
+    private void LoadFromSlot()
+    {
+        int selected=SelectedSlot;
+        var loaded=SaveStore.LoadSlot(SlotPath(selected));
+        if (loaded?.ManualLocation is not { } location || !Enum.IsDefined((GardenZone)location.Zone) ||
+            !Enum.IsDefined((GardenZone)location.MoriZone))
+        {
+            slotMessage.Text="This save slot could not be loaded.";
+            return;
+        }
+        if (racing) FinishRace(0,cancelled:true);
+        if (machineOpen || machineOpening) CloseMachine();
+        carrying=false;
+        FinishOffer();
+        fruitGrowth.Clear();
+        foreach (var tree in location.Trees ?? Array.Empty<GardenFruitSave>())
+        {
+            if (tree?.Slots==null || !float.IsFinite(tree.X) || !float.IsFinite(tree.Z)) continue;
+            fruitGrowth[new(tree.X,0,tree.Z)]=tree.Slots.Where(slot=>slot!=null).Select(slot=>
+                (Mathf.Clamp(slot.Growth,0,500),
+                    slot.X is float x && slot.Y is float y && slot.Z is float z ? new Vector3(x,y,z) : (Vector3?)null,
+                    Mathf.Clamp(slot.Bites,0,FruitTree.BiteCount))).ToArray();
+        }
+        moriDistress.Reset();
+        upsetTime=pettingTime=petCooldown=0;
+        pet=loaded;
+        petZone=(GardenZone)location.MoriZone;
+        petZonePosition=new(location.MoriX,location.MoriY,location.MoriZ);
+        SwitchZone((GardenZone)location.Zone,restoring:true);
+        friendArt.QueueFree();
+        friendArt=BuildLifeArt();
+        var at=new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
+        if (at.IsFinite()) player.Position=at;
+        if (friend.Visible && petZonePosition.IsFinite()) friend.Position=petZonePosition;
+        player.ResetPhysicsInterpolation();
+        cameraRig.Follow(player.Position,0,true);
+        wanderTarget=friend.Position+Vector3.Left*2;
+        wanderTime=4;
+        slotMode=SlotMode.Closed;
+        pausedByFocus=paused=false;
+        Save();
+        Notify($"Loaded slot {selected+1:00}.");
+        UpdateUi();
     }
 
     private static Panel Panel(Control parent, Rect2 rect, Color color)
@@ -1907,6 +2088,7 @@ public partial class GardenGame : Node3D
         formLabel.Text=inspected.Name;
         stats.Text=$"{SkillLine("Fly",inspected.Fly)}\n{SkillLine("Power",inspected.Power)}\n{SkillLine("Run",inspected.Run)}\n{SkillLine("Stamina",inspected.Stamina)}\n{SkillLine("Swim",inspected.Swim)}\n\nCourtship readiness  {inspected.CourtshipReadiness:0}%";
         readinessBar.Value=inspected.CourtshipReadiness;
+        favoritesLabel.Text=$"Favorite toy   {inspected.PreferredToy}\nFavorite fruit   {inspected.FavoriteFruit}\nFavorite instrument   {inspected.FavoriteInstrument}";
         raceLabel.Text = racing ? $"{Sections[Math.Min((int)moriProgress,Sections.Length-1)].ToUpperInvariant()}  ·  Mori {Mathf.RoundToInt(moriProgress/Sections.Length*100)}%  /  Kite {Mathf.RoundToInt(rivalProgress/Sections.Length*100)}%" : "";
         var gardenTime=TimeSpan.FromSeconds(pet.GardenSeconds);
         zoneLabel.Text = $"{ZoneArt.Title(zone)}   ·   Garden {(int)gardenTime.TotalHours:00}:{gardenTime:mm\\:ss}";
@@ -1916,7 +2098,8 @@ public partial class GardenGame : Node3D
         bagText.Text = $"Garden fruit   {pet.BagFruit}/12\nHeart Fruit   {pet.BagHeartFruit}/12  (V)\nRace stars   {pet.Stars}";
         hint.Text = ContextActions();
         hint.Visible = hintPanel.Visible = !paused && hint.Text.Length>0;
-        toast.Visible = messageTime > 0; pauseLabel.Visible = paused;
+        toast.Visible = messageTime > 0; pauseMenu.Visible=paused && !pausedByFocus && slotMode==SlotMode.Closed;
+        slotMenu.Visible=paused && !pausedByFocus && slotMode!=SlotMode.Closed;
     }
 
     private string ContextActions()
@@ -2055,8 +2238,7 @@ public partial class GardenGame : Node3D
         for (int i=0;i<1500 && hungry.Bond==2;i++)
         {
             reaction.Step(friend,friendArt,hungry,run,carrier,1f/60);
-            noticed|=friendArt.FindChildren("*","Label3D",true,false)
-                .OfType<Label3D>().Any(label=>label.Visible && label.Text=="!");
+            noticed|=friendArt.GetNode<EmotionOrb>("MoodOrb").CurrentGlyph=="!";
         }
         reaction.Step(friend,friendArt,hungry,run,carrier,1f/60);
         if (!noticed || hungry.Bond!=1 || FlatDistance(friend.Position,carrier)>1.35f ||
@@ -2096,7 +2278,7 @@ public partial class GardenGame : Node3D
                     throw new Exception("Something blocks the front of the garden gate");
             }
         var balconyMotion=new ChaoMotion();
-        var climber=new PetState { Run=120,Fly=20 };
+        var climber=new PetState { Run=120,Fly=20,Power=130 };
         friend.Position=new(1.6f,0,-9.4f);
         bool reachedRail=false, jumpedRail=false;
         float balconyPeak=0;
@@ -2154,8 +2336,7 @@ public partial class GardenGame : Node3D
             heldToy.Position.DistanceTo(friend.Position+Vector3.Up*.16f)>.60f)
             throw new Exception($"The item did not follow the avatar's hands to the Chao: {heldToy.Position} / {friend.Position}");
         for (int i=0;i<25;i++) UpdateOffering(1f/60);
-        if (thinkTime<=0 || heldToy!=toy || !friendArt.FindChildren("*","Label3D",true,false)
-            .OfType<Label3D>().Any(label=>label.Text=="?" && label.Visible))
+        if (thinkTime<=0 || heldToy!=toy || friendArt.GetNode<EmotionOrb>("MoodOrb").CurrentGlyph!="?")
             throw new Exception("Chao did not think about the toy before rejecting it");
         RunOfferCheck();
         if (heldToy!=null || toy.CanPickUp) throw new Exception("Rejected toy was not thrown");
@@ -2406,7 +2587,7 @@ public partial class GardenGame : Node3D
         pet.Energy=100;
         for(int i=0;i<60;i++) MoveFriend(1f/60);
         if (!sleeping || napRemaining<ChaoRest.MinimumSleep-1.1f ||
-            Mathf.Abs(friendArt.RotationDegrees.Z-88)>.5f)
+            Mathf.Abs(friendArt.GlobalBasis.Y.Normalized().Dot(Vector3.Up))>.02f)
             throw new Exception("Mori did not settle into a full nap on the bed");
         _UnhandledKeyInput(new InputEventKey { PhysicalKeycode = Key.Q, Pressed = true });
         if (!sleeping || following) throw new Exception("Low bond should not wake Mori");
@@ -2467,9 +2648,10 @@ public partial class GardenGame : Node3D
         smartChao.Chao.Initiative=65;
         smartChao.Chao.Fullness=50;
         smartChao.Park(tree.FruitPosition+Vector3.Right*.35f);
-        for (int i=0;i<1500 && smartChao.Chao.Care==0;i++)
+        int priorCare=smartChao.Chao.Care;
+        for (int i=0;i<1750 && smartChao.Chao.Care==priorCare;i++)
             smartChao.Advance(1f/60,FruitSlots());
-        if (smartChao.Chao.Fullness<=50 || tree.HasFruitOnGround)
+        if (smartChao.Chao.Fullness<=50 || tree.Slots.Count(slot=>slot.HasFruitOnGround)==3)
             throw new Exception("A hungry Chao with high intelligence and initiative did not eat a fallen fruit");
         smartChao.Park(smartStart);
         foreach (var slot in tree.Slots) slot.Regrow();
@@ -2627,12 +2809,10 @@ public partial class GardenGame : Node3D
         UpdatePickupPose(PickupDuration);
         MoveFriend(.02f);
         Vector3 launchPosition = friend.Position;
-        Input.ParseInputEvent(new InputEventKey { PhysicalKeycode=Key.W, Keycode=Key.W, Pressed=true });
-        Input.FlushBufferedEvents();
+        verticalSpeed=4;
         Interact();
-        Input.ParseInputEvent(new InputEventKey { PhysicalKeycode=Key.W, Keycode=Key.W, Pressed=false });
-        Input.FlushBufferedEvents();
-        if (!moriInFlight || carrying) throw new Exception("Moving action did not throw Mori");
+        verticalSpeed=0;
+        if (!moriInFlight || carrying) throw new Exception("Releasing Mori while jumping did not throw him");
         for (int i=0;i<180 && moriInFlight;i++) MoveFriend(1f/60);
         if (moriInFlight || FlatDistance(launchPosition,friend.Position)<1)
             throw new Exception("Thrown Mori did not land at a new position");
@@ -2644,6 +2824,8 @@ public partial class GardenGame : Node3D
         if (friend.Position!=landing || friendArt.RotationDegrees.X<85)
             throw new Exception("Thrown Chao got up too early");
         MoveFriend(.2f);
+        MoveFriend(.02f);
+        MoveFriend(.42f);
         MoveFriend(.02f);
         if (friendArt.GetNodeOrNull<Node3D>("Tears") is not { Visible:true })
             throw new Exception("Thrown Chao did not cry after lying still");
@@ -2672,8 +2854,174 @@ public partial class GardenGame : Node3D
             throw new Exception("Waterfall spatial audio did not load");
         CheckHeartFruitAndCourtship();
         CheckWaterInteractions();
+        CheckChaoInterests();
+        CheckIslandAndGlide();
+        CheckSleepAndWandering();
+        CheckSaveSlots();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
+    }
+
+    private void CheckSleepAndWandering()
+    {
+        friend.Rotation=new(0,1.1f,0);
+        ImportedChao.SleepPose(friendArt,0);
+        Vector3 length=friendArt.GlobalBasis.Y.Normalized();
+        foreach (float at in new[]{6.6f,12f,18.8f,23f,31.5f})
+        {
+            ImportedChao.SleepPose(friendArt,at,15);
+            var axis=friendArt.GlobalBasis.Y.Normalized();
+            if (axis.Dot(length)<.999f || Mathf.Abs(axis.Y)>.01f)
+                throw new Exception("A sleeping Chao changed direction or sat up while rolling");
+        }
+        var paw=(Node3D)friendArt.FindChild("PaddleR",true,false);
+        ImportedChao.SleepPose(friendArt,23,15);
+        float scratching=paw.Rotation.X;
+        ImportedChao.SleepPose(friendArt,23,90);
+        if (scratching<.45f || Mathf.Abs(paw.Rotation.X)>.02f)
+            throw new Exception("Manners did not control scratching in sleep");
+        ImportedChao.CloseEyes(friendArt,false);
+        var recover=new ChaoMotion();
+        recover.Tumble();
+        if (!recover.Recover(friendArt,2.99f) || friendArt.RotationDegrees.X<85)
+            throw new Exception("Fallen Chao did not stay prone for three seconds");
+        recover.Recover(friendArt,.43f);
+        if (!recover.Recover(friendArt,1.90f) || Mathf.Abs(friendArt.RotationDegrees.X)>.1f ||
+            !recover.Recover(friendArt,.11f) || recover.Recover(friendArt,.02f))
+            throw new Exception("Fallen Chao did not wait upright before walking");
+
+        var walker=new ChaoMotion();
+        var stroll=new ChaoWander();
+        var strollPet=new PetState { Run=180 };
+        friend.Position=kitchen+Vector3.Back*2.2f;
+        var goal=kitchen+Vector3.Forward*2.2f;
+        for (int i=0;i<380;i++)
+        {
+            var toward=goal-friend.Position; toward.Y=0;
+            walker.Step(friend,stroll.Steer(friend,toward,1f/60),strollPet,false,false,1f/60,true,out _);
+            if (FlatDistance(friend.Position,kitchen)<1.18f)
+                throw new Exception("Wandering Chao tried to walk through the feeder");
+        }
+        if (FlatDistance(friend.Position,goal)>.65f) throw new Exception($"Chao did not detour around the feeder: {friend.Position}");
+
+        friend.Position=GardenArt.Pond+new Vector3(4,0,4);
+        var from=friend.Position;
+        walker.Step(friend,Vector3.Right*4,new PetState(),false,true,1f/60,true,out _);
+        if (FlatDistance(from,friend.Position)>.0053f)
+            throw new Exception("A Chao carried its walking speed into struggling in water");
+    }
+
+    private void CheckSaveSlots()
+    {
+        paused=true;
+        slotMode=SlotMode.Closed;
+        UpdateUi();
+        if (!pauseMenu.Visible || slotMenu.Visible) throw new Exception("Slots were visible before choosing Save or Load");
+        ShowSlotMenu(SlotMode.Save);
+        if (pauseMenu.Visible || !slotMenu.Visible) throw new Exception("Save did not open a separate slot screen");
+        if (saveSlots.ItemCount!=20) throw new Exception("Save menu does not contain 20 slots");
+        saveSlots.Select(19);
+        pet.Stars=23;
+        player.Position=new(7,0,9);
+        friend.Position=new(8,0,9);
+        SaveToSlot();
+        pet.Stars=6;
+        player.Position=new(3,0,8);
+        ShowSlotMenu(SlotMode.Load);
+        if (pauseMenu.Visible || !slotMenu.Visible || slotAction.Disabled) throw new Exception("Load did not open an active slot screen");
+        LoadFromSlot();
+        if (pet.Stars!=23 || player.Position.DistanceTo(new(7,0,9))>.02f ||
+            friend.Position.DistanceTo(new(8,0,9))>.02f || zone!=GardenZone.Garden ||
+            SaveStore.LoadSlot(SlotPath(19))?.Stars!=23)
+            throw new Exception("Slot 20 did not restore the garden, progress, and positions");
+    }
+
+    private void CheckIslandAndGlide()
+    {
+        var visit=new IslandNap();
+        var walker=new ChaoMotion();
+        var athlete=new PetState { Energy=72,Run=160,Power=190,Fly=450 };
+        friend.Position=new(1.8f,0,3);
+        bool hopped=false;
+        for (int i=0;i<6300 && !visit.IsNapping;i++)
+        {
+            visit.Step(friend,friendArt,athlete,walker,1f/60);
+            hopped|=friend.Position.X is >-21.9f and <-15.7f && friend.Position.Y>.45f;
+        }
+        if (!hopped || !visit.IsNapping) throw new Exception($"The island route did not hop over the stones: {friend.Position}");
+        visit.Cancel(friendArt);
+        var pillar=new ChaoPillarVisit();
+        walker.Reset();
+        var top=GardenLandscape.SouthPillars[0];
+        friend.Position=new(top.X-2,0,top.Z);
+        bool climbed=false, flew=false, started=false;
+        for (int i=0;i<2400;i++)
+        {
+            pillar.Step(friend,friendArt,athlete,walker,1f/30,true);
+            started|=pillar.Active;
+            climbed|=friend.Position.Y>=top.Y-.04f;
+            flew|=walker.Flying;
+            if (started && !pillar.Active) break;
+        }
+        if (!climbed || !flew) throw new Exception($"A strong Chao did not climb a southern pillar and glide: {friend.Position}");
+        float GlideDistance(int fly)
+        {
+            walker.Reset();
+            friend.Position=new(30,3,26);
+            var glider=new PetState { Fly=fly };
+            walker.GlideFromPerch(friend,Vector3.Right,glider);
+            for (int i=0;i<600 && walker.Flying;i++)
+                walker.Step(friend,Vector3.Right*5,glider,false,false,1f/60,true,out _);
+            return friend.Position.X-30;
+        }
+        if (GlideDistance(900)<=GlideDistance(120)+3)
+            throw new Exception("Higher flight skill did not produce a longer glide");
+    }
+
+    private void CheckChaoInterests()
+    {
+        var choices=new ChaoInterests();
+        var walker=new ChaoMotion();
+        var curious=new PetState { FavoriteToy="Rattle",FavoriteFruit="Heart Fruit",FavoriteInstrument="Flute",Fun=42 };
+        var car=new ToyCar();
+        var rattle=new ToyCar { IsRattle=true };
+        world.AddChild(car);
+        world.AddChild(rattle);
+        friend.Position=new(13,0,8);
+        car.Position=friend.Position+Vector3.Back*.28f;
+        rattle.Position=friend.Position+Vector3.Back*.39f;
+        var orb=friendArt.GetNode<EmotionOrb>("MoodOrb");
+        orb.SetHappy(false);
+        orb.SetUpset(false);
+        orb.SetMealUpset(false);
+        orb._PhysicsProcess(2);
+        var eye=(MeshInstance3D)friendArt.FindChild("Left_Eye",true,false);
+        bool HasGlyph(string glyph) => orb.CurrentGlyph==glyph;
+        void Advance(float dt) => choices.Step(friend,friendArt,curious,walker,dt,true,
+            System.Array.Empty<FruitTree>(),new[]{car,rattle},out _);
+        Advance(5);
+        if (!HasGlyph("?") || rattle.PlayedBy(friend)) throw new Exception("A favorite should prompt thought before play");
+        Advance(3.99f);
+        if (!HasGlyph("?")) throw new Exception("The Chao did not think for four seconds");
+        Advance(.02f);
+        if (HasGlyph("?") || HasGlyph("!") || !eye.Visible)
+            throw new Exception("The orb did not return to normal between thought and discovery");
+        Advance(.50f);
+        if (!HasGlyph("!") || eye.Visible || rattle.PlayedBy(friend))
+            throw new Exception("The idea did not produce a happy exclamation before play");
+        Advance(1.98f);
+        if (rattle.PlayedBy(friend)) throw new Exception("Chao started playing before the two-second reaction");
+        Advance(.02f);
+        if (HasGlyph("!") || eye.Visible || rattle.PlayedBy(friend))
+            throw new Exception("Chao did not lower the thinking paw before playing");
+        Advance(.20f);
+        if (!rattle.PlayedBy(friend) || car.PlayedBy(friend) || eye.Visible || HasGlyph("!"))
+            throw new Exception("Chao did not choose the favorite rattle and keep happy eyes while playing");
+        rattle.Advance(5);
+        if (!eye.Visible) throw new Exception("Happy eyes remained after the interaction ended");
+        choices.Cancel(friend,friendArt);
+        car.QueueFree();
+        rattle.QueueFree();
     }
 
     private void CheckWaterInteractions()

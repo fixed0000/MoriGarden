@@ -18,9 +18,11 @@ public partial class GardenEgg : CharacterBody3D
     private Node3D visual = null!;
     private Label3D? nameLabel;
     private float roam, gait, upset, sleepDelay=14, callRemaining, petAnimation, petCooldown;
-    private Vector3 callTarget, foodStart;
-    private FruitTree? meal;
-    private readonly FruitMeal fruitMeal=new();
+    private Vector3 callTarget;
+    private readonly ChaoInterests interests=new();
+    private readonly ChaoPillarVisit pillar=new();
+    private readonly ChaoWander wander=new();
+    private Vector3 wanderTarget;
     private bool reserved;
     private readonly ChaoRest rest=new();
     private readonly IslandNap islandNap=new();
@@ -41,7 +43,7 @@ public partial class GardenEgg : CharacterBody3D
     private AudioStreamPlayer3D swimSound = null!;
     private float swimBeat;
     public bool Asleep { get; private set; }
-    public bool CanReceive => Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && meal==null;
+    public bool CanReceive => Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && !interests.HasMeal;
     public bool CanPet => CanReceive && Chao?.CanAct==true && petCooldown<=0;
 
     public static Color Pigment(string name) => new(name switch
@@ -73,6 +75,8 @@ public partial class GardenEgg : CharacterBody3D
             {
                 GetParent().GetNodeOrNull<WateringCan>("WateringCan")?.Cancel(this);
                 Courtship?.Suspend(this);
+                interests.Cancel(this,visual);
+                pillar.Cancel();
                 distress.PickUp(visual,Asleep || islandNap.IsNapping);
             }
             held=true;
@@ -83,7 +87,6 @@ public partial class GardenEgg : CharacterBody3D
             ImportedChao.CloseEyes(visual,false);
             fruitReaction.Interrupt(visual);
             Asleep=false;
-            if (meal!=null) { meal.Release(Vector3.Zero); meal=null; }
         }
         if (shaking) ShakeTime+=dt;
         Position=at;
@@ -112,9 +115,12 @@ public partial class GardenEgg : CharacterBody3D
 
     public void Call(Vector3 at)
     {
-        if (Chao is not { CanAct:true, RespondsToCall:true } || InFlight || reserved || meal!=null ||
+        if (Chao is not { CanAct:true, RespondsToCall:true } || InFlight || reserved || interests.HasMeal ||
             Position.DistanceTo(at)>16) return;
         GetParent().GetNodeOrNull<WateringCan>("WateringCan")?.Cancel(this);
+        interests.Cancel(this,visual);
+        pillar.Cancel();
+        motion.StopCliffRoute();
         if (Asleep) motion.LeapFromBed(this,Chao);
         rest.Cancel(); islandNap.Cancel(visual); ImportedChao.CloseEyes(visual,false); Asleep=false;
         callTarget=at; callRemaining=11;
@@ -129,19 +135,21 @@ public partial class GardenEgg : CharacterBody3D
         petCooldown=12;
     }
 
-    public bool HasMeal => meal!=null;
+    public bool HasMeal => interests.HasMeal;
     public FruitTree? TakeMeal()
     {
-        if (meal==null) return null;
-        var fruit=meal;
-        meal=null;
-        Chao!.ChangeRelationship(-.65f);
-        (visual.FindChild("MoodOrb",true,false) as EmotionOrb)?.SetMealUpset(false);
-        ShowUpset();
+        var fruit=interests.TakeMeal(visual,Chao!);
+        if (fruit!=null) ShowUpset();
         return fruit;
     }
 
-    public void ReserveForOffer() { reserved=true; rest.Cancel(); fruitReaction.Interrupt(visual); }
+    public void ReserveForOffer()
+    {
+        reserved=true;
+        rest.Cancel();
+        interests.Cancel(this,visual);
+        fruitReaction.Interrupt(visual);
+    }
     public void FinishOffer() { reserved=false; roam=0; }
     public void EatPose(float remaining) => ImportedChao.EatPose(visual,remaining);
 
@@ -200,6 +208,7 @@ public partial class GardenEgg : CharacterBody3D
         state.Tick(dt,Asleep || islandNap.IsNapping);
         if (Courtship?.IsBlooming(this)!=true && state.AdvanceLife(dt))
         {
+            interests.Cancel(this,visual);
             visual.QueueFree();
             if (nameLabel!=null) nameLabel.GetParent().QueueFree();
             MakeHatchling();
@@ -219,7 +228,7 @@ public partial class GardenEgg : CharacterBody3D
         }
         if (Asleep)
         {
-            ImportedChao.SleepPose(visual,ChaoRest.MinimumSleep-napRemaining);
+            ImportedChao.SleepPose(visual,ChaoRest.MinimumSleep-napRemaining,state.Manners);
             napRemaining-=dt;
             if (napRemaining<=0 && state.Energy>=100)
             {
@@ -228,79 +237,72 @@ public partial class GardenEgg : CharacterBody3D
             }
             return false;
         }
-        if (meal!=null)
-        {
-            var mouth=Position+new Vector3(0,.225f,.135f).Rotated(Vector3.Up,Rotation.Y);
-            fruitMeal.Advance(dt,meal,state,visual,mouth);
-            if (fruitMeal.Rejected)
-            {
-                fruitMeal.ThrowBehind(meal,this);
-                meal=null;
-                ShowUpset();
-                return true;
-            }
-            if (meal.Bites<FruitTree.BiteCount) return false;
-            meal.Regrow(); meal=null;
-            return true;
-        }
-        if (!motion.Airborne && Courtship?.Sit(this,visual,state,Data.Color,(Node3D)GetParent(),dt)==true)
+        if (!motion.Airborne && !islandNap.IsVisiting && !pillar.Active && Courtship?.Sit(this,visual,state,Data.Color,(Node3D)GetParent(),dt)==true)
         {
             rest.Cancel();
             return false;
         }
-        if (wateringCan?.Step(this,visual,state,motion,dt,callRemaining<=0 && !rest.Requested && !islandNap.IsNapping)==true)
+        cliffDelay=Mathf.Max(0,cliffDelay-dt);
+        bool startCliff=cliffDelay<=0 && !motion.OnCliffRoute && state.Power>=100 && callRemaining<=0 && !inWater && !motion.Airborne &&
+            !motion.LeavingPond && !islandNap.IsVisiting && !rest.Requested && !pillar.Active && state.Energy>=58;
+        Vector3? cliff=callRemaining>0 ? null : motion.CliffTarget(Position,dt,startCliff);
+        if (startCliff && cliff!=null)
+        {
+            cliffDelay=70;
+            interests.Cancel(this,visual);
+            wateringCan?.Cancel(this);
+        }
+        if (cliff==null && wateringCan?.Step(this,visual,state,motion,dt,callRemaining<=0 && !rest.Requested && !islandNap.IsVisiting)==true)
             return false;
-        if (!motion.LeavingPond && fruitReaction.Step(this,visual,state,motion,fruitCarrier,dt)) return false;
+        if (pillar.Active && pillar.Step(this,visual,state,motion,dt,false)) return false;
+        bool canChoose=!motion.Airborne && !motion.LeavingPond && !inWater && callRemaining<=0 &&
+            !rest.Requested && !islandNap.IsVisiting && fruitCarrier==null;
+        if (cliff==null && interests.Step(this,visual,state,motion,dt,canChoose,fruitSlots ?? Enumerable.Empty<FruitTree>(),
+            new[]{toy,rattle,flute}.OfType<ToyCar>(),out bool fed))
+            return fed;
+        if (cliff==null && !motion.LeavingPond && fruitReaction.Step(this,visual,state,motion,fruitCarrier,dt)) return false;
         callRemaining=Mathf.Max(0,callRemaining-dt);
         bool called=callRemaining>0 && Position.DistanceTo(callTarget)>1.2f;
-        if (!motion.LeavingPond && !called && !rest.Requested && islandNap.Step(this,visual,state,motion,dt)) return false;
+        if (cliff==null && !motion.LeavingPond && (islandNap.IsVisiting || (!called && !rest.Requested)) && islandNap.Step(this,visual,state,motion,dt)) return false;
+        if (cliff==null && pillar.Step(this,visual,state,motion,dt,canChoose && state.Energy>=58)) return false;
         Vector3 beforeRest=Position;
-        if (!motion.Airborne && !motion.LeavingPond && !inWater && !called && rest.Step(this,state,dt,out bool arrived))
+        if (cliff==null && !motion.Airborne && !motion.LeavingPond && !inWater && !called && rest.Step(this,state,dt,out bool arrived))
         {
             var travel=Position-beforeRest; travel.Y=0;
             bool walking=!arrived && travel.Length()>dt*.075f;
             if (walking) gait+=dt*12;
             ImportedChao.Gait(visual,gait,walking,false);
-            visual.Position=Vector3.Zero; visual.Rotation=Vector3.Zero;
-            if (arrived) { Asleep=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(visual); }
+            visual.Position=Vector3.Up*.034f; visual.Rotation=Vector3.Zero;
+            if (arrived) { Asleep=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(visual,manners:state.Manners); }
             return false;
         }
         sleepDelay-=dt;
-        if (!called && sleepDelay<=0 && state.Energy<95) rest.Request(Position);
-        roam+=dt;
-        float phase=Mathf.Floor(roam/4)*1.43f;
-        Vector3 target=called ? callTarget : new(Data.X+Mathf.Sin(phase)*1.65f,0,Data.Z+Mathf.Cos(phase)*1.65f);
-        cliffDelay-=dt;
-        Vector3? cliff=called ? null : motion.CliffTarget(Position,dt,cliffDelay<=0);
-        if (cliffDelay<=0) cliffDelay=state.Fly>=120 ? 35 : 65;
+        if (!called && sleepDelay<=0 && state.Energy<58) rest.Request(Position);
+        roam-=dt;
+        if (roam<=0 || (!inWater && !motion.LeavingPond && motion.BlockedTime>.75f))
+        {
+            wanderTarget=ChaoWander.PickGoal(this,new(Data.X,Position.Y,Data.Z),4.7f);
+            motion.ClearBlocked();
+            roam=4.6f+GD.Randf()*2;
+        }
+        Vector3 target=called ? callTarget : wanderTarget;
         if (cliff is Vector3 rockTarget) target=rockTarget;
-        if (!inWater && !called && cliff==null && state.Fullness>=76 && toy!=null && toy.Available(this,state))
-        {
-            if (toy.Use(this,visual,state,out var toyTarget)) return false;
-            target=toyTarget;
-        }
-        if (!inWater && !called && state.FindsFood && state.Fullness<76 && fruitSlots!=null)
-        {
-            var food=fruitSlots.Where(f=>!f.IsFeeder && f.HasFruitOnGround && f.FruitPosition.DistanceTo(Position)<12)
-                .OrderBy(f=>f.FruitPosition.DistanceSquaredTo(Position)).FirstOrDefault();
-            if (food!=null)
-            {
-                target=food.FruitPosition;
-                if (target.DistanceTo(Position)<.55f)
-                {
-                    foodStart=food.FruitPosition; food.Hold(foodStart);
-                    meal=food; fruitMeal.Begin(food,state,foodStart);
-                    return false;
-                }
-            }
-        }
         target=motion.RouteOffUpperPlatform(Position,target);
         Vector3 offset=target-Position; offset.Y=0;
         bool swimming=state.Swim>=100;
-        if (cliff==null && !inWater) offset=ChaoMotion.AvoidNeighbors(this,offset);
+        if (cliff==null && !inWater)
+        {
+            if (!called && !motion.LeavingPond && !motion.Airborne)
+            {
+                var steered=wander.Steer(this,offset,dt);
+                if (steered.IsZeroApprox() && !offset.IsZeroApprox()) roam=0;
+                offset=steered;
+            }
+            offset=ChaoMotion.AvoidNeighbors(this,offset);
+        }
         bool moving=motion.Step(this,offset,state,false,inWater,dt,true,out bool hardLanding);
         inWater=motion.IsSwimmingAt(Position);
-        if (moving || inWater) gait+=dt*Mathf.Clamp(motion.GroundSpeed*9,4,19);
+        if (moving || inWater) gait+=dt*(inWater && !swimming ? 5.2f : Mathf.Clamp(motion.GroundSpeed*9,4,19));
         ImportedChao.MovePose(visual,gait,moving,inWater,swimming,motion.Sprinting,motion.Airborne,motion.Flying);
         SwimAudio.Paddle(swimSound,dt,inWater && (moving || !swimming),ref swimBeat);
         if (!hardLanding) return false;
@@ -338,6 +340,13 @@ public partial class GardenEgg : CharacterBody3D
 
     public void Park(Vector3 at)
     {
+        interests.Cancel(this,visual);
+        interests.Reconsider();
+        rest.Cancel();
+        islandNap.Cancel(visual);
+        pillar.Cancel();
+        motion.Reset();
+        Asleep=false;
         InFlight=false; Cracked=false; velocity=Vector3.Zero; roam=0;
         Position=at; Data.X=at.X; Data.Y=at.Y; Data.Z=at.Z;
     }
