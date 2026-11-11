@@ -8,7 +8,16 @@ public partial class ImportedChao : Node3D
     private Node3D? softBody;
     private Vector3 lastPosition, lastVelocity, softness, softnessVelocity;
     private bool tracked, alignSoles;
-    private float discardTime;
+    private float discardTime, afterAction;
+    internal static bool Pausing(Node3D art) => art is ImportedChao model && model.afterAction>0;
+    public static void PauseAfterAction(Node3D art) { if (art is ImportedChao model) model.afterAction=2; }
+    public static void ClearActionPause(Node3D art) { if (art is ImportedChao model) model.afterAction=0; }
+    public static bool StepActionPause(Node3D art,float dt)
+    {
+        if (art is not ImportedChao model || model.afterAction<=0) return false;
+        model.afterAction=Mathf.Max(0,model.afterAction-dt);
+        MovePose(art,0,false,false,false,false,false,false); return true;
+    }
     internal float LowestSole()
     {
         float bottom=float.MaxValue;
@@ -300,7 +309,7 @@ public partial class ImportedChao : Node3D
         art.Quaternion=Quaternion.Identity.Slerp(new Quaternion(Vector3.Right,-1.30f),blend);
         art.Position=Vector3.Up*Mathf.Lerp(.008f,.075f,blend);
         if (art.FindChild("HeadPivot",true,false) is Node3D head)
-            head.Rotation=new(-.23f*blend,Mathf.Sin(elapsed*.38f)*.44f*blend,0);
+            head.Rotation=new(-.23f*blend,CloudLook(elapsed)*blend,0);
         foreach (int side in new[]{-1,1})
         {
             if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
@@ -312,6 +321,37 @@ public partial class ImportedChao : Node3D
             if (art.FindChild(side<0 ? "FootL" : "FootR",true,false) is Node3D foot)
             { foot.Position+=new Vector3(side*.014f,-.008f,-.105f)*blend; foot.Rotation=new(-.35f*blend,0,side*.10f*blend); GroundRestLimb(foot,art,blend); }
         }
+    }
+
+    private static float CloudLook(float elapsed)
+    {
+        float phase=Mathf.PosMod(elapsed,18);
+        if (phase<3.4f) return -.46f;
+        if (phase<4.5f) return Mathf.Lerp(-.46f,.42f,Mathf.SmoothStep(0,1,(phase-3.4f)/1.1f));
+        if (phase<9) return .42f;
+        if (phase<9.85f) return Mathf.Lerp(.42f,0,Mathf.SmoothStep(0,1,(phase-9)/.85f));
+        if (phase<14.8f) return 0;
+        if (phase<16.1f) return Mathf.Lerp(0,-.46f,Mathf.SmoothStep(0,1,(phase-14.8f)/1.3f));
+        return -.46f;
+    }
+
+    public static void StandUpPose(Node3D art,Quaternion from,Vector3 fromHeight,float progress)
+    {
+        if (art is ImportedChao model) model.alignSoles=false;
+        float t=Mathf.Clamp(progress,0,1);
+        Gait(art,0,false,false); CloseEyes(art,false);
+        float push=Mathf.SmoothStep(0,1,Mathf.Clamp((t-.28f)/.65f,0,1));
+        art.Quaternion=from.Slerp(Quaternion.Identity,push);
+        art.Position=fromHeight.Lerp(Vector3.Up*.008f,push);
+        if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(.18f*(1-push),0,0);
+        foreach(int side in new[]{-1,1})
+            if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
+            {
+                float brace=1-Mathf.SmoothStep(.70f,.97f,t);
+                paw.Position+=new Vector3(side*.055f,-.035f,-.10f)*brace;
+                paw.Quaternion=paw.Quaternion.Slerp(new Quaternion(Vector3.Down,art.Basis.Inverse()*Vector3.Down),brace);
+                GroundRestLimb(paw,art,brace);
+            }
     }
 
     private static void GroundRestLimb(Node3D limb,Node3D art,float blend)
@@ -454,7 +494,7 @@ public partial class ImportedChao : Node3D
         float advance=Mathf.Clamp(length-.106f,0,.078f);
         paw.Quaternion=paw.Quaternion.Slerp(new Quaternion(Vector3.Down,reach),weight);
         paw.Position+=reach*advance*weight;
-        paw.Scale*=Vector3.One.Lerp(new Vector3(.88f,Mathf.Clamp((length-advance)/.054f,1,2.24f),.88f),weight);
+        paw.Scale*=Vector3.One.Lerp(new Vector3(.88f,Mathf.Clamp((length-advance)/.054f,1,2.8f),.88f),weight);
     }
 
     public static void IdeaPose(Node3D art,float weight=1)
@@ -497,10 +537,10 @@ public partial class ImportedChao : Node3D
             var delta=shoulder.ToLocal(grip)-paw.Position;
             float distance=delta.Length(); if (distance<.01f) continue;
             var direction=delta/distance;
-            float shift=Mathf.Clamp(distance-.10f,0,.075f);
+            float shift=Mathf.Clamp(distance-.10f,0,.11f);
             paw.Quaternion=new Quaternion(Vector3.Down,direction);
             paw.Position+=direction*shift;
-            paw.Scale*=new Vector3(.9f,Mathf.Clamp((distance-shift)/.054f,1,2.24f),.9f);
+            paw.Scale*=new Vector3(.9f,Mathf.Clamp((distance-shift)/.054f,1,2.8f),.9f);
         }
     }
 

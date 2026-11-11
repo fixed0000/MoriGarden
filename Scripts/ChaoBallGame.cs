@@ -28,6 +28,7 @@ internal sealed class ChaoBallGame
             {
                 ImportedChao.ClearBallReaction(member.Art);
                 Orb(member)?.SetIdea(null,false);
+                ImportedChao.PauseAfterAction(member.Art);
             }
         if (ball!=null && GodotObject.IsInstanceValid(ball)) ball.FinishBall();
         a=b=null; ball=null;

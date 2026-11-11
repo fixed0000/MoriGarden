@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 
 namespace Mori;
@@ -32,6 +33,13 @@ public static class GardenLandscape
         edge.SetMeta("unclimbable",true); edge.SetMeta("no_step",true);
         edge.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=new(2*GardenArt.GardenHalfWidth+30,48,6) } });
         root.AddChild(edge);
+        foreach(float x in new[]{GardenArt.GardenMinX-1,GardenArt.GardenHalfWidth+1})
+        {
+            var side=new StaticBody3D { Position=new(x,15,10) };
+            side.SetMeta("unclimbable",true); side.SetMeta("no_step",true);
+            side.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=new(2,40,90) } }); root.AddChild(side);
+        }
+        ZoneArt.Solid(root,new(11,12,GardenArt.GardenHalfDepth+1),new(130,30,2));
         // Small island and the broken bridge in the main pond.
         var island=GardenArt.Shape(root,new CylinderMesh {
             TopRadius=1.10f, BottomRadius=3.05f, Height=.64f, RadialSegments=32 },
@@ -69,15 +77,9 @@ public static class GardenLandscape
         GardenArt.Cylinder(courtyard,new(68,.48f,-1),3.45f,.08f,water);
         GardenArt.Cylinder(courtyard,new(68,1.08f,-1),.51f,1.4f,stone);
         GardenArt.Ball(courtyard,new(68,1.8f,-1),new(.58f,.38f,.58f),water);
-        for (int i=0;i<10;i++)
+        for (int i=0;i<4;i++)
             Palm(courtyard,new(42+i*7.5f,0,17+Mathf.Sin(i)*3));
-        GardenArt.Sign(root,"WEST GROVE",new(-40,1.5f,25),GardenArt.Cream);
         GardenArt.Sign(root,"SOUTH TERRACE",new(4,1.5f,16),GardenArt.Cream);
-        for (int i=0;i<11;i++)
-        {
-            float a=i*Mathf.Tau/11;
-            Palm(root,new(-40+Mathf.Cos(a)*10,0,36+Mathf.Sin(a)*7));
-        }
         foreach (var top in SouthPillars)
         {
             GardenArt.Cylinder(root,new(top.X,top.Y*.5f,top.Z),.65f,top.Y,stone).CreateConvexCollision();
@@ -93,7 +95,7 @@ public static class GardenLandscape
         }
         for (int i=0;i<28;i++)
         {
-            float x = -99+i*7.35f;
+            float x = GardenArt.GardenMinX-6+i*(GardenArt.GardenHalfWidth-GardenArt.GardenMinX+12)/27;
             for (int side=-1;side<=1;side+=2)
             {
                 Mesh mass = (i%3) switch
@@ -107,6 +109,7 @@ public static class GardenLandscape
                     new(i%2==0?"59645b":"6b7266"));
                 cliff.RotationDegrees=new(0,i*29+side*12,side*(i%4-2)*5);
                 GardenArt.StoneCollision(cliff);
+                foreach(var body in cliff.GetChildren().OfType<StaticBody3D>()) body.SetMeta("no_step",true);
             }
         }
     }

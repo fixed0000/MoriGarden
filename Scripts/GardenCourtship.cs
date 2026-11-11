@@ -131,6 +131,8 @@ internal sealed class GardenCourtship
         if (time<7.68f) return;
         ImportedChao.SetHappy(meeting.First.Art,false);
         ImportedChao.SetHappy(meeting.Second.Art,false);
+        ImportedChao.PauseAfterAction(meeting.First.Art);
+        ImportedChao.PauseAfterAction(meeting.Second.Art);
         Suspend(firstActor);
         Suspend(secondActor);
         pair=null;

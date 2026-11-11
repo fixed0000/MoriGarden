@@ -185,7 +185,7 @@ public partial class WateringCan : Node3D
 
     private void Finish()
     {
-        if (IsInstanceValid(ownerArt)) ImportedChao.EndThink(ownerArt!);
+        if (IsInstanceValid(ownerArt)) { ImportedChao.EndThink(ownerArt!); ImportedChao.PauseAfterAction(ownerArt!); }
         if (IsInstanceValid(owner) && stage!=Stage.Approach && stage!=Stage.SetDown)
             Position=Floor(owner!.Position+owner.Basis.Z*.55f);
         Rotation=new(0,Rotation.Y,0);

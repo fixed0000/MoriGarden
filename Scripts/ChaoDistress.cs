@@ -107,8 +107,7 @@ internal sealed class ChaoDistress
             if (reacting>2)
             {
                 float flat=Mathf.SmoothStep(0,1,(reacting-2)/.4f);
-                art.RotationDegrees=new(flat*90,0,0);
-                art.Position=Vector3.Up*Mathf.Lerp(.034f,.16f,flat);
+                ImportedChao.StandUpPose(art,Quaternion.FromEuler(new(Mathf.Pi/2,0,0)),Vector3.Up*.16f,1-flat);
                 reacting=Mathf.Max(2,reacting-dt);
                 return true;
             }

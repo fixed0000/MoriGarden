@@ -6,10 +6,10 @@ namespace Mori;
 internal sealed class ChaoLeisure
 {
     internal static readonly Vector3[][] Routes={
-        new[]{new Vector3(12,0,12),new Vector3(29,0,12),new Vector3(46,0,12),new Vector3(63,0,12),new Vector3(80,0,12)},
-        new[]{new Vector3(-15,0,14),new Vector3(-33,0,14),new Vector3(-51,0,14),new Vector3(-69,0,14),new Vector3(-85,0,14)},
-        new[]{new Vector3(25,0,27),new Vector3(25,0,35),new Vector3(25,0,43),new Vector3(25,0,51),new Vector3(25,0,59)},
-        new[]{new Vector3(-49,0,27),new Vector3(-61,0,32),new Vector3(-73,0,37),new Vector3(-85,0,42)}
+        new[]{new Vector3(12,0,12),new Vector3(29,0,12),new Vector3(46,0,12),new Vector3(64,0,12)},
+        new[]{new Vector3(-15,0,14),new Vector3(-25,0,14),new Vector3(-35,0,14),new Vector3(-45,0,14)},
+        new[]{new Vector3(36,0,5),new Vector3(36,0,17),new Vector3(36,0,29),new Vector3(36,0,41)},
+        new[]{new Vector3(-10,0,25),new Vector3(-22,0,30),new Vector3(-34,0,35),new Vector3(-46,0,40)}
     };
     internal static readonly Vector3[] SkySpots={new(0,0,12),new(11,0,10),new(-2,0,4),new(14,0,-1)};
     private float delay=4+GD.Randf()*5, pause, elapsed, stuck, gait, previousDistance=float.MaxValue;
@@ -17,18 +17,25 @@ internal sealed class ChaoLeisure
     private bool sky;
     private Vector3 goal;
     private readonly ChaoWander steer=new();
-    public bool Active => route>=0 || sky;
+    private readonly ChaoRising rising=new();
+    public bool Active => route>=0 || sky || rising.Active;
     internal bool WatchingSky => sky && pause>0;
     public void Cancel(Node3D art)
     {
         if (Active) { ImportedChao.MovePose(art,0,false,false,false,false,false,false); ImportedChao.CloseEyes(art,false); }
-        route=-1; sky=false; pause=elapsed=stuck=0; delay=7;
+        rising.Cancel(); route=-1; sky=false; pause=elapsed=stuck=0; delay=7;
     }
     internal void BeginSky(Vector3 target) { sky=true; route=-1; goal=target; pause=elapsed=stuck=0; }
     internal void BeginRoute(int index) { route=index%Routes.Length; sky=false; waypoint=0; goal=Routes[route][0]; pause=elapsed=stuck=0; }
 
     public bool Step(CharacterBody3D actor,Node3D art,PetState state,ChaoMotion motion,float dt,bool canStart)
     {
+        if (rising.Active)
+        {
+            rising.Step(art,dt);
+            if (!rising.Active) { Cancel(art); ImportedChao.PauseAfterAction(art); }
+            return true;
+        }
         if (!canStart || motion.IsSwimmingAt(actor.Position))
         {
             if (Active) Cancel(art);
@@ -50,12 +57,13 @@ internal sealed class ChaoLeisure
             if (sky)
             {
                 float lying=24-pause;
-                ImportedChao.CloudPose(art,lying,Mathf.Min(lying/1.3f,pause/1.3f));
+                ImportedChao.CloudPose(art,lying,Mathf.Min(lying/1.3f,1));
             }
             else ImportedChao.MovePose(art,0,false,false,false,false,false,false);
             if (pause<=0)
             {
-                if (sky || ++waypoint>=Routes[route].Length) { Cancel(art); return true; }
+                if (sky) { rising.Begin(art); return true; }
+                if (++waypoint>=Routes[route].Length) { Cancel(art); ImportedChao.PauseAfterAction(art); return true; }
                 goal=Routes[route][waypoint]; previousDistance=float.MaxValue;
             }
             return true;

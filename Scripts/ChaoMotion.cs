@@ -152,9 +152,7 @@ internal sealed class ChaoMotion
         if (recovery<=0) return false;
         float flat=Mathf.SmoothStep(0,1,Mathf.Clamp((recovery-2)/.40f,0,1));
         recovery=Mathf.Max(0,recovery-dt);
-        ImportedChao.Gait(art,0,false,false);
-        art.RotationDegrees=new(flat*90,0,0);
-        art.Position=Vector3.Up*Mathf.Lerp(.034f,.16f,flat);
+        ImportedChao.StandUpPose(art,Quaternion.FromEuler(new(Mathf.Pi/2,0,0)),Vector3.Up*.16f,1-flat);
         return true;
     }
 

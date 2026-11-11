@@ -18,6 +18,7 @@ internal sealed class IslandNap
     private int slot=-1;
     internal Vector3 NapSpot => NapPlaces[slot<0 ? 0 : slot];
     private readonly ChaoSettling settling=new();
+    private readonly ChaoRising rising=new();
     private float landingAge=-1;
     private Vector3 landingAt;
     private bool returnLanding;
@@ -28,7 +29,7 @@ internal sealed class IslandNap
     private readonly ChaoWander walker=new();
     internal bool IsSettling=>settling.Active;
     public bool IsNapping => remaining>0;
-    public bool IsVisiting => settling.Active || landingAge>=0 || approach>0 || stone>=0 || IsNapping || returning!=ReturnMode.None || islandWalk>0;
+    public bool IsVisiting => settling.Active || rising.Active || landingAge>=0 || approach>0 || stone>=0 || IsNapping || returning!=ReturnMode.None || islandWalk>0;
 
     public void Cancel(Node3D art)
     {
@@ -38,7 +39,7 @@ internal sealed class IslandNap
             if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=Vector3.Zero;
         }
         if (remaining>0 || approach>0) cooldown=62;
-        ReleaseSpot(); settling.Cancel(); landingAge=-1;
+        ReleaseSpot(); settling.Cancel(); rising.Cancel(); landingAge=-1;
         approach=remaining=hopTime=islandWalk=0;
         returning=ReturnMode.None;
         stone=-1;
@@ -46,6 +47,12 @@ internal sealed class IslandNap
 
     public bool Step(CharacterBody3D actor,Node3D art,PetState chao,ChaoMotion motion,float dt)
     {
+        if (rising.Active)
+        {
+            rising.Step(art,dt);
+            if (!rising.Active) { ReleaseSpot(); BeginReturn(GD.Randf()<(chao.Swim<100 ? .68f : .42f)); }
+            return true;
+        }
         if (landingAge>=0)
         {
             landingAge+=dt;
@@ -69,8 +76,7 @@ internal sealed class IslandNap
             if (remaining<=0)
             {
                 ImportedChao.CloseEyes(art,false);
-                ReleaseSpot();
-                BeginReturn(GD.Randf()<(chao.Swim<100 ? .68f : .42f));
+                rising.Begin(art);
             }
             return true;
         }

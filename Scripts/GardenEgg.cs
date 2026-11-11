@@ -43,15 +43,20 @@ public partial class GardenEgg : CharacterBody3D
     private bool tossed;
     private float cliffDelay=38;
     private float napRemaining;
+    private readonly ChaoRising rising=new();
+    private readonly ChaoTouch touch=new();
+    private bool leapAfterRising;
+    internal bool BeingPetted=>touch.Active;
+    internal void ContinuePetting(bool held) => touch.Held=held;
     private AudioStreamPlayer3D swimSound = null!;
     private float swimBeat;
     public bool Asleep { get; private set; }
-    public bool CanReceive => !motion.IsSwimmingAt(Position) && Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && !interests.HasMeal;
+    public bool CanReceive => !rising.Active && !touch.Active && !motion.IsSwimmingAt(Position) && Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && !interests.HasMeal;
     internal bool CanSocialize => Chao?.CanAct==true && CanReceive && !held && !islandNap.IsVisiting &&
         !motion.Airborne && !motion.Recovering && !motion.LeavingPond && !motion.OnCliffRoute &&
         !rest.Requested && !interests.Busy && !leisure.Active && !pillar.Active && !fruitReaction.Busy &&
         callRemaining<=0 && petAnimation<=0 && !GardenArt.IsPondWater(Position);
-    public bool CanPet => CanReceive && Chao?.CanAct==true && petCooldown<=0;
+    public bool CanPet => !rising.Active && !motion.IsSwimmingAt(Position) && !Asleep && !islandNap.IsNapping && !InFlight && !held && !reserved && !distress.Busy && Chao?.CanAct==true && (petCooldown<=0 || interests.HasMeal);
 
     public static Color Pigment(string name) => new(name switch
     {
@@ -84,6 +89,7 @@ public partial class GardenEgg : CharacterBody3D
                 Courtship?.Suspend(this);
                 interests.Cancel(this,visual);
                 pillar.Cancel();
+                rising.Cancel(); touch.Cancel(); ImportedChao.ClearActionPause(visual);
                 distress.PickUp(visual,Asleep || islandNap.IsNapping);
             }
             held=true;
@@ -128,18 +134,20 @@ public partial class GardenEgg : CharacterBody3D
         interests.Cancel(this,visual);
         pillar.Cancel();
         motion.StopCliffRoute();
-        if (Asleep) motion.LeapFromBed(this,Chao);
-        rest.Cancel(); leisure.Cancel(visual); islandNap.Cancel(visual); ImportedChao.CloseEyes(visual,false); Asleep=false;
+        if (Asleep || leisure.WatchingSky || islandNap.IsNapping) rising.Begin(visual);
+        if (Asleep) leapAfterRising=true;
+        rest.Cancel(); if (!rising.Active) leisure.Cancel(visual); islandNap.Cancel(visual); ImportedChao.CloseEyes(visual,false); Asleep=false;
         callTarget=at; callRemaining=11;
     }
 
-    public void Pet()
+    public void Pet(bool eatingGift=false)
     {
-        if (!CanPet || Chao==null) return;
+        if ((!CanPet && !eatingGift) || Chao==null) return;
+        bool eating=interests.InterruptMeal(this,visual) || eatingGift;
+        if (leisure.WatchingSky) rising.Begin(visual);
         leisure.Cancel(visual);
-        Chao.Pet();
-        (visual.FindChild("MoodOrb",true,false) as EmotionOrb)?.Celebrate();
-        petAnimation=.93f;
+        touch.Begin(Chao,visual,eating);
+        roam=0;
         petCooldown=12;
     }
 
@@ -229,6 +237,13 @@ public partial class GardenEgg : CharacterBody3D
         if (!state.CanAct || distress.HoldPose(visual,state,dt)) return false;
         voice.Step(visual,state,Asleep || islandNap.IsNapping,dt);
         bool inWater=motion.IsSwimmingAt(Position);
+        if (rising.Active)
+        {
+            rising.Step(visual,dt);
+            if (!rising.Active && leapAfterRising) { leapAfterRising=false; motion.LeapFromBed(this,state); }
+            return false;
+        }
+        if (touch.Step(visual,dt)) return false;
         var toys=extraToys ?? new[]{toy,rattle,flute}.OfType<ToyCar>();
         if (toys.Any(item=>item.PlayPose(this,visual))) return false;
         if (!inWater && motion.Recover(visual,dt)) return false;
@@ -244,11 +259,11 @@ public partial class GardenEgg : CharacterBody3D
             napRemaining-=dt;
             if (napRemaining<=0 && state.Energy>=100)
             {
-                Asleep=false; rest.Cancel(); leisure.Cancel(visual); sleepDelay=18;
-                motion.LeapFromBed(this,state);
+                Asleep=false; rising.Begin(visual); leapAfterRising=true; rest.Cancel(); sleepDelay=18;
             }
             return false;
         }
+        if (ImportedChao.StepActionPause(visual,dt)) return false;
         if (!motion.Airborne && !islandNap.IsVisiting && !pillar.Active && Courtship?.Sit(this,visual,state,Data.Color,(Node3D)GetParent(),dt)==true)
         {
             rest.Cancel(); leisure.Cancel(visual);

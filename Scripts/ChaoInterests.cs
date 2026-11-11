@@ -29,6 +29,15 @@ internal sealed class ChaoInterests
         return taken;
     }
 
+    public bool InterruptMeal(CharacterBody3D actor,Node3D art)
+    {
+        if (!HasMeal || fruit==null) return false;
+        var at=actor.Position+actor.Basis.Z*.55f;
+        var floor=actor.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(at+Vector3.Up*.5f,at-Vector3.Up,1));
+        fruit.Place((floor.Count>0 ? (Vector3)floor["position"] : at)+Vector3.Up*.18f);
+        Finish(art); return true;
+    }
+
     public void Cancel(CharacterBody3D actor,Node3D art)
     {
         if (stage==Stage.Idle) return;
@@ -59,7 +68,7 @@ internal sealed class ChaoInterests
                 Vector3 target=toy?.Position ?? (tree ? fruit!.Position : fruit!.FruitPosition);
                 Vector3 offset=target-actor.Position;
                 offset.Y=0;
-                float reach=tree ? 1.48f : .51f;
+                float reach=tree ? 1.48f : toy?.IsInstrument==true ? .28f : .51f;
                 if (stage==Stage.Approach)
                 {
                     if (offset.Length()>reach || motion.Airborne)
@@ -184,6 +193,7 @@ internal sealed class ChaoInterests
 
     private void Finish(Node3D art)
     {
+        if (stage is Stage.Meal or Stage.Shake) ImportedChao.PauseAfterAction(art);
         delay=favorite ? 5 : 11;
         Next(Stage.Idle);
         toy=null;

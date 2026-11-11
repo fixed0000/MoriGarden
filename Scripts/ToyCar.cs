@@ -189,7 +189,7 @@ public partial class ToyCar : CharacterBody3D
     {
         FinishEnsemble();
         GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
-        if (IsInstanceValid(playArt)) playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false);
+        if (IsInstanceValid(playArt)) { playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false); ImportedChao.PauseAfterAction(playArt); }
         if (strap!=null) strap.Hide();
         player=null;
         playChao=null;
@@ -218,6 +218,18 @@ public partial class ToyCar : CharacterBody3D
         inFlight=true;
         velocity=impulse; bounces=0;
         if (strap!=null) strap.Hide();
+    }
+
+    public void HoldByChao(CharacterBody3D actor,Node3D art)
+    {
+        var front=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
+        Hold(actor.Position+front*(IsSynthesizer ? .22f : .19f)+Vector3.Up*(IsSynthesizer ? .075f : .16f));
+        Rotation=new(0,actor.Rotation.Y+(IsSynthesizer ? Mathf.Pi : 0),0);
+        if (IsSynthesizer)
+            ImportedChao.InstrumentHands(art,GlobalPosition-actor.Basis.X*.13f+Vector3.Up*.055f,
+                GlobalPosition+actor.Basis.X*.13f+Vector3.Up*.055f);
+        else if (IsFlute)
+            ImportedChao.InstrumentHands(art,ToGlobal(new(-.065f,.039f,0)),ToGlobal(new(.085f,.039f,0)));
     }
 
     public bool BeginPlay(CharacterBody3D actor,PetState chao)
@@ -251,13 +263,13 @@ public partial class ToyCar : CharacterBody3D
         float wobble=Mathf.Sin(playing*7);
         if (IsElectricGuitar || IsSynthesizer)
         {
-            Position=actor.Position+playForward*(IsElectricGuitar ? .15f : .16f)+Vector3.Up*(IsSynthesizer ? .065f : .085f);
+            Position=actor.Position+playForward*(IsElectricGuitar ? .15f : .22f)+Vector3.Up*(IsSynthesizer ? .065f : .085f);
             Rotation=new(IsElectricGuitar ? -.55f : -.25f,actor.Rotation.Y+(IsSynthesizer ? Mathf.Pi : 0),IsElectricGuitar ? -.48f : 0);
             if (strap!=null) strap.Show();
             ImportedChao.InstrumentPose(art,playing,IsElectricGuitar);
             if (IsSynthesizer)
-                ImportedChao.InstrumentHands(art,GlobalPosition+actor.Basis.X*.09f+Vector3.Up*.103f,
-                    GlobalPosition-actor.Basis.X*.09f+Vector3.Up*(.103f+.009f*Mathf.Sin(playing*13)));
+                ImportedChao.InstrumentHands(art,GlobalPosition-actor.Basis.X*.09f+Vector3.Up*.103f,
+                    GlobalPosition+actor.Basis.X*.09f+Vector3.Up*(.103f+.009f*Mathf.Sin(playing*13)));
             else
                 ImportedChao.InstrumentHands(art,ToGlobal(new(0,.075f,.20f)),ToGlobal(new(0,.075f+.012f*Mathf.Sin(playing*27),.0f)));
             int phrase=(int)((playing+phraseOffset)/1.20f);
@@ -268,7 +280,8 @@ public partial class ToyCar : CharacterBody3D
         {
             Position=actor.Position+playForward*.16f+Vector3.Up*(.148f+.004f*wobble);
             Rotation=new(0,actor.Rotation.Y,.06f*wobble);
-            ImportedChao.ReceivePose(art,.87f);
+            ImportedChao.MovePose(art,0,false,false,false,false,false,false);
+            ImportedChao.InstrumentHands(art,ToGlobal(new(-.065f,.039f,0)),ToGlobal(new(.085f,.039f,0)));
             int phrase=(int)(playing/1.24f);
             if (phrase!=lastShake) { ChaoSounds.Play(this,"flute"); lastShake=phrase; }
             return true;

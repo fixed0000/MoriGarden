@@ -11,14 +11,22 @@ public static class GardenArt
     public static readonly Color Cream = new("fff2cc");
     public static readonly Color Ink = new("253e43");
     public static readonly Vector3 Pond = new(-10,0,-10);
-    public const float GardenHalfWidth = 98;
-    public const float GardenHalfDepth = 64;
+    public const float GardenHalfWidth = 74;
+    public const float GardenMinX=-52;
+    public const float GardenHalfDepth = 44;
     public const float RearBoundary=-26.5f;
-    public static Vector3 RelocateFromRear(Vector3 at) => at.Z<RearBoundary+.5f ? new(at.X,0,19) : at;
+    // Legacy save positions only: never use this rescue during movement.
+    public static Vector3 RelocateFromRear(Vector3 at)
+    {
+        if (at.Z<RearBoundary+.5f) at=new(at.X,0,19);
+        if (at.X<GardenMinX+2 || at.X>GardenHalfWidth-2 || at.Z>GardenHalfDepth-2)
+            at=new(Mathf.Clamp(at.X,GardenMinX+2,GardenHalfWidth-2),0,Mathf.Min(at.Z,GardenHalfDepth-2));
+        return at;
+    }
     public const float PondRadius = 11.4f;
     public const float PondDepth = .30f;
     public static bool IsPondWater(Vector3 at) =>
-        at.Y<.11f && new Vector2(at.X-Pond.X,at.Z-Pond.Z).LengthSquared()<PondRadius*PondRadius;
+        !MountainInterior.Contains(at) && at.Y<.11f && new Vector2(at.X-Pond.X,at.Z-Pond.Z).LengthSquared()<PondRadius*PondRadius;
     public static readonly Vector3 SwimExit = Pond + new Vector3(9.25f,0,9.2f);
     public static readonly Vector3[] TreePositions = { new(-7,0,3), new(8,0,7), new(19,0,-7), new(-23,0,-4), new(7,0,-14), new(-17,0,7), new(17,0,2) };
     public static readonly (Vector3 Center, Vector3 Size)[] Ledges = {
@@ -126,6 +134,9 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
+                bool room=world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25;
+                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16;
+                if (room || tunnel) discard;
                 vec2 p = world.xz;
                 float grain = fract(sin(dot(floor(p*13.0),vec2(127.1,311.7)))*43758.5453);
                 float patch = sin(p.x*.7+sin(p.y*.8))*sin(p.y*.44);
@@ -175,6 +186,9 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
+                bool room=world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25 && world.y>-.35 && world.y<2.6;
+                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16 && world.y>-.35 && world.y<2.6;
+                if (room || tunnel) discard;
                 vec2 gate=vec2(world.x+18.45,world.y-.43);
                 float arch=max(0.0,gate.y-2.53);
                 if (world.z>-17.65 && world.y<5.03 && gate.y>0.0 && length(vec2(gate.x,arch))<2.25) discard;
@@ -272,12 +286,13 @@ public static class GardenArt
             for (int i=0;i<3;i++)
                 Shape(root,new SphereMesh { RadialSegments=7,Rings=3 },
                     center+new Vector3((i-1)*size.X*.32f,-size.Y*.15f,size.Z*.47f),
-                    new(size.X*.43f,size.Y*.76f,.57f),new(i%2==0?"616861":"838579"));
+                    new(size.X*.43f,size.Y*.76f,.57f),new(i%2==0?"616861":"838579")).MaterialOverride=strata;
         }
         var orchard=trees ?? TreePositions.Select(position=>new GardenTreeState { X=position.X,Z=position.Z }).ToArray();
         foreach (var tree in orchard)
             root.AddChild(new FruitTree { Position=new(tree.X,0,tree.Z),FruitKind=tree.FruitKind,TreeState=tree });
         GardenLandscape.Build(root);
+        MountainInterior.Build(root,strata);
         var details = new RandomNumberGenerator { Seed = 731 };
         for (int i=0;i<28;i++)
         {
@@ -345,8 +360,8 @@ public static class GardenArt
             var direction=new Vector3(Mathf.Cos(a),0,Mathf.Sin(a));
             if (ring == 2) return Pond+direction*(PondRadius-1.15f)-Vector3.Up*PondDepth;
             if (ring == 1) return Pond+direction*(PondRadius+.55f);
-            float toX=(direction.X>=0 ? GardenHalfWidth+4-Pond.X : GardenHalfWidth+4+Pond.X)/Mathf.Max(.0001f,Mathf.Abs(direction.X));
-            float toZ=(direction.Z>=0 ? GardenHalfDepth+4-Pond.Z : GardenHalfDepth+4+Pond.Z)/Mathf.Max(.0001f,Mathf.Abs(direction.Z));
+            float toX=(direction.X>=0 ? GardenHalfWidth+4-Pond.X : -GardenMinX+4+Pond.X)/Mathf.Max(.0001f,Mathf.Abs(direction.X));
+            float toZ=(direction.Z>=0 ? GardenHalfDepth+4-Pond.Z : -RearBoundary+8+Pond.Z)/Mathf.Max(.0001f,Mathf.Abs(direction.Z));
             return Pond+direction*Mathf.Min(toX,toZ);
         }
 
@@ -391,6 +406,8 @@ public static class GardenArt
                 float streak = waterfall ? sin(world.y*1.8+TIME*9.0+bands*.45) : sin(world.z*7.0-TIME*2.0+bands*1.8);
                 float whitewater = waterfall ? smoothstep(-.25,.92,bands*.78+streak*.22) : smoothstep(.3,1.0,streak*.65+bands*.35);
                 ALBEDO = mix(vec3(.19,.38,.43),vec3(.67,.79,.79),whitewater*(waterfall ? .87 : .36));
+                if (transparent_pond && ((world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25) ||
+                    (world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16))) discard;
                 if (transparent_pond && distance(world.xz,pond_center)>pond_radius) { discard; }
                 ALPHA = transparent_pond ? .39+whitewater*.13 : waterfall ? .61+whitewater*.25 : 1.0;
                 ROUGHNESS = .35;
