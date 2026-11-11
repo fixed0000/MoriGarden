@@ -9,6 +9,7 @@ public partial class ToyCar : CharacterBody3D
     private PetState? playChao;
     private Node3D? playArt;
     private float playing, cooldown, phraseOffset;
+    private System.Collections.Generic.HashSet<ToyCar>? ensemble;
     private Vector3 placementFrom, placementTo, placementRotation;
     private Vector3 playOrigin, playForward, velocity;
     private bool held, inFlight;
@@ -29,7 +30,26 @@ public partial class ToyCar : CharacterBody3D
     internal float PlayingSeconds => playing;
     internal bool Performing => player!=null && playing<PlayDuration;
     internal bool CanJoin => IsInstrument && Performing && playing<50;
-    internal void StartWith(ToyCar leader) { phraseOffset=leader.playing%1.20f; lastShake=-1; }
+    internal void StartWith(ToyCar leader)
+    {
+        phraseOffset=leader.playing%1.20f; lastShake=-1;
+        ensemble=leader.ensemble ?? new System.Collections.Generic.HashSet<ToyCar> { leader };
+        leader.ensemble=ensemble; ensemble.Add(this);
+    }
+    private void FinishEnsemble()
+    {
+        var group=ensemble;
+        if (group==null) return;
+        foreach(var member in group) member.ensemble=null;
+        foreach(var member in group)
+        {
+            if (!IsInstanceValid(member) || member==this || member.player==null) continue;
+            member.placementFrom=member.Position; member.placementRotation=member.Rotation;
+            member.placementTo=member.PlacementPoint(member.player);
+            member.playing=member.PlayDuration;
+            member.GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
+        }
+    }
     public bool CanPickUp => !held && !inFlight;
     internal bool PlayedBy(CharacterBody3D actor) => player==actor;
     internal bool IsFavorite(PetState chao) => IsInstrument ? chao.FavoriteInstrument==(IsFlute ? "Flute" : IsElectricGuitar ? "Electric Guitar" : "Synthesizer") : IsBeachBall ? chao.PreferredToy=="Beach Ball" :
@@ -139,6 +159,8 @@ public partial class ToyCar : CharacterBody3D
         if (playing<PlayDuration) return;
         if (before<PlayDuration)
         {
+            FinishEnsemble();
+            GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
             placementFrom=Position;
             placementRotation=Rotation;
             placementTo=PlacementPoint(player);
@@ -165,6 +187,8 @@ public partial class ToyCar : CharacterBody3D
 
     private void EndPlay()
     {
+        FinishEnsemble();
+        GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
         if (IsInstanceValid(playArt)) playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false);
         if (strap!=null) strap.Hide();
         player=null;

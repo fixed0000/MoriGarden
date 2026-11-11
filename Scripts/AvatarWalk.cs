@@ -9,6 +9,7 @@ internal sealed class AvatarWalk
     private readonly Dictionary<string,int> joints = new();
     private float phase, amplitude, jumpArms, runBlend, stepSpeed;
     private readonly int leftHand, rightHand;
+    internal float AirPose=>jumpArms;
 
     private AvatarWalk(Skeleton3D skeleton)
     {
@@ -69,7 +70,7 @@ internal sealed class AvatarWalk
                 float roll=cycle<.58f ? .16f*Mathf.Pow(cycle/.58f,3) :
                     .16f*(1-swingTime)+Mathf.Sin(swingTime*Mathf.Tau)*Mathf.Lerp(.18f,.33f,runBlend);
                 StepLeg(suffix,side<0 ? "toe.L" : "toe.R",
-                    new Vector3(0,lift*Mathf.Lerp(.10f,.22f,runBlend)*amplitude,travel*strideLength),
+                    new Vector3(0,lift*Mathf.Lerp(.10f,.39f,runBlend)*amplitude,travel*strideLength),
                     roll*amplitude);
                 continue;
             }

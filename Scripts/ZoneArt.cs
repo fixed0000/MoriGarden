@@ -2,7 +2,7 @@ using Godot;
 
 namespace Mori;
 
-public enum GardenZone { Garden, Lobby, Stadium }
+public enum GardenZone { Garden, Lobby, Stadium, CoastalCove }
 
 public static class ZoneArt
 {
@@ -10,11 +10,13 @@ public static class ZoneArt
     public static readonly Vector3 PlazaStadiumPad = new(6,0,-4);
     public static readonly Vector3 ChaoMachine = new(-23.25f,0,-16.0f);
     public static Vector3 MachineStep => ChaoMachine+Vector3.Back*1.42f;
+    public static readonly Vector3 PlazaCoastalGate=new(8,0,6);
     public static readonly Vector3 PlazaShop = new(-5,0,-2);
     public static string Title(GardenZone zone) => zone switch
     {
         GardenZone.Garden => "MORI GARDEN",
         GardenZone.Lobby => "GARDEN PLAZA",
+        GardenZone.CoastalCove => "COASTAL COVE",
         _ => "STAR STADIUM"
     };
 
@@ -52,6 +54,7 @@ public static class ZoneArt
     public static void Build(Node3D root, GardenZone zone,System.Collections.Generic.IReadOnlyList<GardenTreeState>? trees=null)
     {
         if (zone != GardenZone.Garden) Solid(root,new(0,-.25f,0),new(76,.5f,76));
+        if (zone==GardenZone.CoastalCove) { GardenLandscape.BuildCoastal(root); return; }
         if (zone == GardenZone.Garden)
         {
             GardenArt.BuildGarden(root,trees);
@@ -112,6 +115,7 @@ public static class ZoneArt
         Portal(root,new(0,0,-10),zone==GardenZone.Stadium ? "PLAZA" : "GARDEN",new("a9c99f"));
         if (zone == GardenZone.Lobby)
         {
+            Portal(root,PlazaCoastalGate,"COASTAL COVE",new("b5a78b"));
             GardenArt.Cylinder(root,PlazaStadiumPad+Vector3.Up*.07f,1.35f,.13f,new("7d9b8f"));
             GardenArt.Sign(root,"STADIUM PAD",PlazaStadiumPad+Vector3.Up*1.4f,GardenArt.Cream);
             GardenArt.Shape(root,new BoxMesh(),PlazaShop+new Vector3(0,.47f,0),new(2.45f,.92f,1.16f),new("a28c6e"));

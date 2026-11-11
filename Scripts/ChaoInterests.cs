@@ -80,15 +80,15 @@ internal sealed class ChaoInterests
                     Next(Stage.Approach);
                     return true;
                 }
-                if (elapsed<6.5f)
+                if (elapsed<ChaoThought.Minimum+2.5f)
                 {
                     ImportedChao.IdeaPose(art);
-                    orb?.SetIdea(elapsed<4 ? "?" : elapsed<4.5f ? "" : "!",elapsed>=4.5f);
+                    orb?.SetIdea(ChaoThought.Glyph(elapsed),ChaoThought.Inspired(elapsed));
                     return true;
                 }
-                if (elapsed<6.70f)
+                if (elapsed<ChaoThought.IdeaEnd)
                 {
-                    ImportedChao.IdeaPose(art,1-Mathf.SmoothStep(0,1,(elapsed-6.5f)/.20f));
+                    ImportedChao.IdeaPose(art,1-Mathf.SmoothStep(0,1,(elapsed-ChaoThought.Minimum-2.5f)/.20f));
                     orb?.SetIdea("",true);
                     return true;
                 }

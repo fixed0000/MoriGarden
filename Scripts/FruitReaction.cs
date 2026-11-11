@@ -21,7 +21,7 @@ internal sealed class FruitReaction
     {
         bool eager=AnticipatesFruit;
         stage=eager ? Stage.Waiting : Stage.Confused;
-        remaining=eager ? 5 : 1.35f;
+        remaining=eager ? 5 : ChaoThought.Minimum;
     }
 
     public void Interrupt(Node3D art)

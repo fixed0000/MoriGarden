@@ -103,16 +103,16 @@ internal sealed class GardenCourtship
         if (time<2.2f)
         {
             float approach=Mathf.SmoothStep(0,1,Mathf.Clamp(time/.85f,0,1));
-            firstActor.Position=meeting.Origin-meeting.Axis*(.13f*approach);
-            secondActor.Position=meeting.SecondStart.Lerp(meeting.Origin+meeting.Axis*.13f,approach);
+            firstActor.Position=meeting.Origin-meeting.Axis*(.18f*approach);
+            secondActor.Position=meeting.SecondStart.Lerp(meeting.Origin+meeting.Axis*.18f,approach);
             float rub=time>.85f ? Mathf.Sin((time-.85f)*15)*.24f : 0;
             ImportedChao.CourtshipPose(meeting.First.Art,rub,0);
             ImportedChao.CourtshipPose(meeting.Second.Art,-rub,0);
             return;
         }
         float recoil=Mathf.SmoothStep(0,1,Mathf.Clamp((time-2.2f)/.48f,0,1));
-        firstActor.Position=meeting.Origin-meeting.Axis*Mathf.Lerp(.13f,.70f,recoil);
-        secondActor.Position=meeting.Origin+meeting.Axis*Mathf.Lerp(.13f,.70f,recoil);
+        firstActor.Position=meeting.Origin-meeting.Axis*Mathf.Lerp(.18f,.70f,recoil);
+        secondActor.Position=meeting.Origin+meeting.Axis*Mathf.Lerp(.18f,.70f,recoil);
         if (!meeting.Laid && time>=2.68f)
         {
             meeting.Laid=true;

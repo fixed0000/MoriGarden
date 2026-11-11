@@ -168,6 +168,51 @@ public partial class ImportedChao : Node3D
         var line=new Node3D { Position=center };
         parent.AddChild(line);
         var ink=new Color("655649");
+        if (happy && squint==0)
+        {
+            var triangles=new System.Collections.Generic.List<(Vector3 A,Vector3 B,Vector3 C)>();
+            foreach(var node in parent.FindChildren("Head_*","MeshInstance3D",true,false))
+            {
+                var mesh=(MeshInstance3D)node;
+                var relative=parent.GlobalTransform.AffineInverse()*mesh.GlobalTransform;
+                for(int surface=0;surface<mesh.Mesh.GetSurfaceCount();surface++)
+                {
+                    var arrays=mesh.Mesh.SurfaceGetArrays(surface);
+                    var vertices=arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                    var indices=arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+                    for(int i=0;i+2<indices.Length;i+=3)
+                        triangles.Add((relative*vertices[indices[i]],relative*vertices[indices[i+1]],relative*vertices[indices[i+2]]));
+                }
+            }
+            Vector3 Surface(Vector2 point)
+            {
+                float front=float.NegativeInfinity;
+                foreach(var (v0,v1,v2) in triangles)
+                {
+                    float d=(v1.Y-v2.Y)*(v0.X-v2.X)+(v2.X-v1.X)*(v0.Y-v2.Y);
+                    if (Mathf.Abs(d)<.00000001f) continue;
+                    float u=((v1.Y-v2.Y)*(point.X-v2.X)+(v2.X-v1.X)*(point.Y-v2.Y))/d;
+                    float v=((v2.Y-v0.Y)*(point.X-v2.X)+(v0.X-v2.X)*(point.Y-v2.Y))/d;
+                    float w=1-u-v;
+                    if (Mathf.Min(u,Mathf.Min(v,w))>=-.0001f) front=Mathf.Max(front,u*v0.Z+v*v1.Z+w*v2.Z);
+                }
+                return new(point.X-center.X,point.Y-center.Y,(float.IsNegativeInfinity(front) ? center.Z-.005f : front+.0008f)-center.Z);
+            }
+            var ribbon=new SurfaceTool(); ribbon.Begin(Mesh.PrimitiveType.Triangles);
+            var points=new[]{new Vector2(center.X-.026f,center.Y-.012f),new Vector2(center.X,center.Y+.014f),new Vector2(center.X+.026f,center.Y-.012f)};
+            for(int segment=0;segment<2;segment++) for(int sample=0;sample<12;sample++)
+            {
+                var p0=points[segment].Lerp(points[segment+1],sample/12f);
+                var p1=points[segment].Lerp(points[segment+1],(sample+1)/12f);
+                var across=(p1-p0).Orthogonal().Normalized()*.0018f;
+                foreach(var point in new[]{p0-across,p1-across,p1+across,p0-across,p1+across,p0+across}) ribbon.AddVertex(Surface(point));
+            }
+            ribbon.GenerateNormals();
+            line.AddChild(new MeshInstance3D { Name="FlatSmile",Mesh=ribbon.Commit(),MaterialOverride=new StandardMaterial3D {
+                AlbedoColor=ink,CullMode=BaseMaterial3D.CullModeEnum.Disabled,ShadingMode=BaseMaterial3D.ShadingModeEnum.Unshaded } });
+            return line;
+        }
+
         const float radius=.004f;
         int segments=happy ? 2 : 8;
         Vector3 previous=Vector3.Zero;

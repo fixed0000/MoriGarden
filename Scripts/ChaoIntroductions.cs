@@ -75,7 +75,7 @@ internal sealed class ChaoIntroductions
             case Phase.Think:
                 ImportedChao.IdeaPose(pair.A.Art); ImportedChao.IdeaPose(pair.B.Art);
                 Mood(pair.A,"?"); Mood(pair.B,"?");
-                if (pair.Time>=4) Next(pair,Phase.Alert);
+                if (pair.Time>=ChaoThought.Minimum) Next(pair,Phase.Alert);
                 break;
             case Phase.Alert:
                 ImportedChao.IdeaPose(pair.A.Art); ImportedChao.IdeaPose(pair.B.Art);
@@ -88,13 +88,13 @@ internal sealed class ChaoIntroductions
                 }
                 break;
             case Phase.Approach:
-                if (distance<=.282f)
+                if (distance<=.365f)
                 {
                     Normal(pair.A); Normal(pair.B);
                     Next(pair,Phase.Talk);
                     break;
                 }
-                var step=toward*Mathf.Min(dt*.68f,(distance-.275f)*.5f);
+                var step=toward*Mathf.Min(dt*.68f,(distance-.36f)*.5f);
                 aBody.MoveAndCollide(step);
                 bBody.MoveAndCollide(-step);
                 ImportedChao.MovePose(pair.A.Art,pair.Time*12,true,false,false,false,false,false);

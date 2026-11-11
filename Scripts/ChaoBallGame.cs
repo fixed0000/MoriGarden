@@ -53,7 +53,7 @@ internal sealed class ChaoBallGame
         {
             case Phase.Consider:
                 Carry(a); ImportedChao.IdeaPose(a.Art); Orb(a)?.SetIdea("?",true);
-                if (time<4) break;
+                if (time<ChaoThought.Minimum) break;
                 b=available.Where(c=>c.Actor!=a.Actor && c.Pet.CanAct && c.Pet.Fun<100 &&
                     owner.SocialLink(a.Id,c.Id) is { Met:true } link && link.ScoreFrom(a.Id)>=0 &&
                     c.Actor.Position.DistanceTo(a.Actor.Position)<5 &&
@@ -73,7 +73,7 @@ internal sealed class ChaoBallGame
                 if (voice<=0) { ChaoSounds.Play(a.Art,"voice"); voice=.9f; }
                 ImportedChao.IdeaPose(b.Art); LookAtPeer(b);
                 Orb(b)?.SetIdea("?",false);
-                if (time>=3)
+                if (time>=ChaoThought.Minimum)
                 {
                     var relation=owner.SocialLink(a.Id,b.Id)!;
                     scold=relation.ScoreFrom(b.Id)<0;

@@ -120,7 +120,7 @@ public partial class WateringCan : Node3D
             case Stage.ThinkAgain:
                 ImportedChao.ThinkPose(art,elapsed);
                 Hold(actor,0,0);
-                float thought=3+Mathf.Clamp((240-pet.Intelligence)/55f,0,3);
+                float thought=ChaoThought.WithIntelligence(pet);
                 if (elapsed>=thought)
                 {
                     ImportedChao.EndThink(art);

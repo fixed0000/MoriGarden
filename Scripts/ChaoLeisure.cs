@@ -6,9 +6,10 @@ namespace Mori;
 internal sealed class ChaoLeisure
 {
     internal static readonly Vector3[][] Routes={
-        new[]{new Vector3(0,0,8),new Vector3(8,0,11),new Vector3(13,0,5),new Vector3(8,0,-1),new Vector3(0,0,0)},
-        new[]{new Vector3(-3,0,6),new Vector3(-5,0,12),new Vector3(1,0,16),new Vector3(9,0,15),new Vector3(1,0,9)},
-        new[]{new Vector3(9,0,-2),new Vector3(15,0,-5),new Vector3(18,0,3),new Vector3(14,0,12),new Vector3(7,0,10)}
+        new[]{new Vector3(12,0,12),new Vector3(29,0,12),new Vector3(46,0,12),new Vector3(63,0,12),new Vector3(80,0,12)},
+        new[]{new Vector3(-15,0,14),new Vector3(-33,0,14),new Vector3(-51,0,14),new Vector3(-69,0,14),new Vector3(-85,0,14)},
+        new[]{new Vector3(25,0,27),new Vector3(25,0,35),new Vector3(25,0,43),new Vector3(25,0,51),new Vector3(25,0,59)},
+        new[]{new Vector3(-49,0,27),new Vector3(-61,0,32),new Vector3(-73,0,37),new Vector3(-85,0,42)}
     };
     internal static readonly Vector3[] SkySpots={new(0,0,12),new(11,0,10),new(-2,0,4),new(14,0,-1)};
     private float delay=4+GD.Randf()*5, pause, elapsed, stuck, gait, previousDistance=float.MaxValue;
@@ -28,7 +29,7 @@ internal sealed class ChaoLeisure
 
     public bool Step(CharacterBody3D actor,Node3D art,PetState state,ChaoMotion motion,float dt,bool canStart)
     {
-        if (!canStart || motion.IsSwimmingAt(actor.Position) || state.Energy<38 || state.Fullness<22)
+        if (!canStart || motion.IsSwimmingAt(actor.Position))
         {
             if (Active) Cancel(art);
             return false;
@@ -42,7 +43,7 @@ internal sealed class ChaoLeisure
             previousDistance=float.MaxValue;
         }
         elapsed+=dt;
-        if (elapsed>95) { Cancel(art); return false; }
+        if (elapsed>300) { Cancel(art); return false; }
         if (pause>0)
         {
             pause-=dt;

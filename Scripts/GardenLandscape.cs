@@ -28,14 +28,10 @@ public static class GardenLandscape
         var sand = new Color("b5a78b");
         var stone = new Color("94998a");
         var water = new Color("568c9b");
-        var cove=new Node3D { Position=new(14,0,0) }; root.AddChild(cove);
-        GardenArt.Cylinder(cove,new(-75,.035f,2),20,.06f,sand).Scale = new(1.42f,1,.87f);
-        GardenArt.Cylinder(cove,new(-81,.075f,-1),13,.06f,water).Scale = new(1.38f,1,.83f);
-        GardenArt.Cylinder(cove,new(-85,.145f,-2),3.8f,.18f,new("787f61"));
-        GardenArt.Sign(cove,"COASTAL COVE",new(-57,2,6),GardenArt.Cream);
-        for (int i=0;i<8;i++)
-            Palm(cove,new(-101+i*6.1f,0,8+Mathf.Sin(i*1.5f)*5));
-
+        var edge=new StaticBody3D { Name="NorthernMountainBoundary",Position=new(0,18,GardenArt.RearBoundary-3) };
+        edge.SetMeta("unclimbable",true); edge.SetMeta("no_step",true);
+        edge.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=new(2*GardenArt.GardenHalfWidth+30,48,6) } });
+        root.AddChild(edge);
         // Small island and the broken bridge in the main pond.
         var island=GardenArt.Shape(root,new CylinderMesh {
             TopRadius=1.10f, BottomRadius=3.05f, Height=.64f, RadialSegments=32 },
@@ -75,12 +71,12 @@ public static class GardenLandscape
         GardenArt.Ball(courtyard,new(68,1.8f,-1),new(.58f,.38f,.58f),water);
         for (int i=0;i<10;i++)
             Palm(courtyard,new(42+i*7.5f,0,17+Mathf.Sin(i)*3));
-        GardenArt.Sign(root,"NORTH GROVE",new(-7,1.5f,-32),GardenArt.Cream);
+        GardenArt.Sign(root,"WEST GROVE",new(-40,1.5f,25),GardenArt.Cream);
         GardenArt.Sign(root,"SOUTH TERRACE",new(4,1.5f,16),GardenArt.Cream);
         for (int i=0;i<11;i++)
         {
             float a=i*Mathf.Tau/11;
-            Palm(root,new(-9+Mathf.Cos(a)*13,0,-46+Mathf.Sin(a)*9));
+            Palm(root,new(-40+Mathf.Cos(a)*10,0,36+Mathf.Sin(a)*7));
         }
         foreach (var top in SouthPillars)
         {
@@ -107,12 +103,28 @@ public static class GardenLandscape
                     _ => new CylinderMesh { TopRadius=.24f,BottomRadius=.56f,Height=1,RadialSegments=5 }
                 };
                 var cliff = GardenArt.Shape(root,mass,
-                    new(x,2.1f,side*(GardenArt.GardenHalfDepth+Mathf.Sin(i)*2)),new(14+i%4,7+i%5*1.8f,8+i%3),
+                    new(x,side<0 ? 11.5f : 2.1f,side<0 ? GardenArt.RearBoundary-7 : GardenArt.GardenHalfDepth+Mathf.Sin(i)*2),new(14+i%4,side<0 ? 29+i%5*2.2f : 7+i%5*1.8f,side<0 ? 15+i%3 : 8+i%3),
                     new(i%2==0?"59645b":"6b7266"));
                 cliff.RotationDegrees=new(0,i*29+side*12,side*(i%4-2)*5);
                 GardenArt.StoneCollision(cliff);
             }
         }
+    }
+
+    public static void BuildCoastal(Node3D root)
+    {
+        var sand=GardenArt.Cylinder(root,new(0,-.03f,0),22,.06f,new("b5a78b"));
+        sand.Scale=new(1.4f,1,1.04f);
+        GardenArt.Cylinder(root,new(-16,.013f,2),13,.018f,new("568c9b")).Scale=new(1.12f,1,1.32f);
+        GardenArt.Cylinder(root,new(-23,.07f,1),3.8f,.14f,new("787f61"));
+        for(int i=0;i<8;i++) Palm(root,new(-15+i*5.3f,0,11+Mathf.Sin(i*1.5f)*5));
+        GardenArt.Sign(root,"COASTAL COVE",new(0,2.2f,-10),GardenArt.Cream);
+        foreach(int side in new[]{-1,1})
+        {
+            ZoneArt.Solid(root,new(side*31,6,0),new(2,12,50));
+            ZoneArt.Solid(root,new(0,6,side*24),new(64,12,2));
+        }
+        ZoneArt.Portal(root,new(0,0,-18),"PLAZA",new("a6a18a"));
     }
 
     private static void Palm(Node3D root,Vector3 position)

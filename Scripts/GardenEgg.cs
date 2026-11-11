@@ -30,6 +30,7 @@ public partial class GardenEgg : CharacterBody3D
     private readonly ChaoVocal voice=new();
     private readonly FruitReaction fruitReaction=new();
     internal System.Collections.Generic.Dictionary<int,ChaoRest> BedSpaces { set => rest.Spaces=value; }
+    internal System.Collections.Generic.Dictionary<int,IslandNap> IslandSpaces { set => islandNap.Spaces=value; }
     internal void ConfuseOverOffer() => fruitReaction.Confuse();
     internal bool CanAcceptFruit => Chao!=null && fruitReaction.CanAcceptFruit(Chao);
     internal bool AnticipatesFruit => fruitReaction.AnticipatesFruit;
@@ -153,6 +154,7 @@ public partial class GardenEgg : CharacterBody3D
     public void ReserveForOffer()
     {
         reserved=true;
+        islandNap.Cancel(visual);
         rest.Cancel(); leisure.Cancel(visual);
         interests.Cancel(this,visual);
         fruitReaction.Interrupt(visual);
@@ -297,7 +299,7 @@ public partial class GardenEgg : CharacterBody3D
         roam-=dt;
         if (roam<=0 || (!inWater && !motion.LeavingPond && motion.BlockedTime>.75f))
         {
-            wanderTarget=ChaoWander.PickGoal(this,new(Data.X,Position.Y,Data.Z),4.7f);
+            wanderTarget=ChaoWander.PickGoal(this,Position,4.7f);
             motion.ClearBlocked();
             roam=4.6f+GD.Randf()*2;
         }

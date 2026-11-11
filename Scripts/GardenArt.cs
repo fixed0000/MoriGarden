@@ -13,6 +13,8 @@ public static class GardenArt
     public static readonly Vector3 Pond = new(-10,0,-10);
     public const float GardenHalfWidth = 98;
     public const float GardenHalfDepth = 64;
+    public const float RearBoundary=-26.5f;
+    public static Vector3 RelocateFromRear(Vector3 at) => at.Z<RearBoundary+.5f ? new(at.X,0,19) : at;
     public const float PondRadius = 11.4f;
     public const float PondDepth = .30f;
     public static bool IsPondWater(Vector3 at) =>
@@ -302,7 +304,7 @@ public static class GardenArt
         Cylinder(root, new(-5, .13f, 4), 1, .26f, new("736956"));
         Cylinder(root, new(-5, .31f, 4), 1.12f, .13f, new("a29878"));
         var feeder=new StaticBody3D { Position=new(-5,.1875f,4) };
-        feeder.SetMeta("no_step",true);
+        feeder.SetMeta("no_step",true); feeder.SetMeta("jumpable",true);
         feeder.AddChild(new CollisionShape3D { Shape=new CylinderShape3D { Radius=1.10f,Height=.375f } });
         root.AddChild(feeder);
 

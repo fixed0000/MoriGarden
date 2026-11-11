@@ -78,8 +78,8 @@ internal sealed class ChaoMusicGroup
         if (stage==0)
         {
             ImportedChao.IdeaPose(visitor.Art);
-            orb?.SetIdea(time<4 ? "?" : time<4.5f ? "" : "!",time>=4.5f);
-            if (time>=6.7f) { ImportedChao.EndThink(visitor.Art); orb?.SetIdea("",true); stage=1; time=0; }
+            orb?.SetIdea(ChaoThought.Glyph(time),ChaoThought.Inspired(time));
+            if (time>=ChaoThought.IdeaEnd) { ImportedChao.EndThink(visitor.Art); orb?.SetIdea("",true); stage=1; time=0; }
             return;
         }
         var target=stage==1 ? instrument.Position : stand;

@@ -12,14 +12,23 @@ internal sealed class IslandNap
     private float islandWalk, nextStroll;
     private Vector3 strollTarget;
     private bool exploredIsland;
-    private static readonly Vector3 Spot=new(-12.63f,.32f,-10.39f);
+    private static readonly Vector3[] NapPlaces={new(-12.73f,.32f,-10.36f),new(-13.67f,.32f,-10.36f),
+        new(-12.73f,.32f,-11.24f),new(-13.67f,.32f,-11.24f)};
+    public System.Collections.Generic.Dictionary<int,IslandNap> Spaces { get; set; }=new();
+    private int slot=-1;
+    internal Vector3 NapSpot => NapPlaces[slot<0 ? 0 : slot];
+    private readonly ChaoSettling settling=new();
+    private float landingAge=-1;
+    private Vector3 landingAt;
+    private bool returnLanding;
     private float cooldown=34, approach, remaining, phase, hopTime;
     private int stone=-1;
     private bool useStones;
     private Vector3 hopFrom;
     private readonly ChaoWander walker=new();
+    internal bool IsSettling=>settling.Active;
     public bool IsNapping => remaining>0;
-    public bool IsVisiting => approach>0 || stone>=0 || IsNapping || returning!=ReturnMode.None || islandWalk>0;
+    public bool IsVisiting => settling.Active || landingAge>=0 || approach>0 || stone>=0 || IsNapping || returning!=ReturnMode.None || islandWalk>0;
 
     public void Cancel(Node3D art)
     {
@@ -29,6 +38,7 @@ internal sealed class IslandNap
             if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=Vector3.Zero;
         }
         if (remaining>0 || approach>0) cooldown=62;
+        ReleaseSpot(); settling.Cancel(); landingAge=-1;
         approach=remaining=hopTime=islandWalk=0;
         returning=ReturnMode.None;
         stone=-1;
@@ -36,6 +46,22 @@ internal sealed class IslandNap
 
     public bool Step(CharacterBody3D actor,Node3D art,PetState chao,ChaoMotion motion,float dt)
     {
+        if (landingAge>=0)
+        {
+            landingAge+=dt;
+            float rebound=landingAge<.26f ? Mathf.Sin(landingAge/.26f*Mathf.Pi)*.065f : 0;
+            actor.Position=new(actor.Position.X,landingAt.Y+rebound,actor.Position.Z);
+            ImportedChao.MovePose(art,0,false,false,false,false,landingAge<.26f,false);
+            if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(.18f,Mathf.Sin(landingAge*2)*.22f,0);
+            if (landingAge>=2.26f) { landingAge=-1; if (returnLanding) FinishReturn(); }
+            return true;
+        }
+        if (settling.Active)
+        {
+            if (chao.Energy>=100) { settling.Cancel(); ReleaseSpot(); return false; }
+            if (settling.Step(actor,art,chao.Manners,dt)) remaining=NapDuration;
+            return true;
+        }
         if (remaining>0)
         {
             ImportedChao.SleepPose(art,NapDuration-remaining,chao.Manners);
@@ -43,6 +69,7 @@ internal sealed class IslandNap
             if (remaining<=0)
             {
                 ImportedChao.CloseEyes(art,false);
+                ReleaseSpot();
                 BeginReturn(GD.Randf()<(chao.Swim<100 ? .68f : .42f));
             }
             return true;
@@ -68,37 +95,48 @@ internal sealed class IslandNap
             Walk(actor,art,chao,motion,strollTarget,dt);
             if (islandWalk<=0)
             {
-                if (chao.Energy<91) { approach=15; useStones=false; }
+                if (chao.Energy<91 && ReserveSpot(actor)) { approach=15; useStones=false; }
                 else BeginReturn(GD.Randf()<.5f);
             }
             return true;
         }
-        Vector3 direction=Spot-actor.Position;
+        Vector3 direction=NapSpot-actor.Position;
         direction.Y=0;
         if (approach<=0)
         {
             cooldown=Mathf.Max(0,cooldown-dt);
-            if (cooldown>0 || chao.Energy>=99 || direction.Length()>42) return false;
+            if (cooldown>0 || chao.Energy>=99 || direction.Length()>90 || !ReserveSpot(actor)) return false;
+            direction=NapSpot-actor.Position;
             approach=70;
             useStones=!motion.IsSwimmingAt(actor.Position);
             stone=-1;
         }
         approach-=dt;
-        if (direction.Length()<.29f && actor.Position.Y>.24f)
+        if (direction.Length()<.24f && actor.Position.Y>.24f)
         {
-            approach=0; remaining=NapDuration;
+            if (direction.Length()>.035f)
+            {
+                actor.MoveAndCollide(direction.LimitLength(dt*.38f));
+                ImportedChao.MovePose(art,phase+=dt*5,true,false,false,false,false,false);
+                return true;
+            }
+            approach=0;
             exploredIsland=true;
-            ImportedChao.SleepPose(art,0,chao.Manners);
+            if (chao.Energy>=100) { ReleaseSpot(); return false; }
+            var support=actor.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(
+                actor.Position+Vector3.Up*.4f,actor.Position-Vector3.Up*.5f,1));
+            if (support.Count>0) actor.Position=new(actor.Position.X,((Vector3)support["position"]).Y,actor.Position.Z);
+            settling.Begin(actor);
             return true;
         }
         if (stone>=0) return Cross(actor,art,dt);
         if (approach<=0 || motion.BlockedTime>2.7f)
         {
-            approach=0; cooldown=55;
+            approach=0; cooldown=55; ReleaseSpot();
             return false;
         }
         bool water=motion.IsSwimmingAt(actor.Position);
-        var goal=useStones ? BankRoute(actor.Position) : Spot;
+        var goal=useStones ? BankRoute(actor.Position) : NapSpot;
         if (useStones && goal==GardenLandscape.IslandBank && new Vector2(actor.Position.X-goal.X,actor.Position.Z-goal.Z).Length()<.29f)
         {
             stone=0; hopFrom=actor.Position; hopTime=0;
@@ -107,7 +145,7 @@ internal sealed class IslandNap
         }
         var route=motion.RouteOffUpperPlatform(actor.Position,goal)-actor.Position;
         route.Y=0;
-        if (useStones && !water && !motion.Airborne) route=walker.Steer(actor,route,dt);
+        if (!water && !motion.Airborne) route=walker.Steer(actor,route,dt);
         bool moving=motion.Step(actor,route,chao,false,water,dt,true,out _,directIsland:!useStones);
         if (moving || water) phase+=dt*(water && chao.Swim<100 ? 5.2f : 9);
         ImportedChao.MovePose(art,phase,moving,water,chao.Swim>=100,false,motion.Airborne,motion.Flying);
@@ -131,10 +169,10 @@ internal sealed class IslandNap
             hopFrom=target; hopTime=0;
             if (reverse)
             {
-                if (stone==steps.Length) FinishReturn();
+                if (stone==steps.Length) { landingAge=0; landingAt=target; returnLanding=true; stone=-1; }
                 else stone=stone==0 ? steps.Length : stone-1;
             }
-            else if (++stone>steps.Length) { stone=-1; useStones=false; }
+            else if (++stone>steps.Length) { stone=-1; useStones=false; landingAge=0; landingAt=target; returnLanding=false; }
         }
         return true;
     }
@@ -189,6 +227,30 @@ internal sealed class IslandNap
         returning=ReturnMode.None;
         stone=-1;
         cooldown=62;
+    }
+
+    private bool ReserveSpot(CharacterBody3D actor)
+    {
+        if (slot>=0) return true;
+        float nearest=float.MaxValue;
+        for(int i=0;i<NapPlaces.Length;i++)
+        {
+            if (Spaces.ContainsKey(i)) continue;
+            bool occupied=false;
+            foreach(var node in actor.GetTree().GetNodesInGroup("GardenChao"))
+                if (node is Node3D other && other!=actor && other.Visible && Flat(other.GlobalPosition-NapPlaces[i]).Length()<.56f &&
+                    Mathf.Abs(other.GlobalPosition.Y-NapPlaces[i].Y)<.35f) { occupied=true; break; }
+            float distance=actor.Position.DistanceSquaredTo(NapPlaces[i]);
+            if (occupied || distance>=nearest) continue;
+            nearest=distance; slot=i;
+        }
+        if (slot<0) return false;
+        Spaces[slot]=this; return true;
+    }
+    private void ReleaseSpot()
+    {
+        if (slot>=0 && Spaces.TryGetValue(slot,out var owner) && owner==this) Spaces.Remove(slot);
+        slot=-1;
     }
 
     private static Vector3 Flat(Vector3 vector) => new(vector.X,0,vector.Z);

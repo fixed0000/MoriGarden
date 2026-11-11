@@ -15,7 +15,8 @@ internal sealed class ChaoRest
     private Vector3 destination;
     private Vector3 hopStart;
     private float hop;
-    private float timeout, settle, facing, arrivalYaw;
+    private float timeout, facing;
+    private readonly ChaoSettling settling=new();
     private bool landed;
     private readonly ChaoWander detour=new();
     public bool HandlesPose => hop>0;
@@ -39,7 +40,7 @@ internal sealed class ChaoRest
         direction=direction.LengthSquared()<.02f ? Vector3.Back : direction.Normalized();
         approach=Bed+direction*2.05f;
         destination=Bed+Slots[slot]+Vector3.Up*.43f;
-        hop=settle=0; landed=false;
+        hop=0; landed=false; settling.Cancel();
         walk.Reset();
         timeout=35;
         Requested=true;
@@ -47,7 +48,7 @@ internal sealed class ChaoRest
 
     public void Cancel()
     {
-        Requested=false; hop=0;
+        Requested=false; hop=0; settling.Cancel();
         if (slot>=0 && Spaces.TryGetValue(slot,out var owner) && owner==this) Spaces.Remove(slot);
         slot=-1;
     }
@@ -76,7 +77,7 @@ internal sealed class ChaoRest
             var forward=destination-hopStart;
             facing=Mathf.Atan2(forward.X,forward.Z);
             actor.Rotation=new(0,facing,0);
-            arrivalYaw=facing+Mathf.Lerp(-Mathf.Pi,Mathf.Pi,GD.Randf());
+
         }
         if (!landed)
         {
@@ -91,19 +92,7 @@ internal sealed class ChaoRest
             if (hit.Count>0) actor.Position=(Vector3)hit["position"];
             landed=true;
         }
-        settle+=dt;
-        actor.Rotation=new(0,Mathf.LerpAngle(facing,arrivalYaw,Mathf.SmoothStep(0,1,Mathf.Clamp(settle/.9f,0,1))),0);
-        if (art!=null)
-        {
-            if (settle<2.2f)
-            {
-                ImportedChao.MovePose(art,settle*8,settle<.9f,false,false,false,false,false);
-                if (art.FindChild("HeadPivot",true,false) is Node3D head)
-                    head.Rotation=new(.45f,settle<.9f ? 0 : Mathf.Sin((settle-.9f)/1.3f*Mathf.Tau)*.55f,0);
-            }
-            else ImportedChao.LieDown(art,(settle-2.2f)/1.3f,chao.Manners);
-        }
-        if (settle>=3.5f) { Requested=false; hop=0; reached=true; }
+        if (settling.Step(actor,art,chao.Manners,dt)) { Requested=false; hop=0; reached=true; }
         return true;
     }
 }
