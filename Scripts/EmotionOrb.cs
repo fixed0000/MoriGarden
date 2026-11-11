@@ -18,12 +18,14 @@ public partial class EmotionOrb : Node3D
     internal string CurrentGlyph => displayed;
     private bool thinking;
     private bool upset, distressed;
-    private bool mealUpset, ideaJoy;
+    private bool mealUpset, mealHappy, ideaJoy;
     private string? ideaSymbol;
-    private float heartTime;
+    private float heartTime, reactionTime;
     private string symbol="?";
     private string displayed="";
+    public void ReactUpset(float duration) { reactionTime=Mathf.Max(reactionTime,duration); Refresh(); }
     public void Celebrate() { heartTime=1.1f; Refresh(); }
+    public void SetMealHappy(bool happy) { if (mealHappy==happy) return; mealHappy=happy; Refresh(); }
     public void SetMealUpset(bool value) { mealUpset=value; Refresh(); }
     public void SetHappy(bool value)
     {
@@ -52,11 +54,11 @@ public partial class EmotionOrb : Node3D
 
     private void Refresh()
     {
-        string next=distressed ? "spring" : ideaSymbol ?? (thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "");
+        string next=distressed || reactionTime>0 ? "spring" : ideaSymbol ?? (thinking ? symbol : mealUpset ? "spring" : heartTime>0 ? "♥" : upset ? "spring" : "");
         if (GetParent() is Node3D chao)
         {
-            ImportedChao.SmileEyes(chao,(ideaJoy && !distressed) || next=="♥");
-            ImportedChao.HalfEyes(chao,next=="spring" && (!ideaJoy || distressed));
+            ImportedChao.SmileEyes(chao,((ideaJoy || mealHappy) && !distressed && reactionTime<=0) || next=="♥");
+            ImportedChao.HalfEyes(chao,next=="spring" && (!ideaJoy || distressed || reactionTime>0));
         }
         if (next==displayed) return;
         displayed=next;
@@ -177,6 +179,7 @@ public partial class EmotionOrb : Node3D
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
+        if (reactionTime>0) { reactionTime=Mathf.Max(0,reactionTime-dt); if (reactionTime==0) Refresh(); }
         if (heartTime>0) { heartTime=Mathf.Max(0,heartTime-dt); if (heartTime==0) Refresh(); }
         Vector3 target = ((Node3D)GetParent()).ToGlobal(rest);
         if (!initialized || previousTarget.DistanceTo(target) > .75f)

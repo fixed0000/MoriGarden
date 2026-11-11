@@ -10,18 +10,30 @@ internal sealed class FruitMeal
     private int startBites;
     private int plannedBites;
     private bool fullAtStart;
+    private string? giver;
     private float duration;
     private Vector3 from;
     public float Duration => duration;
     public float Remaining => Duration-elapsed;
     public bool Rejected { get; private set; }
+    public bool RejectedForTaste { get; private set; }
 
-    public void Begin(FruitTree fruit,PetState chao,Vector3 start,bool alreadyFull=false)
+    public void Begin(FruitTree fruit,PetState chao,Vector3 start,bool alreadyFull=false,string? givenBy=null)
     {
         elapsed=0;
         from=start;
         startBites=fruit.Bites;
         Rejected=false;
+        giver=givenBy;
+        RejectedForTaste=fruit.IsSpecial && fruit.Kind!=chao.FavoriteFruit;
+        if (RejectedForTaste)
+        {
+            plannedBites=startBites;
+            animationsAt[startBites]=0;
+            bitesAt[startBites]=duration=chao.Fullness>=75 ? 3 : chao.Fullness<=25 || chao.Glutton ? 1 : 2;
+            fullAtStart=false;
+            return;
+        }
         fullAtStart=!fruit.IsHeartFruit && (alreadyFull || chao.Fullness>=99.9f);
         if (fullAtStart)
         {
@@ -59,7 +71,14 @@ internal sealed class FruitMeal
         fruit.Hold(reach>=1 ? bite : from.Lerp(bite,reach)+forward*(Mathf.Sin(reach*Mathf.Pi)*.10f));
         while (fruit.Bites<plannedBites && elapsed>=bitesAt[fruit.Bites])
         {
+            bool favoriteGift=giver!=null && fruit.IsSpecial && fruit.Kind==chao.FavoriteFruit && fruit.Bites==0;
             fruit.TakeBite();
+            if (favoriteGift)
+            {
+                chao.Bond++;
+                chao.ChangeRelationship(1,giver!);
+                chao.Joy=Mathf.Min(100,chao.Joy+4);
+            }
             if (!fullAtStart) chao.FeedBite(fruit.Bites==FruitTree.BiteCount);
             ChaoSounds.Play(art,"bite");
             if (fruit.IsHeartFruit && fruit.Bites==FruitTree.BiteCount)
@@ -71,18 +90,24 @@ internal sealed class FruitMeal
                 break;
             }
         }
-        if (fullAtStart && elapsed>=Duration) Rejected=true;
+        if ((fullAtStart || RejectedForTaste) && elapsed>=Duration) Rejected=true;
         ImportedChao.EatPose(art,pause ? 0 : chewTime);
         if (art.FindChild("HeadPivot",true,false) is Node3D head)
             head.Rotation=new(0,pause ? Mathf.Sin(elapsedPause*1.75f)*.33f : 0,0);
         if (art.FindChild("MoodOrb",true,false) is EmotionOrb orb)
+        {
+            orb.SetMealHappy(fruit.IsSpecial && fruit.Kind==chao.FavoriteFruit && !Rejected && fruit.Bites<FruitTree.BiteCount);
             orb.SetMealUpset(pause && chao.Joy<40 && elapsedPause>.35f && elapsedPause<1.24f);
+        }
     }
 
-    public void ThrowBehind(FruitTree fruit,CharacterBody3D chao)
+    public void ThrowBehind(FruitTree fruit,CharacterBody3D chao,Node3D art)
     {
+        ImportedChao.DiscardPose(art);
         var back=-chao.GlobalBasis.Z.Normalized();
         fruit.Hold(chao.Position+back*.24f+Vector3.Up*.38f);
         fruit.Release(back*2.8f+Vector3.Up*2.25f);
+        if (RejectedForTaste)
+            art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.ReactUpset(1);
     }
 }

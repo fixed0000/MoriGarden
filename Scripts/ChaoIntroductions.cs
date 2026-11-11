@@ -7,7 +7,7 @@ namespace Mori;
 internal sealed class ChaoIntroductions
 {
     internal sealed record Candidate(string Id,CharacterBody3D Actor,Node3D Art,PetState Pet);
-    private enum Phase { Look, Think, Alert, Approach, Talk, Shake, Wait }
+    private enum Phase { Look, Think, Alert, Approach, Talk, Raise, Shake, Lower, Wait }
     private sealed class Meeting(Candidate a,Candidate b)
     {
         public Candidate A=a, B=b;
@@ -108,14 +108,27 @@ internal sealed class ChaoIntroductions
                     ChaoSounds.Play(voice%2==0 ? pair.A.Art : pair.B.Art,"voice");
                     pair.Sounds++;
                 }
-                if (pair.Time>=1.05f) Next(pair,Phase.Shake);
+                if (pair.Time>=1.05f) Next(pair,Phase.Raise);
+                break;
+            case Phase.Raise:
+            case Phase.Lower:
+                float weight=Mathf.SmoothStep(0,1,Mathf.Clamp(pair.Time/.5f,0,1));
+                if (pair.Stage==Phase.Lower) weight=1-weight;
+                var handPoint=(aBody.GlobalPosition+bBody.GlobalPosition)*.5f+Vector3.Up*.145f;
+                ImportedChao.HandshakePose(pair.A.Art,handPoint,weight);
+                ImportedChao.HandshakePose(pair.B.Art,handPoint,weight);
+                if (pair.Time>=.5f)
+                {
+                    if (pair.Stage==Phase.Raise) Next(pair,Phase.Shake);
+                    else { Mood(pair.A,"",true); Mood(pair.B,"",true); Next(pair,Phase.Wait); }
+                }
                 break;
             case Phase.Shake:
                 var grip=(aBody.GlobalPosition+bBody.GlobalPosition)*.5f+
                     Vector3.Up*(.145f+Mathf.Sin(pair.Time*23)*.026f);
                 ImportedChao.HandshakePose(pair.A.Art,grip);
                 ImportedChao.HandshakePose(pair.B.Art,grip);
-                if (pair.Time>=1.28f)
+                if (pair.Time>=2.6f)
                 {
                     var link=owner.SocialLink(pair.A.Id,pair.B.Id,create:true)!;
                     if (!link.Introduced)
@@ -124,10 +137,9 @@ internal sealed class ChaoIntroductions
                         link.Score=Math.Clamp(link.Score+4+(pair.A.Pet.Sociability+pair.B.Pet.Sociability)/38,-100,100);
                         save();
                     }
-                    Normal(pair.A); Normal(pair.B);
-                    Mood(pair.A,"",pair.A.Pet.Sociability>=60);
-                    Mood(pair.B,"",pair.B.Pet.Sociability>=60);
-                    Next(pair,Phase.Wait);
+                    Mood(pair.A,"",true);
+                    Mood(pair.B,"",true);
+                    Next(pair,Phase.Lower);
                 }
                 break;
             case Phase.Wait:

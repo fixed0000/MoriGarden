@@ -52,6 +52,17 @@ public partial class WateringCan : Node3D
         AddChild(drops);
     }
 
+    internal bool InUse => owner!=null;
+    internal void PushAside(Vector3 travel)
+    {
+        if (InUse) return;
+        var space=GetWorld3D().DirectSpaceState;
+        var query=new PhysicsShapeQueryParameters3D { Shape=new SphereShape3D { Radius=.13f },
+            Transform=new Transform3D(Basis.Identity,GlobalPosition+Vector3.Up*.15f),Motion=travel,CollisionMask=1 };
+        var fraction=space.CastMotion(query);
+        GlobalPosition+=travel*fraction[0];
+    }
+
     internal static bool Qualified(PetState pet) => pet.Intelligence>=140 && pet.Kindness>=50;
 
     public void Advance(float dt)
@@ -243,7 +254,7 @@ public partial class WateringCan : Node3D
         return new[]{OuterBank,new Vector3(4.4f,0,.9f),stand};
     }
 
-    private static Vector3 DryRoute(Vector3 start,Vector3 goal)
+    private Vector3 DryRoute(Vector3 start,Vector3 goal)
     {
         var radial=start-GardenArt.Pond; radial.Y=0;
         bool atOutlet=radial.Normalized().Dot(PondSide)>.9975f;
@@ -257,7 +268,7 @@ public partial class WateringCan : Node3D
             next=Around(start,goal==PondBank ? OuterBank : goal,GardenArt.Pond,GardenArt.PondRadius+1.12f,1.03f);
         next=Around(start,next,ChaoRest.Bed,1.91f,.50f);
         next=Around(start,next,new Vector3(-5,0,4),1.40f,.46f);
-        foreach (var trunk in GardenArt.TreePositions)
+        foreach (var trunk in GetParent().GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder).Select(tree=>tree.Position))
             next=Around(start,next,trunk,.87f,.38f);
         return next;
     }

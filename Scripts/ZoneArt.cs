@@ -49,16 +49,19 @@ public static class ZoneArt
         body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = size } }); root.AddChild(body);
     }
 
-    public static void Build(Node3D root, GardenZone zone)
+    public static void Build(Node3D root, GardenZone zone,System.Collections.Generic.IReadOnlyList<GardenTreeState>? trees=null)
     {
         if (zone != GardenZone.Garden) Solid(root,new(0,-.25f,0),new(76,.5f,76));
         if (zone == GardenZone.Garden)
         {
-            GardenArt.BuildGarden(root);
+            GardenArt.BuildGarden(root,trees);
             root.AddChild(new WateringCan { Name="WateringCan" });
             root.AddChild(new ToyCar { Name="ToyCar" });
             root.AddChild(new ToyCar { Name="Rattle",IsRattle=true });
             root.AddChild(new ToyCar { Name="Flute",IsFlute=true });
+            root.AddChild(new ToyCar { Name="ElectricGuitar",IsElectricGuitar=true });
+            root.AddChild(new ToyCar { Name="Synthesizer",IsSynthesizer=true });
+            root.AddChild(new ToyCar { Name="BeachBall",IsBeachBall=true });
             GardenArt.Cylinder(root,MachineStep+Vector3.Up*.065f,.94f,.13f,new("91a99a")).CreateConvexCollision();
             GardenArt.Cylinder(root,ChaoMachine+Vector3.Up*.10f,1.0f,.20f,new("586c65")).CreateConvexCollision();
             var casing=GardenArt.Shape(root,new CapsuleMesh { Radius=.31f,Height=1.79f,RadialSegments=16,Rings=6 },

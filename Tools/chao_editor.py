@@ -98,9 +98,9 @@ class ChaoEditor:
         groups = {
             "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Initiative", "Agility"},
             "Favorites": {"FavoriteToy", "FavoriteFruit", "FavoriteInstrument"},
-            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "Sociability", "Aggressiveness", "Curiosity"},
+            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "CourtshipReadiness", "BloomRemaining", "Sociability", "ActivityPreference", "Clumsy", "Dexterous", "Aggressiveness", "Curiosity"},
             "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
-            "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
+            "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "AdultSeconds", "EvolutionFoodSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
         pages = {}
         counts = {}
@@ -126,12 +126,12 @@ class ChaoEditor:
                                            values=("seed", "bloom", "comet", "tide", "swift", "stone"), width=13)
                 elif name in groups["Favorites"]:
                     choices = {
-                        "FavoriteToy": ("", "Toy Car", "Rattle"),
-                        "FavoriteFruit": ("Garden Fruit", "Heart Fruit"),
-                        "FavoriteInstrument": ("Flute", "None"),
+                        "FavoriteToy": ("", "Toy Car", "Rattle", "Beach Ball"),
+                        "FavoriteFruit": ("Blue Square Fruit", "Yellow Triangle Fruit", "Red Round Fruit", "Green Diamond Fruit"),
+                        "FavoriteInstrument": ("Flute", "Electric Guitar", "Synthesizer", "None"),
                     }
                     control = ttk.Combobox(fields, textvariable=var, state="readonly",
-                                           values=choices[name], width=14)
+                                           values=choices[name], width=22 if name == "FavoriteFruit" else 14)
                 elif name == "RecentAnimalSkill":
                     control = ttk.Combobox(fields, textvariable=var, state="readonly",
                                            values=("", "Swim", "Fly", "Run", "Power"), width=13)

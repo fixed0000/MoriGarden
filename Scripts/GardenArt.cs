@@ -1,4 +1,6 @@
 using Godot;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Mori;
 
@@ -114,7 +116,7 @@ public static class GardenArt
         return root;
     }
 
-    public static void BuildGarden(Node3D root)
+    public static void BuildGarden(Node3D root,IReadOnlyList<GardenTreeState>? trees=null)
     {
         var ground = BuildPondTerrain(root);
         ground.MaterialOverride = new ShaderMaterial { Shader = new Shader { Code = """
@@ -270,11 +272,9 @@ public static class GardenArt
                     center+new Vector3((i-1)*size.X*.32f,-size.Y*.15f,size.Z*.47f),
                     new(size.X*.43f,size.Y*.76f,.57f),new(i%2==0?"616861":"838579"));
         }
-        foreach (var position in TreePositions)
-        {
-            root.AddChild(new FruitTree { Position=position });
-            ZoneArt.Solid(root,position+Vector3.Up*2.65f,new(.95f,5.3f,.95f));
-        }
+        var orchard=trees ?? TreePositions.Select(position=>new GardenTreeState { X=position.X,Z=position.Z }).ToArray();
+        foreach (var tree in orchard)
+            root.AddChild(new FruitTree { Position=new(tree.X,0,tree.Z),FruitKind=tree.FruitKind,TreeState=tree });
         GardenLandscape.Build(root);
         var details = new RandomNumberGenerator { Seed = 731 };
         for (int i=0;i<28;i++)
@@ -289,16 +289,6 @@ public static class GardenArt
                     shore+new Vector3(reed*.11f,height*.5f,details.RandfRange(-.2f,.2f)),
                     Vector3.One,new(reed%2==0?"506247":"697755"));
                 blade.RotationDegrees = new(0,0,details.RandfRange(-23,23));
-            }
-        }
-        foreach (var tree in TreePositions)
-        {
-            for (int i=0;i<6;i++)
-            {
-                float angle = i*Mathf.Tau/6;
-                var rootKnot = Ball(root,tree+new Vector3(Mathf.Cos(angle)*.6f,.09f,Mathf.Sin(angle)*.6f),
-                    new(1.35f,.20f,.24f),new("574d3d"));
-                rootKnot.Rotation = new(0,-angle,0);
             }
         }
         // A worn trail marker at the fork.

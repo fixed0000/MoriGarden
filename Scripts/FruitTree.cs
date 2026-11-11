@@ -12,15 +12,30 @@ public partial class FruitTree : Node3D
     public bool IsFeeder { get; init; }
     public bool SingleUse { get; init; }
     public bool IsHeartFruit { get; init; }
+    public string FruitKind { get; init; } = FruitKinds.Garden;
+    public string Kind => IsHeartFruit ? FruitKinds.Heart : FruitKind;
+    public bool IsSpecial => FruitKinds.IsSpecial(Kind);
+    public GardenTreeState? TreeState { get; init; }
+    public bool Mature => (host ?? this).TreeState?.GrowthSeconds is not <180;
     private FruitTree? host;
     private readonly List<FruitTree> extras=new();
     private MeshInstance3D fruitSkin=null!;
     private float ripening, ripeAfter=92;
-    private float crownShake;
+    public const float RipeFallSeconds=600;
+    internal bool OnBranch => !dropped;
+    internal bool Pushable => HasFruitOnGround && Bites<BiteCount;
+    internal void PushAside(Vector3 travel)
+    {
+        if (!Pushable) return;
+        var hit=fruit.MoveAndCollide(travel);
+        if (hit!=null) fruit.MoveAndCollide(hit.GetRemainder().Slide(hit.GetNormal()));
+        fruit.MoveAndCollide(Vector3.Down*.55f);
+    }
+    private float crownShake, ripeningStep;
     public const float ShakeDuration=2.05f;
     public float Sway { get; private set; }
     public IEnumerable<FruitTree> Slots => new[]{this}.Concat(extras);
-    private bool Ripe => IsFeeder || ripening>=ripeAfter;
+    private bool Ripe => IsFeeder || (Mature && ripening>=ripeAfter);
     public bool CanShake => !IsFeeder && host==null && crownShake<=0 && Slots.Any(slot=>!slot.dropped && slot.Ripe);
     public bool IsBranchSlot => host!=null;
     private Vector3 branch = new(1.18f,4.02f,1.27f);
@@ -29,6 +44,8 @@ public partial class FruitTree : Node3D
     private float fallSpeed;
     private bool held, thrown;
     private Vector3 tossVelocity;
+    private int tossBounces;
+    public bool HasActiveFruit => Slots.Any(slot=>slot.held || slot.thrown);
     public bool HasFruitOnGround => dropped && settled && !held;
 
     public void Hold(Vector3 position)
@@ -42,7 +59,7 @@ public partial class FruitTree : Node3D
         held = false;
         settled = false;
         thrown = true;
-        tossVelocity = velocity;
+        tossVelocity = velocity; tossBounces=0;
     }
     public void Place(Vector3 position)
     {
@@ -82,7 +99,7 @@ public partial class FruitTree : Node3D
         }
         else if (host==null)
         {
-            ripening=ripeAfter;
+            ripening=TreeState?.GrowthSeconds<180 ? 0 : ripeAfter;
             var bark=new Color("504639");
             trunk=GardenArt.Shape(this,new CylinderMesh { TopRadius=.28f,BottomRadius=.68f,Height=5.6f,RadialSegments=9 },
                 new(0,2.8f,0),Vector3.One,bark);
@@ -105,7 +122,8 @@ public partial class FruitTree : Node3D
                     if (i==0) branch=socket;
                     else
                     {
-                        var slot=new FruitTree { host=this,branch=socket,ripeAfter=92+i*9,ripening=i==2 ? 57 : 24 };
+                        var slot=new FruitTree { host=this,FruitKind=Kind,branch=socket,ripeAfter=92+i*9,
+                            ripening=TreeState?.GrowthSeconds<180 ? 0 : i==2 ? 57 : 24 };
                         extras.Add(slot);
                         AddChild(slot);
                     }
@@ -116,11 +134,77 @@ public partial class FruitTree : Node3D
         fruit = new CharacterBody3D { Position = branch, CollisionLayer = 0, CollisionMask = 1 };
         fruit.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius=.18f } });
         AddChild(fruit);
-        fruitSkin=IsHeartFruit
-            ? GardenArt.Shape(fruit,HeartMesh(),Vector3.Zero,Vector3.One,new("df486f"))
-            : GardenArt.Ball(fruit,Vector3.Zero,new(.30f,.28f,.29f),new("ad7540"));
+        fruitSkin=DrawFruit(fruit,Kind);
         GardenArt.Ball(fruit,new(.05f,.15f,0),new(.12f,.035f,.07f),new("51663b"));
         RefreshGrowth();
+        if (!IsFeeder && host==null)
+        {
+            var collider=new StaticBody3D { Position=Vector3.Up*2.65f };
+            collider.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=new(.95f,5.3f,.95f) } });
+            AddChild(collider);
+            for (int i=0;i<6;i++)
+            {
+                float angle=i*Mathf.Tau/6;
+                var root=GardenArt.Ball(this,new(Mathf.Cos(angle)*.6f,.09f,Mathf.Sin(angle)*.6f),
+                    new(1.35f,.20f,.24f),new("574d3d"));
+                root.Rotation=new(0,-angle,0);
+            }
+            if (TreeState!=null)
+            {
+                Scale=Vector3.One*Mathf.Lerp(.20f,1,Mathf.Clamp(TreeState.GrowthSeconds/180,0,1));
+                if (TreeState.Fruits!=null)
+                    foreach (var (slot,state) in Slots.Zip(TreeState.Fruits))
+                        slot.RestoreGrowth(state.Growth,state.X is float x && state.Y is float y && state.Z is float z ?
+                            new Vector3(x,y,z) : null,state.Bites);
+            }
+        }
+    }
+
+    internal static Color FruitColor(string kind) => new(kind switch
+    {
+        FruitKinds.Blue=>"4e8bdf",FruitKinds.Yellow=>"e8cb50",FruitKinds.Red=>"de5a55",
+        FruitKinds.Green=>"65b46a",FruitKinds.Heart=>"df486f",_=>"ad7540"
+    });
+
+    private static MeshInstance3D DrawFruit(Node3D parent,string kind)
+    {
+        var color=FruitColor(kind);
+        return kind switch
+        {
+            FruitKinds.Blue=>GardenArt.Shape(parent,new BoxMesh { Size=new(.29f,.28f,.29f) },
+                Vector3.Zero,Vector3.One,color),
+            FruitKinds.Yellow=>GardenArt.Shape(parent,new PrismMesh { Size=new(.30f,.28f,.29f),LeftToRight=.5f },
+                Vector3.Zero,Vector3.One,color),
+            FruitKinds.Green=>GardenArt.Shape(parent,DiamondMesh(),Vector3.Zero,Vector3.One,color),
+            FruitKinds.Heart=>GardenArt.Shape(parent,HeartMesh(),Vector3.Zero,Vector3.One,color),
+            _=>GardenArt.Ball(parent,Vector3.Zero,new(.30f,.28f,.29f),color)
+        };
+    }
+
+    private static Mesh DiamondMesh()
+    {
+        var mesh=new SurfaceTool();
+        mesh.Begin(Mesh.PrimitiveType.Triangles);
+        for (int i=0;i<4;i++)
+        {
+            var a=Vector3.Back.Rotated(Vector3.Up,i*Mathf.Pi/2)*.145f;
+            var b=Vector3.Back.Rotated(Vector3.Up,(i+1)*Mathf.Pi/2)*.145f;
+            mesh.AddVertex(Vector3.Up*.14f); mesh.AddVertex(a); mesh.AddVertex(b);
+            mesh.AddVertex(Vector3.Down*.14f); mesh.AddVertex(b); mesh.AddVertex(a);
+        }
+        mesh.GenerateNormals();
+        return mesh.Commit();
+    }
+
+    public void CaptureState()
+    {
+        if (TreeState==null) return;
+        TreeState.Fruits=Slots.Select(slot=>
+        {
+            var state=slot.CaptureGrowth();
+            return new GardenFruitSlotSave(state.Growth,state.Bites,state.GroundPosition?.X,
+                state.GroundPosition?.Y,state.GroundPosition?.Z);
+        }).ToArray();
     }
 
     private static Mesh HeartMesh()
@@ -164,16 +248,23 @@ public partial class FruitTree : Node3D
     {
         if (IsFeeder || dropped) return;
         float size=Mathf.Clamp(ripening/ripeAfter,0,1);
-        fruit.Visible=size>.08f;
+        fruit.Visible=Mature && size>.08f;
         fruit.Scale=Vector3.One*Mathf.Lerp(.35f,1,size);
         if (fruitSkin.MaterialOverride is StandardMaterial3D paint)
-            paint.AlbedoColor=new Color("6c864c").Lerp(new Color("ad7540"),Mathf.SmoothStep(.5f,1,size));
+            paint.AlbedoColor=new Color("6c864c").Lerp(FruitColor(Kind),Mathf.SmoothStep(.5f,1,size));
     }
 
     public void UpdateFruit(float delta)
     {
         if (!IsFeeder && host==null)
         {
+            ripeningStep=delta;
+            if (TreeState!=null && !Mature)
+            {
+                ripeningStep=Mathf.Max(0,delta-(180-TreeState.GrowthSeconds));
+                TreeState.GrowthSeconds=Mathf.Min(180,TreeState.GrowthSeconds+delta);
+                Scale=Vector3.One*Mathf.Lerp(.20f,1,TreeState.GrowthSeconds/180);
+            }
             bool shaking=crownShake>0;
             crownShake=Mathf.Max(0,crownShake-delta);
             float progress=1-crownShake/ShakeDuration;
@@ -188,16 +279,17 @@ public partial class FruitTree : Node3D
         if (held) return;
         if (thrown)
         {
-            settled=ThrowMotion.Step(fruit,ref tossVelocity,delta);
+            settled=ThrowMotion.StepItem(fruit,ref tossVelocity,delta,ref tossBounces);
             thrown=!settled;
             return;
         }
         if (!dropped)
         {
-            ripening=Mathf.Min(ripeAfter,ripening+delta);
+            if (Mature) ripening=Mathf.Min(ripeAfter+RipeFallSeconds,ripening+(host ?? this).ripeningStep);
             var tree=host ?? this;
             fruit.Position=tree.crown.Transform*(branch-new Vector3(0,3.6f,0));
             RefreshGrowth();
+            if (ripening>=ripeAfter+RipeFallSeconds && Mature) { dropped=true; elapsed=fallSpeed=0; }
             return;
         }
         if (settled) return;

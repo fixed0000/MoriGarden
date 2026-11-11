@@ -6,6 +6,7 @@ internal sealed class ChaoWander
 {
     private Vector3 detour;
     private float detourTime;
+    private float bedSide;
 
     public static Vector3 PickGoal(CharacterBody3D actor,Vector3 center,float radius)
     {
@@ -16,6 +17,8 @@ internal sealed class ChaoWander
             var heading=Vector3.Back.Rotated(Vector3.Up,GD.Randf()*Mathf.Tau);
             var candidate=center+heading*Mathf.Lerp(radius*.38f,radius,GD.Randf());
             candidate.Y=actor.Position.Y;
+            var fromBed=candidate-ChaoRest.Bed; fromBed.Y=0;
+            if (actor.Position.Y<.22f && fromBed.Length()<2.05f) continue;
             if (GardenArt.IsPondWater(candidate) && !GardenArt.IsPondWater(actor.Position)) continue;
             var direction=candidate-actor.Position;
             float distance=direction.Length();
@@ -31,6 +34,22 @@ internal sealed class ChaoWander
         if (toward.LengthSquared()<.05f) return toward;
         detourTime=Mathf.Max(0,detourTime-dt);
         if (detourTime>0 && !Blocked(actor,detour*.62f)) return detour;
+        var bed=actor.Position-ChaoRest.Bed; bed.Y=0;
+        var goal=actor.Position+toward-ChaoRest.Bed; goal.Y=0;
+        // An unreachable target inside the bed should be replaced, not circled forever.
+        if (actor.Position.Y<.22f && goal.Length()<1.9f) return Vector3.Zero;
+        if (actor.Position.Y<.22f && bed.Length()<3.0f && goal.Length()>1.9f)
+        {
+            var nearest=bed+toward*Mathf.Clamp(-bed.Dot(toward)/toward.LengthSquared(),0,1);
+            if (nearest.Length()<1.88f)
+            {
+                var outward=bed.LengthSquared()>.01f ? bed.Normalized() : Vector3.Back;
+                if (bedSide==0) bedSide=outward.Cross(toward).Y>=0 ? 1 : -1;
+                var tangent=outward.Rotated(Vector3.Up,bedSide*Mathf.Pi/2);
+                return (tangent+outward*Mathf.Clamp((2.04f-bed.Length())*3,-.15f,1.5f)).Normalized();
+            }
+        }
+        bedSide=0;
         var heading=toward.Normalized();
         if (!Blocked(actor,heading*Mathf.Min(.75f,toward.Length())))
         {

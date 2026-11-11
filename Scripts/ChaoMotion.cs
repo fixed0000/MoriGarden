@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 
 namespace Mori;
@@ -358,8 +359,17 @@ internal sealed class ChaoMotion
                 airborneJump=rebounded=landingTumble=false;
                 airDirection=forward*Mathf.Clamp(speed,1.2f,4.2f);
             }
-            else if (support.GetTravel().Y<-.003f)
-                body.MoveAndCollide(Vector3.Down*.07f);
+            else
+            {
+                if (support.GetTravel().Y<-.003f) body.MoveAndCollide(Vector3.Down*.07f);
+                // The grass mesh is flat. Keep collider soles on the same plane across triangle seams.
+                if (support.GetNormal().Y>.999f && Mathf.Abs(support.GetPosition().Y)<.001f &&
+                    body.GetChildren().OfType<CollisionShape3D>().FirstOrDefault() is {} shape)
+                {
+                    float half=shape.Shape is CapsuleShape3D capsule ? capsule.Height*.5f : shape.Shape is SphereShape3D sphere ? sphere.Radius : 0;
+                    if (half>0) body.Position=new(body.Position.X,half-shape.Position.Y+.001f,body.Position.Z);
+                }
+            }
         }
         if (!airborne) return;
         peak=Mathf.Max(peak,body.Position.Y);

@@ -32,10 +32,39 @@ internal static class ChaoSounds
         float envelope=Mathf.SmoothStep(0,.038f,t)*(1-Mathf.SmoothStep(.19f,.36f,t));
         return envelope*(.45f*Mathf.Sin(glide)+.19f*Mathf.Sin(glide*2)+.11f*Mathf.Sin(glide*3)+.025f*noise);
     });
+    private static readonly AudioStreamWav Guitar=Render(1.20f,(t,n)=>
+    {
+        float beat=t%.30f, hz=new float[]{164.81f,196,220,196}[(int)(t/.30f)%4];
+        float pluck=0;
+        for(int harmonic=1;harmonic<=12;harmonic++)
+        {
+            float pick=Mathf.Sin(harmonic*.72f);
+            float detune=1+.0015f*Mathf.Sin(beat*31);
+            pluck+=pick*Mathf.Sin(Mathf.Tau*hz*harmonic*detune*beat)*Mathf.Exp(-beat*(3.0f+harmonic*1.2f))/Mathf.Pow(harmonic,.82f);
+        }
+        float attack=1-Mathf.Exp(-beat*950);
+        float amp=Mathf.Tanh((pluck+n*.13f*Mathf.Exp(-beat*130))*3.2f)*.52f;
+        return attack*amp*(1-Mathf.SmoothStep(.25f,.30f,beat));
+    });
+    private static readonly AudioStreamWav Synth=Render(1.20f,(t,n)=>
+    {
+        // A struck-string piano envelope: bright hammer transient and decaying partials.
+        float beat=t%.30f,hz=new float[]{523.25f,659.25f,783.99f,659.25f}[(int)(t/.30f)%4];
+        float tone=0;
+        for(int harmonic=1;harmonic<=9;harmonic++)
+        {
+            float inharmonic=Mathf.Sqrt(1+.00012f*harmonic*harmonic);
+            tone+=Mathf.Cos(Mathf.Tau*hz*harmonic*inharmonic*beat)*Mathf.Exp(-beat*(2.4f+harmonic*2.8f))/Mathf.Pow(harmonic,1.6f);
+        }
+        return (1-Mathf.Exp(-beat*1400))*(tone*.46f+n*.08f*Mathf.Exp(-beat*150))*(1-Mathf.SmoothStep(.27f,.30f,beat));
+    });
+    private static readonly AudioStreamWav Ball=Render(.14f,(t,n)=>Mathf.Exp(-t*34)*(.7f*Mathf.Sin(Mathf.Tau*(170*t-230*t*t))+.30f*n));
+    private static readonly AudioStreamWav Angry=Render(.55f,(t,n)=>Mathf.Sin(Mathf.Pi*t/.55f)*(.38f*Mathf.Sin(Mathf.Tau*(350*t+10*Mathf.Sin(t*20)))+.08f*n));
+    private static readonly AudioStreamWav Sniff=Render(.32f,(t,n)=>Mathf.Sin(Mathf.Pi*t/.32f)*(.45f*n+.18f*Mathf.Sin(Mathf.Tau*630*t)));
     private static readonly AudioStreamWav Breath=SleepSound(false);
     private static readonly AudioStreamWav Snore=SleepSound(true);
 
-    public static void Play(Node3D owner,string cue)
+    public static void Play(Node3D owner,string cue,float start=0)
     {
         var audio=owner.GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue");
         if (audio==null)
@@ -45,12 +74,12 @@ internal static class ChaoSounds
         }
         audio.Stream=cue switch
         {
-            "bite"=>Bite,"rattle"=>Rattle,"flute"=>Flute,"voice"=>Voice,
+            "guitar"=>Guitar,"synth"=>Synth,"ball"=>Ball,"angry"=>Angry,"sniff"=>Sniff,"bite"=>Bite,"rattle"=>Rattle,"flute"=>Flute,"voice"=>Voice,
             "breath"=>Breath,"snore"=>Snore,_=>Mood
         };
         audio.PitchScale=cue=="voice" ? Mathf.Lerp(.91f,1.23f,GD.Randf()) : 1;
         audio.VolumeDb=cue is "breath" or "snore" ? -19 : -11;
-        audio.Play();
+        audio.Play(start);
     }
 
     private static AudioStreamWav SleepSound(bool snore) => Render(.82f,(t,noise)=>

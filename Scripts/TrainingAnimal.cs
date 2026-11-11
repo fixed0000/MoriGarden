@@ -119,6 +119,15 @@ public partial class TrainingAnimal : CharacterBody3D
         feet[1].Rotation=new(-feet[0].Rotation.X,0,0);
     }
 
+    internal void PushAside(Vector3 travel)
+    {
+        if (!Available) return;
+        Vector3 before=Position;
+        GardenContact.Move(this,travel);
+        habitat+=Position-before;
+        releaseFrom+=Position-before;
+    }
+
     public void Throw(Vector3 velocity)
     {
         inFlight = true;

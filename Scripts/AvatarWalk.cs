@@ -52,7 +52,9 @@ internal sealed class AvatarWalk
         amplitude=Mathf.MoveToward(amplitude,grounded ? Mathf.Clamp(stepSpeed/2.4f,0,1) : 0,dt*5);
         jumpArms=Mathf.MoveToward(jumpArms,grounded ? 0 : 1,dt*7);
         runBlend=Mathf.MoveToward(runBlend,Mathf.SmoothStep(3.6f,5.4f,stepSpeed),dt*4);
-        phase+=dt*(4.6f+stepSpeed*1.65f);
+        // One gait cycle advances by its actual two-foot stride distance.
+        float cycleStride=Mathf.Lerp(.38f,.60f,runBlend)*amplitude*(carrying ? .76f : 1);
+        if (grounded && speed>.025f && cycleStride>.005f) phase+=Mathf.Tau*(speed*dt)/(2*cycleStride/.58f);
         float swing=Mathf.Sin(phase)*amplitude*(carrying ? .70f : 1);
         for (int side=-1;side<=1;side+=2)
         {
@@ -60,7 +62,7 @@ internal sealed class AvatarWalk
             if (grounded)
             {
                 float cycle=Mathf.PosMod(phase/Mathf.Tau+(side>0 ? .5f : 0),1);
-                float strideLength=Mathf.Lerp(.16f,.29f,runBlend)*amplitude*(carrying ? .76f : 1);
+                float strideLength=Mathf.Lerp(.38f,.60f,runBlend)*amplitude*(carrying ? .76f : 1);
                 float swingTime=Mathf.Clamp((cycle-.58f)/.42f,0,1);
                 float lift=Mathf.Sin(swingTime*Mathf.Pi);
                 float travel=cycle<.58f ? 1-2*cycle/.58f : Mathf.Lerp(-1,1,Mathf.SmoothStep(0,1,swingTime));

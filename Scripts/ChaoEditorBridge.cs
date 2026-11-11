@@ -15,7 +15,7 @@ internal sealed class ChaoEditorBridge
     private string lastRequest="";
     private string status="Ready";
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
-        .Where(p=>p.CanWrite && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
+        .Where(p=>p.CanWrite && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
             && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)).ToArray();
 
     public ChaoEditorBridge(string directory) => this.directory=directory;
@@ -61,9 +61,10 @@ internal sealed class ChaoEditorBridge
                             var owner=target=="main" ? next : roster["main"];
                             var link=owner.SocialLink(target,other,create:true)!;
                             if (met is bool flag) { link.Met=flag; link.Introduced|=flag; }
-                            if (score is int value) link.Score=Math.Clamp(value,-100,100);
+                            if (score is int value) link.SetScoreFrom(target,value);
                         }
                         next.GardenEggs=current.GardenEggs;
+                        next.GardenTrees=current.GardenTrees;
                         updated=next;
                         EditedTarget=target;
                         roster[target]=next;
@@ -81,7 +82,7 @@ internal sealed class ChaoEditorBridge
             {
                 var link=ownerState.SocialLink(entry.Key,peer.Key);
                 return new { id=peer.Key, name=peer.Value.Name, met=link?.Met ?? false,
-                    score=link?.Score ?? 0, status=link?.Status ?? "Stranger" };
+                    score=link?.ScoreFrom(entry.Key) ?? 0, status=link?.StatusFrom(entry.Key) ?? "Stranger" };
             }).ToArray() }).ToArray();
         string path=Path.Combine(directory,"chao-editor-state.json");
         File.WriteAllText(path+".tmp",JsonSerializer.Serialize(new { session,status,lastRequest,chao }));

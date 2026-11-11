@@ -130,7 +130,7 @@ internal sealed class ChaoInterests
                 var mouth=actor.Position+new Vector3(0,.225f,.135f).Rotated(Vector3.Up,actor.Rotation.Y);
                 meal.Advance(dt,fruit!,chao,art,mouth);
                 if (!meal.Rejected && fruit!.Bites<FruitTree.BiteCount) return true;
-                if (meal.Rejected) meal.ThrowBehind(fruit!,actor);
+                if (meal.Rejected) meal.ThrowBehind(fruit!,actor,art);
                 else fruit!.Regrow();
                 Finish(art);
                 changed=true;
@@ -156,7 +156,7 @@ internal sealed class ChaoInterests
         {
             bool preferred=IsFavorite(food,chao);
             bool loose=FoodAvailable(food,actor,chao);
-            bool canShake=!loose && chao.Power>=100 && chao.Fullness<72 && food.CanShake &&
+            bool canShake=(!food.IsSpecial || preferred) && !loose && chao.Power>=100 && chao.Fullness<72 && food.CanShake &&
                 actor.Position.DistanceTo(food.Position)<7;
             if (!loose && !canShake) continue;
             float distance=actor.Position.DistanceTo(loose ? food.FruitPosition : food.Position);
@@ -168,13 +168,13 @@ internal sealed class ChaoInterests
     }
 
     private static bool IsFavorite(FruitTree fruit,PetState chao) =>
-        chao.FavoriteFruit==(fruit.IsHeartFruit ? "Heart Fruit" : "Garden Fruit");
+        chao.FavoriteFruit==fruit.Kind;
 
     private static bool FoodAvailable(FruitTree food,CharacterBody3D actor,PetState chao)
     {
         bool favorite=IsFavorite(food,chao);
-        return (!food.IsFeeder || food.IsHeartFruit) && food.HasFruitOnGround &&
-            (chao.FindsFood ? chao.Fullness<76 : favorite && chao.Fullness<45) &&
+        return (!food.IsFeeder || food.SingleUse) && (!food.IsSpecial || favorite) && food.HasFruitOnGround &&
+            (chao.FindsFood ? chao.Fullness<76 : chao.Fullness<45 && !food.IsHeartFruit) &&
             actor.Position.DistanceTo(food.FruitPosition)<(favorite ? 12 : 8);
     }
 
@@ -190,6 +190,7 @@ internal sealed class ChaoInterests
         fruit=null;
         tree=favorite=false;
         Orb(art)?.SetMealUpset(false);
+        Orb(art)?.SetMealHappy(false);
         Orb(art)?.SetIdea(null,false);
         ImportedChao.EndThink(art);
     }
