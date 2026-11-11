@@ -87,6 +87,7 @@ public static class ZoneArt
                 FontSize=48,PixelSize=.0020f,OutlineSize=0,Modulate=new Color("40372a") });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Swim, Home=new(-11,0,-2.2f), Position=new(-11,0,-2.2f) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Fly, Home=new(5,0,-6), Position=new(5,0,-6) });
+            root.AddChild(new TrainingAnimal { Name="Parrot",IsParrot=true,Skill=AnimalSkill.Fly, Home=new(11,0,3), Position=new(11,0,3) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Run, Home=new(3,0,9), Position=new(3,0,9) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Power, Home=new(-4,0,-7), Position=new(-4,0,-7) });
             Portal(root,GardenLobbyGate,"PLAZA",new("8f8c7e"),1.33f);

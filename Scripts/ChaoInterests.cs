@@ -13,7 +13,12 @@ internal sealed class ChaoInterests
     private bool tree;
     private bool favorite;
     private float delay=5, elapsed, gait;
-    private readonly FruitMeal meal=new();
+    private FruitMeal meal=new();
+    private string? mealGiver;
+    internal void ContinueGivenMeal(FruitTree food,FruitMeal progress)
+    {
+        fruit=food; toy=null; tree=false; stage=Stage.Meal; elapsed=0; meal=progress; mealGiver=PetState.CurrentHero;
+    }
 
     public void Reconsider() => delay=0;
 
@@ -137,7 +142,9 @@ internal sealed class ChaoInterests
                 return false;
             case Stage.Meal:
                 var mouth=actor.Position+new Vector3(0,.225f,.135f).Rotated(Vector3.Up,actor.Rotation.Y);
+                int previousBites=fruit!.Bites;
                 meal.Advance(dt,fruit!,chao,art,mouth);
+                if (mealGiver!=null && fruit.Bites>previousBites) chao.ChangeRelationship(.12f*(fruit.Bites-previousBites),mealGiver);
                 if (!meal.Rejected && fruit!.Bites<FruitTree.BiteCount) return true;
                 if (meal.Rejected) meal.ThrowBehind(fruit!,actor,art);
                 else fruit!.Regrow();
@@ -198,6 +205,7 @@ internal sealed class ChaoInterests
         Next(Stage.Idle);
         toy=null;
         fruit=null;
+        mealGiver=null;
         tree=favorite=false;
         Orb(art)?.SetMealUpset(false);
         Orb(art)?.SetMealHappy(false);

@@ -7,6 +7,7 @@ public enum AnimalSkill { Swim, Fly, Run, Power }
 public partial class TrainingAnimal : CharacterBody3D
 {
     public AnimalSkill Skill { get; init; }
+    public bool IsParrot { get; init; }
     public Vector3 Home { get; init; }
     private float respawn;
     private Vector3 habitat;
@@ -18,8 +19,9 @@ public partial class TrainingAnimal : CharacterBody3D
     private Vector3 tossVelocity;
     private Node3D art = null!;
     private readonly Node3D[] feet = new Node3D[2];
+    private readonly Node3D[] wings = new Node3D[2];
     public bool Available => respawn <= 0 && !inFlight;
-    public string AnimalName => Skill switch
+    public string AnimalName => IsParrot ? "Parrot" : Skill switch
     {
         AnimalSkill.Swim => "Penguin",
         AnimalSkill.Fly => "Songbird",
@@ -35,6 +37,7 @@ public partial class TrainingAnimal : CharacterBody3D
         releaseTime = DropDuration;
         art = new Node3D { Scale = Vector3.One*(Skill == AnimalSkill.Run ? .39f : .46f) };
         AddChild(art);
+        if (IsParrot) { BuildParrot(); return; }
         Color coat = new(Skill switch
         {
             AnimalSkill.Swim => "354959",
@@ -74,6 +77,32 @@ public partial class TrainingAnimal : CharacterBody3D
         if (Skill == AnimalSkill.Fly)
             GardenArt.Ball(art,new(0,.22f,-.24f),new(.18f,.12f,.34f),coat);
 
+    }
+
+    private void BuildParrot()
+    {
+        var red=new Color("c65345"); var blue=new Color("477aa6"); var gold=new Color("d9b557");
+        AvatarArt.Profile(art,Vector3.Zero,red,(.07f,.10f,.10f),(.22f,.21f,.17f),(.43f,.19f,.16f),(.52f,.12f,.11f));
+        AvatarArt.Profile(art,new(0,0,.06f),red,(.44f,.12f,.11f),(.57f,.19f,.17f),(.70f,.18f,.15f),(.76f,.09f,.08f));
+        for(int side=-1;side<=1;side+=2)
+        {
+            var foot=new Node3D { Position=new(side*.10f,.047f,.015f) }; art.AddChild(foot); feet[(side+1)/2]=foot;
+            for(int toe=-1;toe<=1;toe++)
+                GardenArt.Shape(foot,new BoxMesh(),new(toe*.035f,0,.055f),new(.027f,.032f,.15f),new("6a665c"));
+            GardenArt.Ball(art,new(side*.13f,.62f,.18f),new(.14f,.14f,.13f),new("e7dfc9"));
+            GardenArt.Ball(art,new(side*.155f,.635f,.227f),new(.047f,.052f,.03f),new("303a40"));
+            GardenArt.Ball(art,new(side*.153f,.646f,.24f),new(.014f,.016f,.008f),Colors.White);
+            var wing=new Node3D { Position=new(side*.16f,.35f,-.015f) }; art.AddChild(wing); wings[(side+1)/2]=wing;
+            AvatarArt.Profile(wing,Vector3.Zero,gold,(-.14f,.045f,.09f),(0,.095f,.14f),(.15f,.055f,.08f));
+            for(int feather=0;feather<3;feather++)
+                AvatarArt.Patch(wing,blue,new(side*.05f,-.02f,-.01f),new(side*.09f,-.11f,-.07f-feather*.045f),
+                    new(side*.04f,-.27f-feather*.025f,-.20f-feather*.025f));
+        }
+        AvatarArt.Profile(art,new(0,0,.25f),new("dfcba1"),(.53f,.06f,.08f),(.63f,.105f,.14f),(.69f,.06f,.07f));
+        AvatarArt.Patch(art,new("3b4145"),new(-.065f,.60f,.37f),new(.065f,.60f,.37f),new(0,.50f,.33f));
+        for(int i=-1;i<=1;i++)
+            AvatarArt.Patch(art,i==0 ? red : blue,new(i*.042f-.035f,.22f,-.12f),new(i*.042f+.035f,.22f,-.12f),
+                new(i*.065f,.025f,-.56f));
     }
 
     public void UpdateAnimal(float dt, float time, bool carried)
@@ -117,6 +146,8 @@ public partial class TrainingAnimal : CharacterBody3D
         art.Rotation=new(swimming ? .33f : 0,0,swimming ? stroke*.09f : 0);
         feet[0].Rotation=new(stroke*(swimming ? .93f : .62f),0,0);
         feet[1].Rotation=new(-feet[0].Rotation.X,0,0);
+        if (IsParrot)
+            for(int side=0;side<2;side++) wings[side].Rotation=new(swimming ? stroke*.55f : .05f*Mathf.Sin(roamAge*3),0,(side==0 ? -1 : 1)*(swimming ? .42f : .08f));
     }
 
     internal void PushAside(Vector3 travel)

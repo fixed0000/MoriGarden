@@ -51,7 +51,7 @@ public partial class GardenEgg : CharacterBody3D
     private AudioStreamPlayer3D swimSound = null!;
     private float swimBeat;
     public bool Asleep { get; private set; }
-    public bool CanReceive => !rising.Active && !touch.Active && !motion.IsSwimmingAt(Position) && Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved && !interests.HasMeal;
+    public bool CanReceive => !rising.Active && !touch.Active && !motion.IsSwimmingAt(Position) && Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved;
     internal bool CanSocialize => Chao?.CanAct==true && CanReceive && !held && !islandNap.IsVisiting &&
         !motion.Airborne && !motion.Recovering && !motion.LeavingPond && !motion.OnCliffRoute &&
         !rest.Requested && !interests.Busy && !leisure.Active && !pillar.Active && !fruitReaction.Busy &&
@@ -152,6 +152,7 @@ public partial class GardenEgg : CharacterBody3D
     }
 
     public bool HasMeal => interests.HasMeal;
+    internal void ContinueGivenMeal(FruitTree fruit,FruitMeal progress) => interests.ContinueGivenMeal(fruit,progress);
     public FruitTree? TakeMeal()
     {
         var fruit=interests.TakeMeal(visual,Chao!);
@@ -161,6 +162,7 @@ public partial class GardenEgg : CharacterBody3D
 
     public void ReserveForOffer()
     {
+        GetParent().GetNodeOrNull<WateringCan>("WateringCan")?.Cancel(this);
         reserved=true;
         islandNap.Cancel(visual);
         rest.Cancel(); leisure.Cancel(visual);

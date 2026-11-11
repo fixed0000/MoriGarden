@@ -7,9 +7,10 @@ internal sealed class AvatarWalk
 {
     private readonly Skeleton3D skeleton;
     private readonly Dictionary<string,int> joints = new();
-    private float phase, amplitude, jumpArms, runBlend, stepSpeed;
+    private float phase, amplitude, jumpArms, runBlend, stepSpeed, waterBlend;
     private readonly int leftHand, rightHand;
     internal float AirPose=>jumpArms;
+    internal Skeleton3D Skeleton=>skeleton;
 
     private AvatarWalk(Skeleton3D skeleton)
     {
@@ -47,14 +48,15 @@ internal sealed class AvatarWalk
         return null;
     }
 
-    public void Step(float dt,float speed,bool grounded,bool carrying,float verticalSpeed)
+    public void Step(float dt,float speed,bool grounded,bool carrying,float verticalSpeed,bool wading=false)
     {
+        waterBlend=Mathf.MoveToward(waterBlend,wading && grounded ? 1 : 0,dt*4);
         stepSpeed=Mathf.Lerp(stepSpeed,speed,1-Mathf.Exp(-11*dt));
         amplitude=Mathf.MoveToward(amplitude,grounded ? Mathf.Clamp(stepSpeed/2.4f,0,1) : 0,dt*5);
         jumpArms=Mathf.MoveToward(jumpArms,grounded ? 0 : 1,dt*7);
         runBlend=Mathf.MoveToward(runBlend,Mathf.SmoothStep(3.6f,5.4f,stepSpeed),dt*4);
         // One gait cycle advances by its actual two-foot stride distance.
-        float cycleStride=Mathf.Lerp(.38f,.60f,runBlend)*amplitude*(carrying ? .76f : 1);
+        float cycleStride=Mathf.Lerp(.38f,.60f,runBlend)*amplitude*(carrying ? .76f : 1)*Mathf.Lerp(1,.82f,waterBlend);
         if (grounded && speed>.025f && cycleStride>.005f) phase+=Mathf.Tau*(speed*dt)/(2*cycleStride/.58f);
         float swing=Mathf.Sin(phase)*amplitude*(carrying ? .70f : 1);
         for (int side=-1;side<=1;side+=2)
@@ -63,14 +65,14 @@ internal sealed class AvatarWalk
             if (grounded)
             {
                 float cycle=Mathf.PosMod(phase/Mathf.Tau+(side>0 ? .5f : 0),1);
-                float strideLength=Mathf.Lerp(.38f,.60f,runBlend)*amplitude*(carrying ? .76f : 1);
+                float strideLength=cycleStride;
                 float swingTime=Mathf.Clamp((cycle-.58f)/.42f,0,1);
                 float lift=Mathf.Sin(swingTime*Mathf.Pi);
                 float travel=cycle<.58f ? 1-2*cycle/.58f : Mathf.Lerp(-1,1,Mathf.SmoothStep(0,1,swingTime));
                 float roll=cycle<.58f ? .16f*Mathf.Pow(cycle/.58f,3) :
                     .16f*(1-swingTime)+Mathf.Sin(swingTime*Mathf.Tau)*Mathf.Lerp(.18f,.33f,runBlend);
                 StepLeg(suffix,side<0 ? "toe.L" : "toe.R",
-                    new Vector3(0,lift*Mathf.Lerp(.10f,.39f,runBlend)*amplitude,travel*strideLength),
+                    new Vector3(0,lift*Mathf.Lerp(Mathf.Lerp(.10f,.39f,runBlend),.43f,waterBlend)*amplitude,travel*strideLength),
                     roll*amplitude);
                 continue;
             }

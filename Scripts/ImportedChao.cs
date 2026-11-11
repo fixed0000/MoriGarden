@@ -213,7 +213,7 @@ public partial class ImportedChao : Node3D
             {
                 var p0=points[segment].Lerp(points[segment+1],sample/12f);
                 var p1=points[segment].Lerp(points[segment+1],(sample+1)/12f);
-                var across=(p1-p0).Orthogonal().Normalized()*.0018f;
+                var across=(p1-p0).Orthogonal().Normalized()*.0032f;
                 foreach(var point in new[]{p0-across,p1-across,p1+across,p0-across,p1+across,p0+across}) ribbon.AddVertex(Surface(point));
             }
             ribbon.GenerateNormals();

@@ -25,6 +25,10 @@ public partial class EmotionOrb : Node3D
     private string displayed="";
     public void ReactUpset(float duration) { reactionTime=Mathf.Max(reactionTime,duration); Refresh(); }
     public void Celebrate() { heartTime=1.1f; Refresh(); }
+    public void WaitForPetting()
+    {
+        heartTime=reactionTime=0; thinking=ideaJoy=mealHappy=mealUpset=upset=false; ideaSymbol=null; Refresh();
+    }
     public void SetMealHappy(bool happy) { if (mealHappy==happy) return; mealHappy=happy; Refresh(); }
     public void SetMealUpset(bool value) { mealUpset=value; Refresh(); }
     public void SetHappy(bool value)

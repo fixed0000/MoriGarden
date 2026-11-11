@@ -19,9 +19,15 @@ public partial class ToyCar : CharacterBody3D
     public bool IsSynthesizer { get; init; }
     public bool IsBeachBall { get; init; }
     public bool IsInstrument => IsFlute || IsElectricGuitar || IsSynthesizer;
+    internal bool IsGroundToy => !IsInstrument && !IsRattle && !IsBeachBall;
     internal CharacterBody3D? PlayActor => player;
     internal PetState? PlayState => playChao;
-    internal void FinishBall() => EndPlay();
+    internal void FinishBall()
+    {
+        if (player==null) return;
+        if (IsInstanceValid(player) && Position.Y>player.Position.Y+.04f) Position=PlacementPoint(player);
+        EndPlay();
+    }
     public string ItemName => IsBeachBall ? "beach ball" : IsElectricGuitar ? "electric guitar" : IsSynthesizer ? "synthesizer" : IsFlute ? "flute" : IsRattle ? "rattle" : "toy car";
     private int lastShake, bounces;
     internal int BounceCount=>bounces;
@@ -194,6 +200,7 @@ public partial class ToyCar : CharacterBody3D
         player=null;
         playChao=null;
         playArt=null;
+        held=false;
         cooldown=18;
     }
 
@@ -222,6 +229,7 @@ public partial class ToyCar : CharacterBody3D
 
     public void HoldByChao(CharacterBody3D actor,Node3D art)
     {
+        if (IsRattle) { RattleGrip(actor,art,0); return; }
         var front=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
         Hold(actor.Position+front*(IsSynthesizer ? .22f : .19f)+Vector3.Up*(IsSynthesizer ? .075f : .16f));
         Rotation=new(0,actor.Rotation.Y+(IsSynthesizer ? Mathf.Pi : 0),0);
@@ -230,6 +238,29 @@ public partial class ToyCar : CharacterBody3D
                 GlobalPosition+actor.Basis.X*.13f+Vector3.Up*.055f);
         else if (IsFlute)
             ImportedChao.InstrumentHands(art,ToGlobal(new(-.065f,.039f,0)),ToGlobal(new(.085f,.039f,0)));
+    }
+
+    private void RattleGrip(CharacterBody3D actor,Node3D art,float phase)
+    {
+        var grip=actor.Position+actor.Basis.Z*.22f+Vector3.Up*.14f;
+        held=player==null; inFlight=false;
+        Rotation=new(-Mathf.Pi/2+Mathf.Sin(phase)*.33f,actor.Rotation.Y,0);
+        Position=grip-Basis*new Vector3(0,.038f,-.095f);
+        ImportedChao.InstrumentHands(art,ToGlobal(new(-.028f,.038f,-.115f)),ToGlobal(new(.028f,.038f,-.075f)));
+    }
+
+    internal void PushAside(Vector3 travel)
+    {
+        if (!CanPickUp || player!=null && !IsGroundToy) return;
+        var before=Position;
+        GardenContact.Move(this,travel);
+        MoveAndCollide(Vector3.Down*.55f);
+        var shift=Position-before;
+        if (player!=null)
+        {
+            playOrigin+=shift;
+            if (playing>=PlayDuration) { placementFrom+=shift; placementTo+=shift; }
+        }
     }
 
     public bool BeginPlay(CharacterBody3D actor,PetState chao)
@@ -288,10 +319,8 @@ public partial class ToyCar : CharacterBody3D
         }
         if (IsRattle)
         {
-            var grip=actor.Position+playForward*.14f+Vector3.Up*.19f;
-            Rotation=new(-.8f+wobble*.55f,actor.Rotation.Y,0);
-            Position=grip-Basis*new Vector3(0,.038f,-.091f);
-            ImportedChao.ReceivePose(art,.72f+.14f*wobble);
+            ImportedChao.MovePose(art,0,false,false,false,false,false,false);
+            RattleGrip(actor,art,playing*12);
             int shake=(int)(playing*4);
             if (shake!=lastShake) { ChaoSounds.Play(this,"rattle"); lastShake=shake; }
             return true;

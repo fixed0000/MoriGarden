@@ -111,11 +111,12 @@ internal partial class GardenSky : Node3D
         sky.SetShaderParameter("moon_dir",moonDirection);
         sun.LookAt(-sunDirection);
         moon.LookAt(-moonDirection);
-        sun.LightEnergy=.68f*light*Mathf.SmoothStep(-.025f,.065f,altitude);
+        sun.LightEnergy=.46f*light*Mathf.SmoothStep(-.025f,.065f,altitude);
+        sun.LightSpecular=.18f;
         moon.LightEnergy=.19f*(1-light);
         sun.LightColor=new Color("fff3dd").Lerp(new Color("ffad7a"),dusk*.55f);
         environment.AmbientLightColor=new Color("9dabdd").Lerp(new Color("eaf3ff"),light);
-        environment.AmbientLightEnergy=Mathf.Lerp(.27f,.53f,light);
+        environment.AmbientLightEnergy=Mathf.Lerp(.27f,.43f,light);
         float flight=Mathf.PosMod(seconds+51,83);
         for (int i=0;i<gulls.Length;i++)
         {
