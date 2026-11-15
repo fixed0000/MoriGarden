@@ -7,6 +7,7 @@ public partial class ImportedChao : Node3D
     private readonly System.Collections.Generic.Dictionary<int,float> sleepOffsets=new();
     private Node3D? softBody;
     private Vector3 lastPosition, lastVelocity, softness, softnessVelocity;
+    private float lastHeading,bodyTwist,twistVelocity,softPhase;
     private bool tracked, alignSoles;
     private float discardTime, afterAction;
     internal static bool Pausing(Node3D art) => art is ImportedChao model && model.afterAction>0;
@@ -29,6 +30,7 @@ public partial class ImportedChao : Node3D
     public static void DiscardPose(Node3D art) { if (art is ImportedChao model) model.discardTime=.55f; }
     private Vector3 development=Vector3.One;
     private bool crawls, wasCrawling;
+    internal static bool IsCrawling(Node3D art) => art is ImportedChao model && model.wasCrawling;
     private float poseHeading,turnGait;
     internal static void StandForAction(Node3D art) { if (art is ImportedChao model) model.wasCrawling=false; }
     public static void ApplyDevelopment(Node3D art,PetState state)
@@ -48,13 +50,19 @@ public partial class ImportedChao : Node3D
         Vector3 at=actor.GlobalPosition;
         Vector3 shift=at-lastPosition;
         Vector3 velocity=tracked && shift.Length()<.5f ? shift/dt : Vector3.Zero;
-        softnessVelocity+=actor.GlobalBasis.Inverse()*(lastVelocity-velocity).LimitLength(4)*.34f;
-        softnessVelocity+=(-softness*75-softnessVelocity*13)*dt;
-        softness=(softness+softnessVelocity*dt).LimitLength(.13f);
-        softBody.Rotation=new(softness.Z,0,-softness.X);
-        float stretch=Mathf.Clamp(softness.Y*.6f,-.065f,.065f);
+        if(!tracked || shift.Length()>.5f) { lastVelocity=velocity; softness=softnessVelocity=Vector3.Zero; lastHeading=actor.Rotation.Y; bodyTwist=twistVelocity=0; }
+        softnessVelocity+=actor.GlobalBasis.Inverse()*(lastVelocity-velocity).LimitLength(3)*.48f;
+        softnessVelocity+=(-softness*58-softnessVelocity*12)*dt;
+        softness=(softness+softnessVelocity*dt).LimitLength(.10f);
+        float yawRate=tracked ? Mathf.Clamp(Mathf.AngleDifference(lastHeading,actor.Rotation.Y)/dt,-5,5) : 0;
+        twistVelocity+=(-yawRate*.9f-bodyTwist*48-twistVelocity*11)*dt;
+        bodyTwist=Mathf.Clamp(bodyTwist+twistVelocity*dt,-.075f,.075f);
+        softPhase+=velocity.Length()*dt*13;
+        float walkingSoftness=Mathf.Min(.007f,velocity.Length()*.003f)*Mathf.Sin(softPhase);
+        softBody.Rotation=new(softness.Z,bodyTwist,-softness.X);
+        float stretch=Mathf.Clamp(softness.Y*.65f+walkingSoftness,-.045f,.045f);
         softBody.Scale=new Vector3(1-stretch*.45f,1+stretch,1-stretch*.45f)*development;
-        lastPosition=at; lastVelocity=velocity; tracked=true;
+        lastPosition=at; lastVelocity=velocity; lastHeading=actor.Rotation.Y; tracked=true;
         if (discardTime>0)
         {
             discardTime=Mathf.Max(0,discardTime-dt);
@@ -249,6 +257,7 @@ public partial class ImportedChao : Node3D
 
     public static void SleepPose(Node3D art,float elapsed=0,int manners=50)
     {
+        StandForAction(art);
         if (art is ImportedChao modelPose) modelPose.alignSoles=false;
         if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=Vector3.Zero;
         float phase=Mathf.PosMod(elapsed,33);
@@ -308,6 +317,7 @@ public partial class ImportedChao : Node3D
 
     public static void CloudPose(Node3D art,float elapsed,float weight=1)
     {
+        StandForAction(art);
         if (art is ImportedChao model) model.alignSoles=false;
         float blend=Mathf.SmoothStep(0,1,Mathf.Clamp(weight,0,1));
         Gait(art,0,false,false); CloseEyes(art,false);
@@ -340,18 +350,26 @@ public partial class ImportedChao : Node3D
         return -.46f;
     }
 
-    public static void StandUpPose(Node3D art,Quaternion from,Vector3 fromHeight,float progress)
+    public static void StandUpPose(Node3D art,Quaternion from,Vector3 fromHeight,float progress,bool fromCrawl=false)
     {
         if (art is ImportedChao model) model.alignSoles=false;
         float t=Mathf.Clamp(progress,0,1);
         Gait(art,0,false,false); CloseEyes(art,false);
-        float push=Mathf.SmoothStep(0,1,Mathf.Clamp((t-.28f)/.65f,0,1));
+        float push=Mathf.SmoothStep(0,1,Mathf.Clamp((t-(fromCrawl ? 0 : .28f))/(fromCrawl ? .85f : .65f),0,1));
         art.Quaternion=from.Slerp(Quaternion.Identity,push);
         art.Position=fromHeight.Lerp(Vector3.Up*.008f,push);
         if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(.18f*(1-push),0,0);
         foreach(int side in new[]{-1,1})
             if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
             {
+                if(fromCrawl)
+                {
+                    float lift=Mathf.Sin(Mathf.Clamp(t/.8f,0,1)*Mathf.Pi)*.055f;
+                    paw.Position+=new Vector3(side*.025f,0,-.025f)*(1-push);
+                    paw.GlobalPosition+=Vector3.Up*(.025f+lift)*(1-push);
+                    paw.Rotation=new(-.65f*(1-push),0,side*.24f*(1-push));
+                    continue;
+                }
                 float brace=1-Mathf.SmoothStep(.70f,.97f,t);
                 paw.Position+=new Vector3(side*.055f,-.035f,-.10f)*brace;
                 paw.Quaternion=paw.Quaternion.Slerp(new Quaternion(Vector3.Down,art.Basis.Inverse()*Vector3.Down),brace);

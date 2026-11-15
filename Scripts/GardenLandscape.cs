@@ -74,9 +74,9 @@ public static class GardenLandscape
                 GardenArt.Cylinder(courtyard,basePos+Vector3.Up*height,.62f,.24f,stone);
             }
         GardenArt.Cylinder(courtyard,new(68,.23f,-1),3.8f,.42f,stone).CreateConvexCollision();
-        GardenArt.Cylinder(courtyard,new(68,.48f,-1),3.45f,.08f,water);
+        WaterArt.Ellipse(courtyard,new(68,.525f,-1),new(3.45f,3.45f),"CourtyardWater");
         GardenArt.Cylinder(courtyard,new(68,1.08f,-1),.51f,1.4f,stone);
-        GardenArt.Ball(courtyard,new(68,1.8f,-1),new(.58f,.38f,.58f),water);
+        GardenArt.Ball(courtyard,new(68,1.8f,-1),new(.58f,.38f,.58f),water).MaterialOverride=WaterArt.Material(true,false);
         for (int i=0;i<4;i++)
             Palm(courtyard,new(42+i*7.5f,0,17+Mathf.Sin(i)*3));
         GardenArt.Sign(root,"SOUTH TERRACE",new(4,1.5f,16),GardenArt.Cream);
@@ -118,7 +118,7 @@ public static class GardenLandscape
     {
         var sand=GardenArt.Cylinder(root,new(0,-.03f,0),22,.06f,new("b5a78b"));
         sand.Scale=new(1.4f,1,1.04f);
-        GardenArt.Cylinder(root,new(-16,.013f,2),13,.018f,new("568c9b")).Scale=new(1.12f,1,1.32f);
+        WaterArt.Ellipse(root,new(-16,.022f,2),new(14.56f,17.16f),"CoastalWater");
         GardenArt.Cylinder(root,new(-23,.07f,1),3.8f,.14f,new("787f61"));
         for(int i=0;i<8;i++) Palm(root,new(-15+i*5.3f,0,11+Mathf.Sin(i*1.5f)*5));
         GardenArt.Sign(root,"COASTAL COVE",new(0,2.2f,-10),GardenArt.Cream);

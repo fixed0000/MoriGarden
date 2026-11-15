@@ -45,6 +45,17 @@ internal partial class GardenSky : Node3D
         """ } };
     private DirectionalLight3D sun=null!;
     private DirectionalLight3D moon=null!;
+    private bool natureAtmosphere;
+    internal void SetNatureAtmosphere(bool active)
+    {
+        natureAtmosphere=active;
+        sun.ShadowBlur=active ? 1.6f : 1;
+        sun.LightAngularDistance=active ? .8f : 0;
+        environment.FogEnabled=active;
+        environment.FogDensity=.0022f;
+        environment.FogLightColor=new("899d99");
+        environment.FogSkyAffect=.10f;
+    }
     private readonly Node3D[] gulls=new Node3D[3];
     private readonly Node3D[,] wings=new Node3D[3,2];
     private readonly MeshInstance3D[] gullShadows=new MeshInstance3D[3];
@@ -116,7 +127,7 @@ internal partial class GardenSky : Node3D
         moon.LightEnergy=.19f*(1-light);
         sun.LightColor=new Color("fff3dd").Lerp(new Color("ffad7a"),dusk*.55f);
         environment.AmbientLightColor=new Color("9dabdd").Lerp(new Color("eaf3ff"),light);
-        environment.AmbientLightEnergy=Mathf.Lerp(.27f,.43f,light);
+        environment.AmbientLightEnergy=Mathf.Lerp(.27f,.43f,light)+(natureAtmosphere ? .035f : 0);
         float flight=Mathf.PosMod(seconds+51,83);
         for (int i=0;i<gulls.Length;i++)
         {

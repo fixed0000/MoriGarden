@@ -135,9 +135,8 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
-                bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2;
-                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72;
-                if (room || tunnel) discard;
+            """+MountainInterior.VoidDiscard+"""
+
                 vec2 p = world.xz;
                 float grain = fract(sin(dot(floor(p*13.0),vec2(127.1,311.7)))*43758.5453);
                 float patch = sin(p.x*.7+sin(p.y*.8))*sin(p.y*.44);
@@ -187,9 +186,8 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
-                bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2 && world.y>-.35 && world.y<2.6;
-                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72 && world.y>-.35 && world.y<2.6;
-                if (room || tunnel) discard;
+            """+MountainInterior.VoidDiscard+"""
+
                 vec2 gate=vec2(world.x+18.45,world.y-.43);
                 float arch=max(0.0,gate.y-2.53);
                 if (world.z>-17.65 && world.y<5.03 && gate.y>0.0 && length(vec2(gate.x,arch))<2.25) discard;
@@ -293,6 +291,12 @@ public static class GardenArt
         foreach (var tree in orchard)
             root.AddChild(new FruitTree { Position=new(tree.X,0,tree.Z),FruitKind=tree.FruitKind,TreeState=tree });
         GardenLandscape.Build(root);
+        // Rounded supporting shoulders enclose the enlarged room without exposing its lining.
+        foreach(var at in new[]{new Vector3(-15.3f,3.2f,-22.9f),new Vector3(-8.1f,3.4f,-22.9f),new Vector3(-11.7f,3.5f,-25.6f)})
+        {
+            var shoulder=Shape(root,new SphereMesh { RadialSegments=7,Rings=5 },at,new(5.5f,8.2f,6.0f),new("626d64"));
+            shoulder.MaterialOverride=strata; StoneCollision(shoulder);
+        }
         MountainInterior.Build(root,strata);
         var details = new RandomNumberGenerator { Seed = 731 };
         for (int i=0;i<28;i++)
@@ -409,31 +413,7 @@ public static class GardenArt
         return grass;
     }
 
-    private static ShaderMaterial FlowMaterial(bool waterfall,bool transparentPond=false)
-    {
-        var material = new ShaderMaterial { Shader = new Shader { Code = """
-            shader_type spatial;
-            uniform bool waterfall = false;
-            uniform bool transparent_pond = false;
-            uniform vec2 pond_center;
-            uniform float pond_radius;
-            varying vec3 world;
-            void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
-            void fragment() {
-                float bands = sin(world.x*12.0 + sin(world.x*2.8)*3.0);
-                float streak = waterfall ? sin(world.y*1.8+TIME*9.0+bands*.45) : sin(world.z*7.0-TIME*2.0+bands*1.8);
-                float whitewater = waterfall ? smoothstep(-.25,.92,bands*.78+streak*.22) : smoothstep(.3,1.0,streak*.65+bands*.35);
-                ALBEDO = mix(vec3(.19,.38,.43),vec3(.67,.79,.79),whitewater*(waterfall ? .87 : .36));
-                if (transparent_pond && ((world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2) ||
-                    (world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72))) discard;
-                if (transparent_pond && distance(world.xz,pond_center)>pond_radius) { discard; }
-                ALPHA = transparent_pond ? .39+whitewater*.13 : waterfall ? .61+whitewater*.25 : 1.0;
-                ROUGHNESS = .35;
-            }
-            """ } };
-        material.SetShaderParameter("waterfall",waterfall);
-        material.SetShaderParameter("transparent_pond",transparentPond);
-        return material;
-    }
+    private static ShaderMaterial FlowMaterial(bool waterfall,bool transparentPond=false) =>
+        WaterArt.Material(waterfall,transparentPond,gardenCutout:transparentPond);
 
 }

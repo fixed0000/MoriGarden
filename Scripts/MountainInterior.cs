@@ -6,17 +6,17 @@ namespace Mori;
 
 internal static class MountainInterior
 {
-    internal static readonly Aabb Room=new(new(-14f,-.35f,-24f),new(4.5f,2.95f,2.8f));
+    internal static readonly Aabb Room=new(new(-14.65f,-.35f,-24.75f),new(5.8f,2.95f,3.8f));
     internal static readonly Aabb Passage=new(new(-12.15f,-.35f,-21.21f),new(2.3f,2.95f,4.49f));
     public static bool Contains(Vector3 p) => Room.HasPoint(p) || Passage.HasPoint(p);
     internal static Vector3 RestorePosition(Vector3 at) =>
         new Aabb(new(-24.8f,-.35f,-25.9f),new(24.2f,2.95f,7.65f)).HasPoint(at) && !Contains(at)
             ? new(-11,0,-22.1f) : at;
-    private const string VoidDiscard="""
-        bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2 && world.y>-.35 && world.y<2.6;
-        bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72 && world.y>-.35 && world.y<2.6;
+    internal static string VoidDiscard => System.FormattableString.Invariant($"""
+        bool room=world.x>{Room.Position.X:0.###} && world.x<{Room.End.X:0.###} && world.z>{Room.Position.Z:0.###} && world.z<{Room.End.Z:0.###} && world.y>{Room.Position.Y:0.###} && world.y<{Room.End.Y:0.###};
+        bool tunnel=world.x>{Passage.Position.X:0.###} && world.x<{Passage.End.X:0.###} && world.z>{Passage.Position.Z:0.###} && world.z<{Passage.End.Z:0.###} && world.y>{Passage.Position.Y:0.###} && world.y<{Passage.End.Y:0.###};
         if (room || tunnel) discard;
-        """;
+        """);
     public static void Build(Node3D root,Material rockMaterial)
     {
         // Subtract the same void from visible rock and from its physical triangle surfaces.
@@ -115,17 +115,20 @@ internal static class MountainInterior
             if (normal.Y<.5f) solid.SetMeta("no_step",true);
             solid.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=extents } }); root.AddChild(solid);
         }
-        Panel("CaveCarpet",new(-11.75f,0,-22.6f),new(4.5f,2.8f),Vector3.Up,carpet);
-        Panel("CaveCeiling",new(-11.75f,2.6f,-22.6f),new(4.5f,2.8f),Vector3.Down,brick);
-        Panel("CaveLeftWall",new(-14,1.3f,-22.6f),new(2.8f,2.6f),Vector3.Right,brick);
-        Panel("CaveRightWall",new(-9.5f,1.3f,-22.6f),new(2.8f,2.6f),Vector3.Left,brick);
-        Panel("CaveBackWall",new(-11.75f,1.3f,-24),new(4.5f,2.6f),Vector3.Back,brick);
-        Panel("CaveFrontLeft",new(-13.075f,1.3f,-21.2f),new(1.85f,2.6f),Vector3.Forward,brick);
-        Panel("CaveFrontRight",new(-9.675f,1.3f,-21.2f),new(.35f,2.6f),Vector3.Forward,brick);
-        Panel("CavePassageFloor",new(-11,0,-18.96f),new(2.3f,4.49f),Vector3.Up,GardenArt.Material(new("282421")));
-        Panel("CavePassageCeiling",new(-11,2.6f,-18.96f),new(2.3f,4.49f),Vector3.Down,brick);
-        Panel("CavePassageLeft",new(-12.15f,1.3f,-18.96f),new(4.49f,2.6f),Vector3.Right,brick);
-        Panel("CavePassageRight",new(-9.85f,1.3f,-18.96f),new(4.49f,2.6f),Vector3.Left,brick);
+        var center=Room.GetCenter();
+        float width=Room.Size.X,depth=Room.Size.Z,front=Room.End.Z;
+        Panel("CaveCarpet",new(center.X,0,center.Z),new(width,depth),Vector3.Up,carpet);
+        Panel("CaveCeiling",new(center.X,2.6f,center.Z),new(width,depth),Vector3.Down,brick);
+        Panel("CaveLeftWall",new(Room.Position.X,1.3f,center.Z),new(depth,2.6f),Vector3.Right,brick);
+        Panel("CaveRightWall",new(Room.End.X,1.3f,center.Z),new(depth,2.6f),Vector3.Left,brick);
+        Panel("CaveBackWall",new(center.X,1.3f,Room.Position.Z),new(width,2.6f),Vector3.Back,brick);
+        Panel("CaveFrontLeft",new((Room.Position.X+Passage.Position.X)*.5f,1.3f,front),new(Passage.Position.X-Room.Position.X,2.6f),Vector3.Forward,brick);
+        Panel("CaveFrontRight",new((Room.End.X+Passage.End.X)*.5f,1.3f,front),new(Room.End.X-Passage.End.X,2.6f),Vector3.Forward,brick);
+        float passageDepth=Passage.End.Z-front; float passageZ=(Passage.End.Z+front)*.5f;
+        Panel("CavePassageFloor",new(-11,0,passageZ),new(2.3f,passageDepth),Vector3.Up,GardenArt.Material(new("282421")));
+        Panel("CavePassageCeiling",new(-11,2.6f,passageZ),new(2.3f,passageDepth),Vector3.Down,brick);
+        Panel("CavePassageLeft",new(-12.15f,1.3f,passageZ),new(passageDepth,2.6f),Vector3.Right,brick);
+        Panel("CavePassageRight",new(-9.85f,1.3f,passageZ),new(passageDepth,2.6f),Vector3.Left,brick);
         var ramp=new SurfaceTool(); ramp.Begin(Mesh.PrimitiveType.Triangles);
         var a=new Vector3(-12.15f,-.305f,-15.25f); var b=new Vector3(-9.85f,-.305f,-15.25f);
         var c=new Vector3(-12.15f,0,-16.74f); var d=new Vector3(-9.85f,0,-16.74f);
@@ -133,7 +136,7 @@ internal static class MountainInterior
         ramp.GenerateNormals();
         var threshold=GardenArt.Shape(root,ramp.Commit(),Vector3.Zero,Vector3.One,new("a49b7d"));
         threshold.Name="SubmergedCaveApproach"; threshold.CreateTrimeshCollision();
-        var furniture=new Node3D { Name="ChaoWoodenFurniture",Position=new(-12.8f,0,-22.85f) }; root.AddChild(furniture);
+        var furniture=new Node3D { Name="ChaoWoodenFurniture",Position=new(-14.05f,0,-24.20f) }; root.AddChild(furniture);
         var wood=new ShaderMaterial { Shader=new Shader { Code="""
             shader_type spatial;
             varying vec3 world;

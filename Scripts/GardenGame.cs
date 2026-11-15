@@ -169,7 +169,8 @@ public partial class GardenGame : Node3D
             music = new AudioStreamPlayer { Stream=loop, VolumeDb=-18, Autoplay=true };
             AddChild(music);
         }
-        testMode = OS.GetCmdlineUserArgs().Contains("--smoke-test");
+        meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review");
+        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test");
         savePath = ProjectSettings.GlobalizePath(testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
@@ -238,6 +239,11 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(meadowReview)
+        {
+            if(reviewFrame==0) { carrying=false; SwitchZone(GardenZone.Expedition); }
+            ReviewMeadow(); return;
+        }
         float dt = Math.Min((float)delta, .1f);
         if (testMode && ++frame == 12)
         {
@@ -600,13 +606,13 @@ public partial class GardenGame : Node3D
         Vector2 axes = MovementAxes();
         Vector3 direction = cameraRig.RelativeDirection(axes);
         // Скорость — первое удобное место для твоих экспериментов с кодом.
-        bool inWater=zone==GardenZone.Garden && GardenArt.IsPondWater(player.Position);
+        bool inWater=WaterArt.PlayerWet(zone,player.Position);
         if (inWater) dashTime=0;
         float speed = inWater ? 3.7f*.63f : dashTime > 0 ? 10 : Held(Key.Shift) ? 5.5f : 3.7f;
         if (carrying) speed *= .7f;
         playerWake.Visible = inWater && player.Position.Y<.16f;
         playerWake.Scale = Vector3.One*(1+.12f*Mathf.Sin(time*7));
-        playerWake.Position = new(0,.017f-player.Position.Y,0);
+        playerWake.Position = new(0,WaterArt.Level(zone)+.013f-player.Position.Y,0);
         pushResistance=Mathf.MoveToward(pushResistance,0,dt);
         if (pushResistance>0) speed*=.965f;
         if (machineLoad>0 || pickingItem || (carrying && pickupTime<PickupDuration) || (releasePose>0 && !throwingPose) || pettingTime>0 || treeReachTime>0) speed = 0;
@@ -658,7 +664,7 @@ public partial class GardenGame : Node3D
         }
         avatarWalk?.Step(dt,speedNow,grounded || groundHold>0 || lowStep,carrying,verticalSpeed,inWater);
         playerArt.Position=new(0,Mathf.Lerp(playerArt.Position.Y,-.47f*offerLean,1-Mathf.Exp(-12*dt)),0);
-        bool wetNow=zone==GardenZone.Garden && GardenArt.IsPondWater(player.Position);
+        bool wetNow=WaterArt.PlayerWet(zone,player.Position);
         bool wading=wetNow && grounded && speedNow>.2f;
         SetSplashes(playerSplashes,wading,player.Position.Y);
         SwimAudio.Wade(wadeSound,wading ? FlatDistance(before,player.Position) : 0,wetNow && grounded,ref wadeStride);
@@ -1156,7 +1162,7 @@ public partial class GardenGame : Node3D
             var floor = player.MoveAndCollide(Vector3.Down*.08f, testOnly:true);
             if (floor != null && floor.GetNormal().Y > .6f) verticalSpeed = 7;
         }
-        if (code == Key.Ctrl && dashCooldown <= 0 && !(zone==GardenZone.Garden && GardenArt.IsPondWater(player.Position))) { dashTime = .3f; dashCooldown = 2; }
+        if (code == Key.Ctrl && dashCooldown <= 0 && !WaterArt.PlayerWet(zone,player.Position)) { dashTime = .3f; dashCooldown = 2; }
         if (code == Key.E) Interact();
         if (code == Key.F) PetFriend();
         if (code == Key.Q)
@@ -2190,6 +2196,7 @@ public partial class GardenGame : Node3D
             var strip = GardenArt.Shape(world,new BoxMesh(),(Track[i]+Track[i+1])*.5f+Vector3.Up*.115f,
                 new(2.1f,.045f,direction.Length()+.13f),color);
             strip.Rotation = new(0,Mathf.Atan2(direction.X,direction.Z),0);
+            if(Sections[i]=="Swim") strip.MaterialOverride=WaterArt.Material();
             if (i == 0 || Sections[i] != Sections[i-1])
                 GardenArt.Sign(world,Sections[i].ToUpperInvariant(),Track[i]+Vector3.Up*1.1f,GardenArt.Cream);
         }
@@ -2331,6 +2338,8 @@ public partial class GardenGame : Node3D
         var arrival=travel.Pending;
         if (next==GardenZone.Expedition && arrival!=null) travel.ExpeditionArea=arrival.To;
         zone = next; EnsureGardenTrees(); world = new Node3D(); AddChild(world); travel.Build(world,zone,pet);
+        gardenSky.SetNatureAtmosphere(zone==GardenZone.Expedition);
+        gardenSky.Advance((float)pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
         if (zone==GardenZone.Expedition) pet.Expedition.VisitedAreas.Add(travel.ExpeditionArea);
         if (zone==GardenZone.Garden)
             foreach (var tree in world.GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder))
@@ -2694,7 +2703,7 @@ public partial class GardenGame : Node3D
         friendArt=BuildLifeArt();
         var at=new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
         if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) :
-            zone==GardenZone.Expedition ? new(Mathf.Clamp(at.X,-35,35),Mathf.Clamp(at.Y,-.1f,18),Mathf.Clamp(at.Z,-27,27)) : at;
+            zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player) : at;
         if (friend.Visible && petZonePosition.IsFinite()) friend.Position=petZonePosition;
         player.ResetPhysicsInterpolation();
         cameraRig.Follow(player.Position,0,true);
@@ -3520,6 +3529,7 @@ public partial class GardenGame : Node3D
         CheckCaveFurnishingAndWaterContacts();
         CheckCrawlingTurnsAndNewItems();
         CheckSocialAndAnimationCorrections();
+        CheckLandscapeRefinements();
         CheckExpeditionFoundation();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
