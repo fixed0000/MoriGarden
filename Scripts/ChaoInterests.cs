@@ -15,6 +15,7 @@ internal sealed class ChaoInterests
     private float delay=5, elapsed, gait;
     private FruitMeal meal=new();
     private string? mealGiver;
+    private readonly ChaoRising rising=new();
     internal void ContinueGivenMeal(FruitTree food,FruitMeal progress)
     {
         fruit=food; toy=null; tree=false; stage=Stage.Meal; elapsed=0; meal=progress; mealGiver=PetState.CurrentHero;
@@ -55,6 +56,7 @@ internal sealed class ChaoInterests
         bool canStart,IEnumerable<FruitTree> fruits,IEnumerable<ToyCar> toys,out bool changed)
     {
         changed=false;
+        if (rising.Active) { rising.Step(art,dt); ImportedChao.ClearActionPause(art); return true; }
         if (stage==Stage.Idle)
         {
             delay=Mathf.Max(0,delay-dt);
@@ -69,7 +71,7 @@ internal sealed class ChaoInterests
         {
             case Stage.Approach:
             case Stage.Idea:
-                if (!Available(actor,chao) || elapsed>24) { Finish(art); return false; }
+                if (!Available(actor,chao) || elapsed>(chao.Run<50 ? 54 : 24)) { Finish(art); return false; }
                 Vector3 target=toy?.Position ?? (tree ? fruit!.Position : fruit!.FruitPosition);
                 Vector3 offset=target-actor.Position;
                 offset.Y=0;
@@ -86,6 +88,8 @@ internal sealed class ChaoInterests
                     }
                     Face(actor,offset);
                     Next(Stage.Idea);
+                    if (art.Basis.Y.Normalized().Dot(Vector3.Up)<.8f) { rising.Begin(art); return true; }
+                    ImportedChao.StandForAction(art);
                 }
                 if (offset.Length()>reach+.20f || motion.IsSwimmingAt(actor.Position))
                 {
@@ -200,6 +204,7 @@ internal sealed class ChaoInterests
 
     private void Finish(Node3D art)
     {
+        rising.Cancel();
         if (stage is Stage.Meal or Stage.Shake) ImportedChao.PauseAfterAction(art);
         delay=favorite ? 5 : 11;
         Next(Stage.Idle);

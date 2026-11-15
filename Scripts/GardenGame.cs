@@ -45,6 +45,8 @@ public partial class GardenGame : Node3D
     private readonly List<string> relationshipIds=new();
     private Node3D? importedAvatar;
     private float offerTime, eatTime, thinkTime;
+    private readonly ChaoGreeting chaoGreeting=new();
+    private bool preparingGift;
     private FruitMeal fruitMeal=new();
     private bool rejectFruit, rejectToy, welcomeFruit;
     private AudioStreamPlayer3D mainSwimSound = null!, wadeSound = null!, impactSound = null!;
@@ -267,7 +269,10 @@ public partial class GardenGame : Node3D
         if (testMode && frame is 220 or 239)
             GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath(
                 $"res://artifacts/cave-exterior-{(frame==220 ? "left" : "right")}.png"));
-        if (testMode && frame==240)
+        if (testMode && frame is 254 or 269 or 289)
+            GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath(
+                $"res://artifacts/{(frame==254 ? "gorilla" : frame==269 ? "drums" : "crawling-chao")}.png"));
+        if (testMode && frame==290)
         {
             GD.Print("SMOKE_OK: scene, interactions, evolution, music, swimming, save, grips, petting, mountain room; screenshots captured");
             GetTree().Quit();
@@ -431,6 +436,36 @@ public partial class GardenGame : Node3D
             player.Position=new(0,0,5);
             camera.GlobalPosition=frame<=220 ? new(-21,3,-16) : new(-3,4,-14);
             camera.LookAt(new(-11,2.4f,-22));
+        }
+        if (testMode && frame is >=240 and <=254)
+        {
+            var animal=world.GetNode<TrainingAnimal>("Gorilla");
+            if (frame==240) animal.UpdateAnimal(40,time,false);
+            camera.GlobalPosition=animal.Position+animal.Basis*new Vector3(.5f,.38f,.62f);
+            camera.LookAt(animal.Position+Vector3.Up*.18f);
+        }
+        if (testMode && frame is >=255 and <=269)
+        {
+            friend.Position=new(13,0,12); friend.Rotation=Vector3.Zero;
+            var drums=world.GetNode<ToyCar>("Drums");
+            if (frame==255)
+            {
+                foreach(var item in world.GetChildren().OfType<ToyCar>()) item.CancelPlay(friend);
+                pet.Run=80; drums.BeginPlay(friend,new PetState { Fun=20 });
+                friendArt.GetNode<EmotionOrb>("MoodOrb").WaitForPetting();
+            }
+            drums.PlayPose(friend,friendArt);
+            camera.GlobalPosition=friend.Position+new Vector3(.55f,.58f,.67f);
+            camera.LookAt(friend.Position+Vector3.Up*.17f);
+        }
+        if (testMode && frame is >=270 and <=289)
+        {
+            if (frame==270) foreach(var item in world.GetChildren().OfType<ToyCar>()) item.CancelPlay(friend);
+            pet.Run=0; ImportedChao.ApplyDevelopment(friendArt,pet);
+            friend.Position=new(13,0,12+(frame-270)*.006f); friend.Rotation=Vector3.Zero;
+            ImportedChao.MovePose(friendArt,(frame-270)*.20f,true,false,false,false,false,false);
+            camera.GlobalPosition=friend.Position+new Vector3(.50f,.40f,.67f);
+            camera.LookAt(friend.Position+new Vector3(0,.18f,.15f));
         }
         CheckPortals();
         UpdateTrainingAnimals(dt);
@@ -839,7 +874,8 @@ public partial class GardenGame : Node3D
 
     private void MoveFriend(float dt)
     {
-        if (testMode && (frame is >=15 and <=44 || frame is >=95 and <=114 || frame is >=132 and <=145 || frame is >=166 and <=209)) return;
+        ImportedChao.ApplyDevelopment(friendArt,pet);
+        if (testMode && (frame is >=15 and <=44 || frame is >=95 and <=114 || frame is >=132 and <=145 || frame is >=166 and <=209 || frame is >=240 and <=289)) return;
         if (!friend.Visible || racing || courtship.IsPaired(friend) || (introductions.Uses(friend) || ballGame.Uses(friend) || musicGroup.Uses(friend))) return;
         upsetTime=Math.Max(0,upsetTime-dt);
         moriDistress.Tick(dt);
@@ -963,9 +999,9 @@ public partial class GardenGame : Node3D
         {
             if (!moriRest.HandlesPose && !arrived)
             {
-                PoseChao(dt,FlatDistance(beforeRest,friend.Position)>dt*.075f,false);
-                friendArt.Rotation=Vector3.Zero;
-                friendArt.Position=Vector3.Up*.034f;
+                bool walking=FlatDistance(beforeRest,friend.Position)>dt*.075f;
+                if (walking) chaoGait+=dt*6;
+                ImportedChao.MovePose(friendArt,chaoGait,walking,false,false,false,false,false);
             }
             if (arrived) { sleeping=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(friendArt,manners:pet.Manners); }
             return;
@@ -1506,10 +1542,10 @@ public partial class GardenGame : Node3D
                 rejectFruit=heldFruit!=null && (candidate?.Chao ?? pet).Fullness>=99.9f;
                 rejectToy=heldToy!=null && (candidate?.Chao ?? pet).Fun>=99.9f;
                 CharacterBody3D receiver=candidate!=null ? candidate : friend;
+                chaoGreeting.Begin(candidate?.Art ?? friendArt); preparingGift=true; offerLean=0;
                 foreach(var item in world.GetChildren().OfType<ToyCar>()) item.CancelPlay(receiver);
                 ballGame.Cancel(receiver); musicGroup.Cancel(receiver); CanInGarden?.Cancel(receiver);
-                Vector3 toPlayer=player.Position-receiver.Position;
-                if (heldFruit==null) receiver.Rotation=new(0,Mathf.Atan2(toPlayer.X,toPlayer.Z),0);
+
                 if (candidate!=null) candidate.ReserveForOffer();
                 else
                 {
@@ -1526,6 +1562,16 @@ public partial class GardenGame : Node3D
         Vector3 mouth=subject.Position+new Vector3(0,.225f,.135f).Rotated(Vector3.Up,subject.Rotation.Y);
         if (offerTime>0)
         {
+            if (preparingGift)
+            {
+                if (!chaoGreeting.Step(subject,art,player.Position,dt))
+                {
+                    heldFruit?.Hold(HandPosition()); heldToy?.Hold(HandPosition());
+                    if (heldAnimal!=null) heldAnimal.Position=HandPosition();
+                    return;
+                }
+                preparingGift=false;
+            }
             offerTime=Math.Max(0,offerTime-dt);
             float progress=1-offerTime/HandoffDuration;
             if (heldFruit!=null)
@@ -1655,6 +1701,7 @@ public partial class GardenGame : Node3D
 
     private void FinishOffer(bool completed=false)
     {
+        preparingGift=false;
         var art=offeredResident?.Art ?? friendArt;
         art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetMealHappy(false);
         if (completed) { ImportedChao.PauseAfterAction(art); if (offeredResident==null) wanderTime=0; }
@@ -2722,10 +2769,10 @@ public partial class GardenGame : Node3D
 
     private void RunSmokeChecks()
     {
-        var start=friend.Position;
-        for (int i=0;i<90;i++) MoveFriend(1f/60);
-        if (FlatDistance(start,friend.Position)<.4f)
-            throw new Exception("Mori did not start his first walk");
+        var start=friend.Position; float firstWalk=0; var last=start;
+        for (int i=0;i<240;i++) { MoveFriend(1f/60); firstWalk+=FlatDistance(last,friend.Position); last=friend.Position; }
+        if (firstWalk<.4f)
+            throw new Exception($"Mori first walk: {start}/{friend.Position}, target={wanderTarget}, speed={chaoMotion.GroundSpeed}, blocked={chaoMotion.BlockedTime}, air={chaoMotion.Airborne}, yaw={friend.Rotation.Y}, time={wanderTime}, hit={friend.MoveAndCollide(Vector3.Left*.1f,testOnly:true)?.GetCollider()}, normal={friend.MoveAndCollide(Vector3.Left*.1f,testOnly:true)?.GetNormal()}");
         var fruit=world.GetChildren().OfType<FruitTree>().First(tree=>tree.IsFeeder);
         var hungryTaster=new PetState { Fullness=18,Glutton=true };
         var tasterMeal=new FruitMeal();
@@ -2811,7 +2858,7 @@ public partial class GardenGame : Node3D
         friend.Position=new(8,0,6);
         var carrier=new Vector3(12,0,6);
         bool noticed=false;
-        for (int i=0;i<1500 && hungry.Bond==2;i++)
+        for (int i=0;i<2700 && hungry.Bond==2;i++)
         {
             reaction.Step(friend,friendArt,hungry,run,carrier,1f/60);
             noticed|=friendArt.GetNode<EmotionOrb>("MoodOrb").CurrentGlyph=="!";
@@ -2833,7 +2880,7 @@ public partial class GardenGame : Node3D
             moriFruitReaction.Step(friend,friendArt,pet,chaoMotion,player.Position+Vector3.Left*2,1f/60);
         if (pet.Joy!=originalJoy || !moriFruitReaction.AnticipatesFruit)
             throw new Exception("Chao reacted negatively before five seconds");
-        for (int i=0;i<80;i++) UpdateOffering(1f/60);
+        for (int i=0;i<190;i++) UpdateOffering(1f/60);
         if (eatTime<=0 || friendArt.FindChild("Heart",true,false) is not MeshInstance3D { Visible:true })
             throw new Exception("Chao did not welcome the returning fruit");
         RunOfferCheck();
@@ -2907,6 +2954,8 @@ public partial class GardenGame : Node3D
             throw new Exception("Turning away did not cancel the toy handoff");
         moriFruitReaction.Interrupt(friendArt);
         Face(friend.Position);
+        UpdateOffering(1f/60);
+        for(int i=0;i<180 && preparingGift;i++) UpdateOffering(1f/60);
         for (int i=0;i<37;i++) UpdateOffering(1f/60);
         if (offerLean<.7f || offerTime<=0 || heldToy.Position.DistanceTo(HandPosition())>.015f ||
             heldToy.Position.DistanceTo(friend.Position+Vector3.Up*.16f)>.60f)
@@ -3030,12 +3079,12 @@ public partial class GardenGame : Node3D
         }
         var motionCheck=new ChaoMotion();
         var gaitCheck=new PetState { Run=750 };
-        friend.Position=new(8,.01f,0);
+        friend.Position=new(8,.01f,0); friend.Rotation=new(0,Mathf.Pi/2,0);
         for (int i=0;i<75;i++) motionCheck.Step(friend,Vector3.Right*12,gaitCheck,true,false,1f/60,true,out _);
         if (!motionCheck.Sprinting) throw new Exception("High Run Chao did not accelerate into a sprint");
         motionCheck.Reset();
-        friend.Position=new(-2,.82f,-10);
-        for (int i=0;i<150;i++)
+        friend.Position=new(-2,.82f,-10); friend.Rotation=new(0,Mathf.Pi,0);
+        for (int i=0;i<600;i++)
         {
             var goal=new Vector3(-2,0,-12.7f)-friend.Position; goal.Y=0;
             motionCheck.Step(friend,goal,new PetState(),false,false,1f/60,true,out _);
@@ -3055,7 +3104,7 @@ public partial class GardenGame : Node3D
         if (motionCheck.Flying || friend.Position.Y>=2.5f)
             throw new Exception("Falling Chao floated instead of descending");
         motionCheck.Reset();
-        friend.Position=new(-2,.77f,-8.50f);
+        friend.Position=new(-2,.77f,-8.50f); friend.Rotation=Vector3.Zero;
         for (int i=0;i<25 && !motionCheck.Airborne;i++)
             motionCheck.Step(friend,Vector3.Back*2,new PetState(),false,false,1f/60,true,out _);
         if (!motionCheck.Airborne || friend.Position.Y<=.77f)
@@ -3274,7 +3323,7 @@ public partial class GardenGame : Node3D
         pet.Swim=Math.Max(100,pet.Swim);
         int oldSwim = pet.Swim;
         bool sawWake = false;
-        for (int i=0; i<1200 && swimmingTrip; i++)
+        for (int i=0; i<3000 && swimmingTrip; i++)
         {
             MoveFriend(1f/60);
             sawWake |= wake.Visible;
@@ -3419,13 +3468,12 @@ public partial class GardenGame : Node3D
             throw new Exception("Music loop did not load");
         var orb = friendArt.GetChildren().OfType<EmotionOrb>().Single();
         orb._PhysicsProcess(1f/60);
-        var orbRest = orb.Position;
         friend.Position += Vector3.Right*.12f;
         orb._PhysicsProcess(1f/60);
-        if (orb.Position.DistanceTo(orbRest)<.025f)
+        if (orb.GlobalPosition.DistanceTo(orb.TargetPoint)<.025f)
             throw new Exception("Orb did not lag behind motion");
         for (int i=0;i<120;i++) orb._PhysicsProcess(1f/60);
-        if (orb.Position.DistanceTo(orbRest)>.005f)
+        if (orb.GlobalPosition.DistanceTo(orb.TargetPoint)>.005f)
             throw new Exception("Orb did not return to rest");
         if (world.GetNodeOrNull<AudioStreamPlayer3D>("WaterfallSound")?.Stream is not AudioStreamWav)
             throw new Exception("Waterfall spatial audio did not load");
@@ -3444,6 +3492,7 @@ public partial class GardenGame : Node3D
         CheckInstrumentContactAndMountainRoom();
         CheckGiftSwitchingAndWaterGait();
         CheckCaveFurnishingAndWaterContacts();
+        CheckCrawlingTurnsAndNewItems();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }
@@ -3537,6 +3586,81 @@ public partial class GardenGame : Node3D
         ImportedChao.ClearActionPause(friendArt);
     }
 
+    private void CheckCrawlingTurnsAndNewItems()
+    {
+        friend.Position=new(20,0,18); friend.Rotation=Vector3.Zero;
+        ImportedChao.ApplyDevelopment(friendArt,new PetState { Run=49 });
+        ImportedChao.MovePose(friendArt,.5f,true,false,false,false,false,false);
+        var paw=(Node3D)friendArt.FindChild("PaddleL",true,false);
+        float firstPaw=paw.Rotation.X;
+        if (friendArt.Basis.Y.Normalized().Y>.2f) throw new Exception("A Chao below Run Lv. 5 does not crawl on its belly");
+        ImportedChao.MovePose(friendArt,2.4f,true,false,false,false,false,false);
+        if (Mathf.Abs(paw.Rotation.X-firstPaw)<.1f) throw new Exception("Crawling does not alternate the paws");
+        var greeting=new ChaoGreeting(); greeting.Begin(friendArt);
+        for(int i=0;i<120;i++) greeting.Step(friend,friendArt,friend.Position+Vector3.Right,1f/60);
+        if (friendArt.Basis.Y.Normalized().Y<.99f || Mathf.Abs(Mathf.AngleDifference(friend.Rotation.Y,Mathf.Pi/2))>.07f)
+            throw new Exception("A crawling Chao did not rise and turn before receiving an item");
+        ImportedChao.ApplyDevelopment(friendArt,new PetState { Run=50 });
+        ImportedChao.MovePose(friendArt,.5f,true,false,false,false,false,false);
+        float sway=paw.Rotation.Y;
+        ImportedChao.MovePose(friendArt,3.8f,true,false,false,false,false,false);
+        if (friendArt.Basis.Y.Normalized().Y<.99f || Mathf.Abs(paw.Rotation.Y-sway)<.08f)
+            throw new Exception("Walking Chao do not stand or sway their paws sideways");
+        var turn=new ChaoMotion(); friend.Rotation=Vector3.Zero;
+        float oldYaw=0;
+        for(int i=0;i<120;i++)
+        {
+            turn.Step(friend,Vector3.Forward*5,new PetState { Run=80 },false,false,1f/60,false,out _);
+            if (Mathf.Abs(Mathf.AngleDifference(oldYaw,friend.Rotation.Y))>.03f) throw new Exception("A walking Chao turned abruptly");
+            oldYaw=friend.Rotation.Y;
+        }
+        var stroll=new ChaoMotion(); friend.Position=new(19,0,18); friend.Rotation=Vector3.Zero;
+        int stalled=0;
+        for(int i=0;i<720;i++)
+        {
+            var before=friend.Position;
+            stroll.Step(friend,Vector3.Back*3,new PetState { Run=80 },false,false,1f/60,false,out _);
+            if (i>20 && FlatDistance(before,friend.Position)<.002f) stalled++;
+            if (Mathf.Abs(friend.Position.Y)>.04f) throw new Exception("The South Terrace lawn is not level");
+        }
+        if (stalled>3 || friend.Position.Z<30) throw new Exception($"Chao repeatedly stalls near South Terrace: {stalled} frames, {friend.Position}");
+        foreach(string name in new[]{"ToyCar","Rattle","Flute","Drums"})
+        {
+            var item=world.GetNode<ToyCar>(name); item.CancelPlay(friend); item.Position=new(26,.05f,16); item.Rotation=Vector3.Zero;
+            item.Toss(Vector3.Zero); for(int i=0;i<180;i++) item.Advance(1f/60);
+            for(int i=0;i<600;i++) item.PushAside(Vector3.Right*.008f);
+            if (item.Position.Y<-.012f || item.Position.Y>.025f || item.Position.X<30)
+                throw new Exception($"{name} sank or became stuck when pushed: {item.Position}");
+        }
+        var fruit=new FruitTree { IsFeeder=true,SingleUse=true,Position=new(26,0,15) }; world.AddChild(fruit);
+        fruit.Place(new(26,.18f,15));
+        for(int i=0;i<500;i++) fruit.PushAside(Vector3.Right*.008f);
+        if (fruit.FruitPosition.Y<.17f || fruit.FruitPosition.X<29) throw new Exception("A pushed fruit sank into the ground");
+        world.RemoveChild(fruit); fruit.QueueFree();
+        var orb=friendArt.GetNode<EmotionOrb>("MoodOrb");
+        foreach(string glyph in new[]{"♥","?","!","spring"})
+        {
+            orb.WaitForPetting(); orb.SetDistressed(false); orb.SetIdea(glyph=="spring" ? null : glyph,false);
+            if (glyph=="spring") orb.SetUpset(true);
+            orb._PhysicsProcess(.016); friend.Position+=Vector3.Right*.12f; orb._PhysicsProcess(.016);
+            if (orb.GlobalPosition.DistanceTo(orb.TargetPoint)<.025f)
+                throw new Exception($"The {glyph} emotion does not preserve inertia");
+        }
+        var gorilla=world.GetNode<TrainingAnimal>("Gorilla");
+        pet=new PetState { Run=80,Fullness=50 }; friend.Position=new(20,0,15); friend.Rotation=Vector3.Zero;
+        player.Position=friend.Position+Vector3.Back; Face(friend.Position); heldAnimal=gorilla;
+        RunOfferCheck();
+        if (pet.Power!=12 || heldAnimal!=null || gorilla.Available) throw new Exception("Giving a gorilla does not train Power");
+        var drums=world.GetNode<ToyCar>("Drums");
+        var musician=new PetState { FavoriteInstrument="Drums",Fun=20 }; musician.Validate();
+        if (musician.FavoriteInstrument!="Drums" || !drums.IsFavorite(musician) || !drums.BeginPlay(friend,musician))
+            throw new Exception("Drums are unavailable or cannot be a favorite instrument");
+        drums.PlayPose(friend,friendArt);
+        if (drums.GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stream is not AudioStreamWav || drums.PlayDuration!=60)
+            throw new Exception("Drums do not play sound for the normal music duration");
+        drums.CancelPlay(friend); ImportedChao.ClearActionPause(friendArt);
+    }
+
     private void CheckCaveFurnishingAndWaterContacts()
     {
         if (!MountainInterior.Room.HasPoint(GardenArt.RelocateFromRear(new(-20,0,-23))))
@@ -3616,7 +3740,7 @@ public partial class GardenGame : Node3D
         heldFruit=food; food.Hold(HandPosition()); offerTime=eatTime=thinkTime=releasePose=0; pickingItem=false;
         UpdateOffering(.016f);
         if (offerTime<=0 || car.PlayActor!=null) throw new Exception("Giving fruit did not interrupt Mori's toy play");
-        for(int i=0;i<45;i++) UpdateOffering(1f/60);
+        for(int i=0;i<160;i++) UpdateOffering(1f/60);
         if (eatTime<=0) throw new Exception("The replacement fruit was not accepted");
         player.Position=friend.Position+Vector3.Right*3; UpdateOffering(.016f);
         if (heldFruit!=null || eatTime>0 || !moriInterests.HasMeal) throw new Exception("The player did not get free hands while the Chao kept eating");
@@ -3884,10 +4008,11 @@ public partial class GardenGame : Node3D
         _UnhandledKeyInput(new InputEventKey { PhysicalKeycode=Key.Q,Pressed=true });
         if (callTime<=0) throw new Exception("A swimming Chao stopped responding to calls");
         callTime=0; following=false; friend.Position=new(27,0,12);
-        var groundWalk=new ChaoMotion();
+        var groundWalk=new ChaoMotion(); var walkingPet=new PetState { Run=80 };
+        ImportedChao.ApplyDevelopment(friendArt,walkingPet);
         for(int i=0;i<180;i++)
         {
-            groundWalk.Step(friend,Vector3.Back*2,pet,false,false,1f/60,false,out _);
+            groundWalk.Step(friend,Vector3.Back*2,walkingPet,false,false,1f/60,false,out _);
             ImportedChao.MovePose(friendArt,i*.10f,true,false,false,false,false,false);
             ((ImportedChao)friendArt)._PhysicsProcess(1f/60);
             if (i>2 && (Mathf.Abs(friend.Position.Y)>.04f || Mathf.Abs(((ImportedChao)friendArt).LowestSole()-.003f)>.014f))

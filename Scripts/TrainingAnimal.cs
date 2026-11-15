@@ -8,6 +8,7 @@ public partial class TrainingAnimal : CharacterBody3D
 {
     public AnimalSkill Skill { get; init; }
     public bool IsParrot { get; init; }
+    public bool IsGorilla { get; init; }
     public Vector3 Home { get; init; }
     private float respawn;
     private Vector3 habitat;
@@ -20,8 +21,9 @@ public partial class TrainingAnimal : CharacterBody3D
     private Node3D art = null!;
     private readonly Node3D[] feet = new Node3D[2];
     private readonly Node3D[] wings = new Node3D[2];
+    private readonly Node3D[] arms = new Node3D[2];
     public bool Available => respawn <= 0 && !inFlight;
-    public string AnimalName => IsParrot ? "Parrot" : Skill switch
+    public string AnimalName => IsGorilla ? "Gorilla" : IsParrot ? "Parrot" : Skill switch
     {
         AnimalSkill.Swim => "Penguin",
         AnimalSkill.Fly => "Songbird",
@@ -37,6 +39,7 @@ public partial class TrainingAnimal : CharacterBody3D
         releaseTime = DropDuration;
         art = new Node3D { Scale = Vector3.One*(Skill == AnimalSkill.Run ? .39f : .46f) };
         AddChild(art);
+        if (IsGorilla) { art.Scale=Vector3.One*.40f; BuildGorilla(); return; }
         if (IsParrot) { BuildParrot(); return; }
         Color coat = new(Skill switch
         {
@@ -77,6 +80,27 @@ public partial class TrainingAnimal : CharacterBody3D
         if (Skill == AnimalSkill.Fly)
             GardenArt.Ball(art,new(0,.22f,-.24f),new(.18f,.12f,.34f),coat);
 
+    }
+
+    private void BuildGorilla()
+    {
+        var coat=new Color("41434a"); var skin=new Color("8c817b");
+        AvatarArt.Profile(art,Vector3.Zero,coat,(.10f,.23f,.18f),(.32f,.34f,.25f),(.55f,.43f,.26f),(.65f,.28f,.21f));
+        AvatarArt.Profile(art,new(0,0,.03f),coat,(.55f,.20f,.16f),(.69f,.26f,.21f),(.81f,.23f,.19f),(.86f,.13f,.10f));
+        GardenArt.Ball(art,new(0,.66f,.22f),new(.33f,.29f,.15f),skin);
+        GardenArt.Ball(art,new(0,.61f,.30f),new(.22f,.12f,.09f),new("665f5c"));
+        for(int side=-1;side<=1;side+=2)
+        {
+            var arm=new Node3D { Position=new(side*.34f,.50f,.09f) }; art.AddChild(arm); arms[(side+1)/2]=arm;
+            AvatarArt.Profile(arm,Vector3.Zero,coat,(-.39f,.11f,.13f),(-.19f,.14f,.15f),(.06f,.15f,.15f));
+            GardenArt.Ball(arm,new(0,-.40f,.08f),new(.24f,.15f,.25f),skin);
+            for(int knuckle=0;knuckle<3;knuckle++) GardenArt.Ball(arm,new(-.07f+knuckle*.07f,-.42f,.18f),new(.065f,.07f,.07f),skin);
+            var foot=new Node3D { Position=new(side*.17f,.055f,0) }; art.AddChild(foot); feet[(side+1)/2]=foot;
+            GardenArt.Ball(foot,new(0,0,.10f),new(.22f,.11f,.30f),coat);
+            GardenArt.Ball(art,new(side*.10f,.72f,.30f),new(.055f,.045f,.025f),new("26282e"));
+            GardenArt.Shape(art,new BoxMesh(),new(side*.10f,.76f,.285f),new(.14f,.035f,.045f),coat);
+            GardenArt.Ball(art,new(side*.25f,.70f,.01f),new(.09f,.11f,.09f),skin);
+        }
     }
 
     private void BuildParrot()
@@ -146,6 +170,7 @@ public partial class TrainingAnimal : CharacterBody3D
         art.Rotation=new(swimming ? .33f : 0,0,swimming ? stroke*.09f : 0);
         feet[0].Rotation=new(stroke*(swimming ? .93f : .62f),0,0);
         feet[1].Rotation=new(-feet[0].Rotation.X,0,0);
+        if (IsGorilla) for(int i=0;i<2;i++) arms[i].Rotation=new((i==0 ? stroke : -stroke)*(swimming ? .7f : .28f),0,0);
         if (IsParrot)
             for(int side=0;side<2;side++) wings[side].Rotation=new(swimming ? stroke*.55f : .05f*Mathf.Sin(roamAge*3),0,(side==0 ? -1 : 1)*(swimming ? .42f : .08f));
     }

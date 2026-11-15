@@ -8,7 +8,7 @@ internal sealed class ChaoRising
     private Vector3 height;
     private float time;
     public bool Active { get; private set; }
-    public void Begin(Node3D art) { if (Active) return; from=art.Quaternion; height=art.Position; time=0; Active=true; }
+    public void Begin(Node3D art) { if (Active) return; from=art.Quaternion; height=art.Position; time=0; Active=true; ImportedChao.StandForAction(art); }
     public void Cancel() { Active=false; time=0; }
     public bool Step(Node3D art,float dt)
     {

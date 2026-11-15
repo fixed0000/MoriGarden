@@ -81,8 +81,6 @@ internal sealed class ChaoLeisure
         var heading=steer.Steer(actor,delta,dt);
         heading=ChaoMotion.AvoidNeighbors(actor,heading);
         bool moved=motion.Step(actor,heading,state,false,false,dt,false,out _);
-        if (heading.LengthSquared()>.01f)
-            actor.Rotation=new(0,Mathf.LerpAngle(actor.Rotation.Y,Mathf.Atan2(heading.X,heading.Z),1-Mathf.Exp(-8*dt)),0);
         gait+=dt*Mathf.Clamp(motion.GroundSpeed*9,4,19);
         ImportedChao.MovePose(art,gait,moved,false,false,false,motion.Airborne,motion.Flying);
         return true;

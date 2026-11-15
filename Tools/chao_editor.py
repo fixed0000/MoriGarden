@@ -128,7 +128,7 @@ class ChaoEditor:
                     choices = {
                         "FavoriteToy": ("", "Toy Car", "Rattle", "Beach Ball"),
                         "FavoriteFruit": ("Blue Square Fruit", "Yellow Triangle Fruit", "Red Round Fruit", "Green Diamond Fruit"),
-                        "FavoriteInstrument": ("Flute", "Electric Guitar", "Synthesizer", "None"),
+                        "FavoriteInstrument": ("Flute", "Electric Guitar", "Synthesizer", "Drums", "None"),
                     }
                     control = ttk.Combobox(fields, textvariable=var, state="readonly",
                                            values=choices[name], width=22 if name == "FavoriteFruit" else 14)

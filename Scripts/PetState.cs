@@ -255,7 +255,7 @@ public sealed class PetState
         if (Name.Length>18) Name=Name[..18];
         FavoriteToy=FavoriteToy is "Toy Car" or "Rattle" or "Beach Ball" ? FavoriteToy : "";
         EnsureFavoriteFruit();
-        FavoriteInstrument=FavoriteInstrument is "None" or "Electric Guitar" or "Synthesizer" ? FavoriteInstrument : "Flute";
+        FavoriteInstrument=FavoriteInstrument is "None" or "Drums" or "Electric Guitar" or "Synthesizer" ? FavoriteInstrument : "Flute";
         ActivityPreference=Math.Clamp(ActivityPreference,1,5);
         if (!float.IsFinite(AdultSeconds) || AdultSeconds<0 || !float.IsFinite(EvolutionFoodSeconds) || EvolutionFoodSeconds<0) throw new ArgumentException("Invalid evolution time");
         SpecialFruitBag ??= new();

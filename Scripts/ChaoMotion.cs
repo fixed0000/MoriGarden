@@ -161,6 +161,14 @@ internal sealed class ChaoMotion
     public bool Step(CharacterBody3D body,Vector3 direction,PetState pet,bool running,bool water,float dt,
         bool ledges,out bool hardLanding,bool directIsland=false,bool leavingIsland=false,bool allowIslandDrift=false)
     {
+        if (!airborne && !water && FlatLawn(body)) SnapLawn(body);
+        if (!airborne && !water && cliffLeg<0 && direction.LengthSquared()>.04f)
+        {
+            float target=Mathf.Atan2(direction.X,direction.Z);
+            float angle=Mathf.Abs(Mathf.AngleDifference(body.Rotation.Y,target));
+            body.Rotation=new(0,Mathf.RotateToward(body.Rotation.Y,target,dt*1.65f),0);
+            if (angle>1.05f) direction=Vector3.Zero;
+        }
         var start=body.Position;
         Advance(body,direction,pet,running,water,dt,ledges,out hardLanding,directIsland,leavingIsland,allowIslandDrift);
         if (water && !airborne && body.Position.Y<0 && GardenArt.IsPondWater(body.Position))
@@ -172,8 +180,8 @@ internal sealed class ChaoMotion
         BlockedTime=direction.LengthSquared()>.16f && GroundSpeed<.13f && !airborne ? BlockedTime+dt : 0;
         Sprinting=Sprinting && GroundSpeed>=3.15f;
         var facing=airborne ? airDirection : travel;
-        if ((!airborne && walking && actualSpeed>.12f) || (flying && facing.LengthSquared()>.00001f))
-            body.Rotation=new(0,Mathf.LerpAngle(body.Rotation.Y,Mathf.Atan2(facing.X,facing.Z),1-Mathf.Exp(-10*dt)),0);
+        if ((water && walking && actualSpeed>.12f) || (flying && facing.LengthSquared()>.00001f) || cliffLeg>=0 && !airborne && walking)
+            body.Rotation=new(0,Mathf.RotateToward(body.Rotation.Y,Mathf.Atan2(facing.X,facing.Z),dt*1.65f),0);
         return walking;
     }
 
@@ -255,7 +263,7 @@ internal sealed class ChaoMotion
         float stopDistance=rampApproach ? .065f : .16f;
         Vector3 forward=direction.Normalized();
         float pace=water ? (struggling ? .30f+pet.Swim*.001f : .65f+pet.Swim*.0019f)
-            : (running ? 2.2f : .95f)+pet.Run*.0042f;
+            : pet.Run<50 ? .38f+pet.Run*.003f : (running ? 2.2f : .95f)+pet.Run*.0042f;
         speed=Mathf.MoveToward(speed,distance>stopDistance ? pace : 0,dt*(2.6f+pet.Run*.004f));
         if (struggling) speed=Mathf.Min(speed,pace);
         Sprinting=!water && pet.Run>=650 && speed>=3.15f && distance>.32f;
@@ -302,7 +310,7 @@ internal sealed class ChaoMotion
             return;
         }
 
-        bool supported=jumpFromWater || (body.MoveAndCollide(Vector3.Down*.07f,testOnly:true) is { } floor &&
+        bool supported=jumpFromWater || FlatLawn(body) || (body.MoveAndCollide(Vector3.Down*.07f,testOnly:true) is { } floor &&
             floor.GetNormal().Y>.52f);
         var bedOffset=body.Position-ChaoRest.Bed; bedOffset.Y=0;
         if (!airborne && supported && ledges && body.Position.Y is >.24f and <.53f &&
@@ -350,6 +358,7 @@ internal sealed class ChaoMotion
         }
         if (!airborne)
         {
+            if (FlatLawn(body)) { SnapLawn(body); return; }
             var support=body.MoveAndCollide(Vector3.Down*.07f,testOnly:true);
             if (support==null || support.GetNormal().Y<=.52f)
             {
@@ -365,7 +374,7 @@ internal sealed class ChaoMotion
                     body.GetChildren().OfType<CollisionShape3D>().FirstOrDefault() is {} shape)
                 {
                     float half=shape.Shape is CapsuleShape3D capsule ? capsule.Height*.5f : shape.Shape is SphereShape3D sphere ? sphere.Radius : 0;
-                    if (half>0) body.Position=new(body.Position.X,half-shape.Position.Y+.001f,body.Position.Z);
+                    if (half>0) body.Position=new(body.Position.X,half-shape.Position.Y+.004f,body.Position.Z);
                 }
             }
         }
@@ -422,6 +431,20 @@ internal sealed class ChaoMotion
                 travel=travel.LimitLength(Mathf.Max(0,direction.Dot(airDirection.Normalized())));
             body.MoveAndCollide(travel);
         }
+    }
+
+    private static bool FlatLawn(CharacterBody3D body)
+    {
+        if (Mathf.Abs(body.Position.Y)>.08f || GardenArt.IsPondWater(body.Position)) return false;
+        var floor=body.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(
+            body.Position+Vector3.Up*.12f,body.Position-Vector3.Up*.15f,1));
+        return floor.Count>0 && ((Vector3)floor["normal"]).Y>.999f && Mathf.Abs(((Vector3)floor["position"]).Y)<.001f;
+    }
+    private static void SnapLawn(CharacterBody3D body)
+    {
+        if (body.GetChildren().OfType<CollisionShape3D>().FirstOrDefault() is not {} shape) return;
+        float half=shape.Shape is CapsuleShape3D capsule ? capsule.Height*.5f : shape.Shape is SphereShape3D sphere ? sphere.Radius : 0;
+        if (half>0) body.Position=new(body.Position.X,half-shape.Position.Y+.006f,body.Position.Z);
     }
 
     private static Vector3 PondDirection(Vector3 at,Vector3 target)

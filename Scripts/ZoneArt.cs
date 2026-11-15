@@ -64,6 +64,7 @@ public static class ZoneArt
             root.AddChild(new ToyCar { Name="Flute",IsFlute=true });
             root.AddChild(new ToyCar { Name="ElectricGuitar",IsElectricGuitar=true });
             root.AddChild(new ToyCar { Name="Synthesizer",IsSynthesizer=true });
+            root.AddChild(new ToyCar { Name="Drums",IsDrums=true });
             root.AddChild(new ToyCar { Name="BeachBall",IsBeachBall=true });
             GardenArt.Cylinder(root,MachineStep+Vector3.Up*.065f,.94f,.13f,new("91a99a")).CreateConvexCollision();
             GardenArt.Cylinder(root,ChaoMachine+Vector3.Up*.10f,1.0f,.20f,new("586c65")).CreateConvexCollision();
@@ -88,6 +89,7 @@ public static class ZoneArt
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Swim, Home=new(-11,0,-2.2f), Position=new(-11,0,-2.2f) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Fly, Home=new(5,0,-6), Position=new(5,0,-6) });
             root.AddChild(new TrainingAnimal { Name="Parrot",IsParrot=true,Skill=AnimalSkill.Fly, Home=new(11,0,3), Position=new(11,0,3) });
+            root.AddChild(new TrainingAnimal { Name="Gorilla",IsGorilla=true,Skill=AnimalSkill.Power,Home=new(9,0,12),Position=new(9,0,12) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Run, Home=new(3,0,9), Position=new(3,0,9) });
             root.AddChild(new TrainingAnimal { Skill=AnimalSkill.Power, Home=new(-4,0,-7), Position=new(-4,0,-7) });
             Portal(root,GardenLobbyGate,"PLAZA",new("8f8c7e"),1.33f);

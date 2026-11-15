@@ -10,8 +10,22 @@ public partial class EmotionOrb : Node3D
     private Vector3 previousTarget;
     private Vector3 simulatedPosition;
     private bool initialized;
+    internal Vector3 TargetPoint
+    {
+        get
+        {
+            var parent=(Node3D)GetParent();
+            return parent.FindChild("HeadPivot",true,false) is Node3D head
+                ? head.GlobalPosition+Vector3.Up*(.273f*parent.GlobalBasis.Scale.Y)-((Node3D)parent.GetParent()).GlobalBasis.Z*.015f
+                : parent.ToGlobal(rest);
+        }
+    }
 
-    public override void _Ready() => rest = Position;
+    public override void _Ready()
+    {
+        rest=Position;
+        var transform=GlobalTransform; TopLevel=true; GlobalTransform=transform;
+    }
 
     private MeshInstance3D? spring, heart;
     private MeshInstance3D? mark;
@@ -185,7 +199,7 @@ public partial class EmotionOrb : Node3D
         float dt = (float)delta;
         if (reactionTime>0) { reactionTime=Mathf.Max(0,reactionTime-dt); if (reactionTime==0) Refresh(); }
         if (heartTime>0) { heartTime=Mathf.Max(0,heartTime-dt); if (heartTime==0) Refresh(); }
-        Vector3 target = ((Node3D)GetParent()).ToGlobal(rest);
+        Vector3 target = TargetPoint;
         if (!initialized || previousTarget.DistanceTo(target) > .75f)
         {
             initialized = true;
@@ -193,6 +207,7 @@ public partial class EmotionOrb : Node3D
             velocity = Vector3.Zero;
         }
         previousTarget = target;
+        GlobalBasis=Basis.Identity.Scaled(((Node3D)GetParent()).GlobalBasis.Scale);
         velocity += ((target-simulatedPosition)*112 - velocity*13)*dt;
         Vector3 offset = simulatedPosition+velocity*dt-target;
         simulatedPosition = target+offset.LimitLength(.19f);

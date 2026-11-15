@@ -18,7 +18,8 @@ public partial class ToyCar : CharacterBody3D
     public bool IsElectricGuitar { get; init; }
     public bool IsSynthesizer { get; init; }
     public bool IsBeachBall { get; init; }
-    public bool IsInstrument => IsFlute || IsElectricGuitar || IsSynthesizer;
+    public bool IsDrums { get; init; }
+    public bool IsInstrument => IsFlute || IsElectricGuitar || IsSynthesizer || IsDrums;
     internal bool IsGroundToy => !IsInstrument && !IsRattle && !IsBeachBall;
     internal CharacterBody3D? PlayActor => player;
     internal PetState? PlayState => playChao;
@@ -28,7 +29,7 @@ public partial class ToyCar : CharacterBody3D
         if (IsInstanceValid(player) && Position.Y>player.Position.Y+.04f) Position=PlacementPoint(player);
         EndPlay();
     }
-    public string ItemName => IsBeachBall ? "beach ball" : IsElectricGuitar ? "electric guitar" : IsSynthesizer ? "synthesizer" : IsFlute ? "flute" : IsRattle ? "rattle" : "toy car";
+    public string ItemName => IsDrums ? "drums" : IsBeachBall ? "beach ball" : IsElectricGuitar ? "electric guitar" : IsSynthesizer ? "synthesizer" : IsFlute ? "flute" : IsRattle ? "rattle" : "toy car";
     private int lastShake, bounces;
     internal int BounceCount=>bounces;
     private Node3D? strap;
@@ -58,7 +59,7 @@ public partial class ToyCar : CharacterBody3D
     }
     public bool CanPickUp => !held && !inFlight;
     internal bool PlayedBy(CharacterBody3D actor) => player==actor;
-    internal bool IsFavorite(PetState chao) => IsInstrument ? chao.FavoriteInstrument==(IsFlute ? "Flute" : IsElectricGuitar ? "Electric Guitar" : "Synthesizer") : IsBeachBall ? chao.PreferredToy=="Beach Ball" :
+    internal bool IsFavorite(PetState chao) => IsInstrument ? chao.FavoriteInstrument==(IsDrums ? "Drums" : IsFlute ? "Flute" : IsElectricGuitar ? "Electric Guitar" : "Synthesizer") : IsBeachBall ? chao.PreferredToy=="Beach Ball" :
         chao.PreferredToy==(IsRattle ? "Rattle" : "Toy Car");
     internal void CancelPlay(CharacterBody3D actor)
     {
@@ -73,10 +74,22 @@ public partial class ToyCar : CharacterBody3D
         Position=IsFlute ? new Vector3(3.1f,0,1.7f) : IsRattle ? Home+new Vector3(-3,0,.5f) : Home;
         if (IsElectricGuitar) Position=new(4.2f,0,1.8f);
         if (IsSynthesizer) Position=new(5.4f,0,1.8f);
+        if (IsDrums) Position=new(7.1f,0,2.1f);
         if (IsBeachBall) Position=new(6.5f,0,3.2f);
         CollisionLayer=0;
         AddChild(new CollisionShape3D { Position=Vector3.Up*.055f,
             Shape=new BoxShape3D { Size=new(.15f,.10f,.27f) } });
+        if (IsDrums)
+        {
+            foreach(float x in new[]{-.095f,.095f})
+            {
+                GardenArt.Shape(this,new CylinderMesh { TopRadius=.084f,BottomRadius=.068f,Height=.16f,RadialSegments=12 },new(x,.09f,0),Vector3.One,new("9c6140"));
+                GardenArt.Cylinder(this,new(x,.177f,0),.084f,.018f,new("e9d9b6"));
+                var rim=GardenArt.Shape(this,new TorusMesh { InnerRadius=.077f,OuterRadius=.089f,Rings=12,RingSegments=6 },new(x,.171f,0),Vector3.One,new("58666b"));
+                foreach(float z in new[]{-.05f,.05f}) GardenArt.Shape(this,new BoxMesh(),new(x,.019f,z),new(.024f,.038f,.024f),new("654933"));
+            }
+            return;
+        }
         if (IsBeachBall)
         {
             // Six curved panels on a spherical beach ball, rather than stacked shapes.
@@ -231,13 +244,15 @@ public partial class ToyCar : CharacterBody3D
     {
         if (IsRattle) { RattleGrip(actor,art,0); return; }
         var front=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
-        Hold(actor.Position+front*(IsSynthesizer ? .22f : .19f)+Vector3.Up*(IsSynthesizer ? .075f : .16f));
+        Hold(actor.Position+front*(IsDrums ? .27f : IsSynthesizer ? .22f : .19f)+Vector3.Up*(IsDrums ? .05f : IsSynthesizer ? .075f : .16f));
         Rotation=new(0,actor.Rotation.Y+(IsSynthesizer ? Mathf.Pi : 0),0);
         if (IsSynthesizer)
             ImportedChao.InstrumentHands(art,GlobalPosition-actor.Basis.X*.13f+Vector3.Up*.055f,
                 GlobalPosition+actor.Basis.X*.13f+Vector3.Up*.055f);
         else if (IsFlute)
             ImportedChao.InstrumentHands(art,ToGlobal(new(-.065f,.039f,0)),ToGlobal(new(.085f,.039f,0)));
+        else if (IsDrums)
+            ImportedChao.InstrumentHands(art,ToGlobal(new(-.15f,.10f,0)),ToGlobal(new(.15f,.10f,0)));
     }
 
     private void RattleGrip(CharacterBody3D actor,Node3D art,float phase)
@@ -254,7 +269,7 @@ public partial class ToyCar : CharacterBody3D
         if (!CanPickUp || player!=null && !IsGroundToy) return;
         var before=Position;
         GardenContact.Move(this,travel);
-        MoveAndCollide(Vector3.Down*.55f);
+        GardenContact.SupportItem(this,before.Y);
         var shift=Position-before;
         if (player!=null)
         {
@@ -278,6 +293,7 @@ public partial class ToyCar : CharacterBody3D
     public bool PlayPose(CharacterBody3D actor,Node3D art)
     {
         if (player!=actor) return false;
+        ImportedChao.StandForAction(art);
         playArt=art;
         if (IsBeachBall)
         {
@@ -292,6 +308,18 @@ public partial class ToyCar : CharacterBody3D
             return true;
         }
         float wobble=Mathf.Sin(playing*7);
+        if (IsDrums)
+        {
+            Position=actor.Position+playForward*.27f; Rotation=new(0,actor.Rotation.Y,0);
+            GardenContact.SupportItem(this,actor.Position.Y+.04f);
+            ImportedChao.MovePose(art,0,false,false,false,false,false,false);
+            ImportedChao.InstrumentHands(art,ToGlobal(new(-.095f,.20f+.045f*Mathf.Max(0,Mathf.Sin(playing*Mathf.Tau*2)),0)),
+                ToGlobal(new(.095f,.20f+.045f*Mathf.Max(0,-Mathf.Sin(playing*Mathf.Tau*2)),0)));
+            if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=new(.12f,0,0);
+            int hit=(int)(playing*4);
+            if (hit!=lastShake) { ChaoSounds.Play(this,"drums"); lastShake=hit; }
+            return true;
+        }
         if (IsElectricGuitar || IsSynthesizer)
         {
             Position=actor.Position+playForward*(IsElectricGuitar ? .15f : .22f)+Vector3.Up*(IsSynthesizer ? .065f : .085f);
@@ -326,6 +354,7 @@ public partial class ToyCar : CharacterBody3D
             return true;
         }
         Position=playOrigin+playForward*(.14f*(1+wobble));
+        GardenContact.SupportItem(this,actor.Position.Y+.04f);
         Rotation=new(0,actor.Rotation.Y,0);
         ImportedChao.EatPose(art,playing);
         art.Rotation=new(.35f+.11f*wobble,0,0);

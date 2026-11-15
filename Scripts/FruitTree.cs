@@ -27,9 +27,10 @@ public partial class FruitTree : Node3D
     internal void PushAside(Vector3 travel)
     {
         if (!Pushable) return;
+        float beforeY=fruit.GlobalPosition.Y;
         var hit=fruit.MoveAndCollide(travel);
         if (hit!=null) fruit.MoveAndCollide(hit.GetRemainder().Slide(hit.GetNormal()));
-        fruit.MoveAndCollide(Vector3.Down*.55f);
+        GardenContact.SupportItem(fruit,beforeY);
     }
     private float crownShake, ripeningStep;
     public const float ShakeDuration=2.05f;

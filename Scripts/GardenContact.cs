@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 
 namespace Mori;
@@ -5,6 +6,19 @@ namespace Mori;
 // Soft contacts keep small garden residents movable instead of making them immovable walls.
 internal static class GardenContact
 {
+    internal static void SupportItem(CharacterBody3D body,float previousY)
+    {
+        var shape=body.GetChildren().OfType<CollisionShape3D>().FirstOrDefault();
+        if (shape==null) return;
+        float bottom=float.PositiveInfinity;
+        var box=shape.Shape.GetDebugMesh().GetAabb();
+        for(int i=0;i<8;i++) bottom=Mathf.Min(bottom,(body.GlobalBasis*(shape.Transform*box.GetEndpoint(i))).Y);
+        var at=body.GlobalPosition;
+        var ray=PhysicsRayQueryParameters3D.Create(new(at.X,previousY+bottom+.12f,at.Z),new(at.X,previousY+bottom-1.3f,at.Z),1);
+        var floor=body.GetWorld3D().DirectSpaceState.IntersectRay(ray);
+        if (floor.Count>0 && ((Vector3)floor["normal"]).Y>.55f)
+            body.GlobalPosition=new(at.X,((Vector3)floor["position"]).Y-bottom+.004f,at.Z);
+    }
     public static void Resolve(CharacterBody3D player,Vector3 previous,Vector3 position,float radius,float height,System.Action<Vector3> push)
     {
         if (player.Position.Y>position.Y+height || player.Position.Y+1.7f<position.Y) return;

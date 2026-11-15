@@ -28,9 +28,12 @@ public partial class ImportedChao : Node3D
     private readonly System.Collections.Generic.Dictionary<MeshInstance3D,Vector3[]> soleVertices=new();
     public static void DiscardPose(Node3D art) { if (art is ImportedChao model) model.discardTime=.55f; }
     private Vector3 development=Vector3.One;
+    private bool crawls, wasCrawling;
+    internal static void StandForAction(Node3D art) { if (art is ImportedChao model) model.wasCrawling=false; }
     public static void ApplyDevelopment(Node3D art,PetState state)
     {
         if (art is not ImportedChao model) return;
+        model.crawls=state.Run/10<5;
         float progress=state.Form=="seed" ? 0 : state.SecondEvolutionProgress;
         model.development=new(1+progress*(state.Form=="stone" ? .12f : .025f),
             1+progress*(state.Form=="comet" ? .10f : .035f),1+progress*.025f);
@@ -415,8 +418,8 @@ public partial class ImportedChao : Node3D
                     paddle.Scale=restPaddle.Scale;
                 }
                 paddle.Rotation=new(sprinting ? -.98f+side*swing*.10f : -side*swing*(swimming ? (struggling ? 1.52f : 1.02f) : .49f),
-                    swimming ? side*.32f*Mathf.Cos(phase) : 0,
-                    side*(swimming ? .43f+.19f*side*swing : sprinting ? .18f : .04f));
+                    swimming ? side*.32f*Mathf.Cos(phase) : moving && !sprinting ? side*swing*.14f : 0,
+                    side*(swimming ? .43f+.19f*side*swing : sprinting ? .18f : .04f+swing*.08f));
             }
         }
     }
@@ -442,6 +445,28 @@ public partial class ImportedChao : Node3D
         art.RotationDegrees=new(pitch,0,struggling ? Mathf.Sin(phase*2.3f)*15 : 0);
         art.Position=Vector3.Up*(water ? (swims ? .19f : -.085f)+Mathf.Sin(phase*(struggling ? 2.1f : 1))*(struggling ? .032f : .012f) :
             airborne ? .025f : .008f);
+        if (art is ImportedChao crawler)
+        {
+            bool crawl=crawler.crawls && (moving || crawler.wasCrawling) && !water && !airborne;
+            crawler.wasCrawling=crawl;
+            if (crawl)
+            {
+                crawler.alignSoles=false;
+                float stroke=moving ? Mathf.Sin(phase) : 0;
+                art.RotationDegrees=new(84,stroke*3.5f,stroke*4);
+                art.Position=new(stroke*.012f,.11f+(moving ? Mathf.Abs(stroke)*.005f : 0),0);
+                if (art.FindChild("HeadPivot",true,false) is Node3D chin) chin.RotationDegrees=new(-74,stroke*4,0);
+                foreach(int side in new[]{-1,1})
+                    if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
+                    {
+                        paw.Rotation=new(-1.05f+side*stroke*.68f,side*.22f,side*.26f);
+                        paw.Position+=new Vector3(side*.015f,side*stroke*.026f,.025f);
+                        GroundRestLimb(paw,art,.9f);
+                    }
+                foreach(string side in new[]{"L","R"})
+                    if (art.FindChild("Foot"+side,true,false) is Node3D foot) GroundRestLimb(foot,art,.9f);
+            }
+        }
     }
 
     public static void ClimbPose(Node3D art,float elapsed)

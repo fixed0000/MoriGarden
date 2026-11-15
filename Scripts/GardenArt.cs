@@ -386,7 +386,24 @@ public static class GardenArt
         turf.GenerateNormals();
         bed.GenerateNormals();
         var grass=Shape(root,turf.Commit(),Vector3.Zero,Vector3.One,Colors.White);
-        grass.CreateTrimeshCollision();
+        // A few continuous solid slabs avoid the long triangle seams under the lawn.
+        float r=PondRadius+.55f, x0=GardenMinX-4,x1=GardenHalfWidth+4,z0=RearBoundary-8,z1=GardenHalfDepth+4;
+        void Flat(float left,float right,float front,float back)
+        {
+            var body=new StaticBody3D { Name="SolidGardenFloor",Position=new((left+right)/2,-.25f,(front+back)/2) };
+            body.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=new(right-left,.5f,back-front) } }); root.AddChild(body);
+        }
+        Flat(x0,x1,z0,Pond.Z-r); Flat(x0,x1,Pond.Z+r,z1);
+        Flat(x0,Pond.X-r,Pond.Z-r,Pond.Z+r); Flat(Pond.X+r,x1,Pond.Z-r,Pond.Z+r);
+        var rim=new SurfaceTool(); rim.Begin(Mesh.PrimitiveType.Triangles);
+        Vector3 Square(int i)
+        {
+            float a=i*Mathf.Tau/sides; var dir=new Vector3(Mathf.Cos(a),0,Mathf.Sin(a));
+            return Pond+dir*(r/Mathf.Max(Mathf.Abs(dir.X),Mathf.Abs(dir.Z)));
+        }
+        for(int i=0;i<sides;i++) foreach(var point in new[]{Square(i),Square(i+1),Ring(i,1),Square(i+1),Ring(i+1,1),Ring(i,1)}) rim.AddVertex(point);
+        var rimBody=new StaticBody3D { Name="PondGrassRim" };
+        rimBody.AddChild(new CollisionShape3D { Shape=rim.Commit().CreateTrimeshShape() }); root.AddChild(rimBody);
         var bottom=Shape(root,bed.Commit(),Vector3.Zero,Vector3.One,new("a49b7d"));
         bottom.CreateTrimeshCollision();
         return grass;

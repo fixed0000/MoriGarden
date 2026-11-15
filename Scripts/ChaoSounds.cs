@@ -59,6 +59,9 @@ internal static class ChaoSounds
         return (1-Mathf.Exp(-beat*1400))*(tone*.46f+n*.08f*Mathf.Exp(-beat*150))*(1-Mathf.SmoothStep(.27f,.30f,beat));
     });
     private static readonly AudioStreamWav Ball=Render(.14f,(t,n)=>Mathf.Exp(-t*34)*(.7f*Mathf.Sin(Mathf.Tau*(170*t-230*t*t))+.30f*n));
+    private static readonly AudioStreamWav Drums=Render(.23f,(t,n)=>
+        Mathf.Exp(-t*19)*(.65f*Mathf.Sin(Mathf.Tau*(135*t+1.6f*(1-Mathf.Exp(-t*45))))+
+            .22f*Mathf.Sin(Mathf.Tau*291*t))+.18f*n*Mathf.Exp(-t*95));
     private static readonly AudioStreamWav Angry=Render(.55f,(t,n)=>Mathf.Sin(Mathf.Pi*t/.55f)*(.38f*Mathf.Sin(Mathf.Tau*(350*t+10*Mathf.Sin(t*20)))+.08f*n));
     private static readonly AudioStreamWav Sniff=Render(.32f,(t,n)=>Mathf.Sin(Mathf.Pi*t/.32f)*(.45f*n+.18f*Mathf.Sin(Mathf.Tau*630*t)));
     private static readonly AudioStreamWav Breath=SleepSound(false);
@@ -74,7 +77,7 @@ internal static class ChaoSounds
         }
         audio.Stream=cue switch
         {
-            "guitar"=>Guitar,"synth"=>Synth,"ball"=>Ball,"angry"=>Angry,"sniff"=>Sniff,"bite"=>Bite,"rattle"=>Rattle,"flute"=>Flute,"voice"=>Voice,
+            "drums"=>Drums,"guitar"=>Guitar,"synth"=>Synth,"ball"=>Ball,"angry"=>Angry,"sniff"=>Sniff,"bite"=>Bite,"rattle"=>Rattle,"flute"=>Flute,"voice"=>Voice,
             "breath"=>Breath,"snore"=>Snore,_=>Mood
         };
         audio.PitchScale=cue=="voice" ? Mathf.Lerp(.91f,1.23f,GD.Randf()) : 1;

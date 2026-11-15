@@ -23,6 +23,8 @@ internal sealed class ChaoWander
             var direction=candidate-actor.Position;
             float distance=direction.Length();
             if (distance<=reach || Blocked(actor,direction.LimitLength(Mathf.Min(1.15f,distance)))) continue;
+            var ray=PhysicsRayQueryParameters3D.Create(actor.GlobalPosition+Vector3.Up*.20f,candidate+Vector3.Up*.20f,1);
+            if (actor.GetWorld3D().DirectSpaceState.IntersectRay(ray).Count>0) continue;
             best=candidate;
             reach=distance;
         }

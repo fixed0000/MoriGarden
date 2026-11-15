@@ -233,6 +233,7 @@ public partial class GardenEgg : CharacterBody3D
     private bool AdvanceChao(float dt,IEnumerable<FruitTree>? fruitSlots,ToyCar? toy,Vector3? fruitCarrier,ToyCar? rattle,ToyCar? flute,WateringCan? wateringCan,IEnumerable<ToyCar>? extraToys)
     {
         var state=Data.Chao!;
+        ImportedChao.ApplyDevelopment(visual,state);
         if (nameLabel!=null) nameLabel.Text=state.Name;
         if (reserved || Courtship?.IsPaired(this)==true) return false;
         state.Tick(dt,Asleep || islandNap.IsNapping);
@@ -302,8 +303,7 @@ public partial class GardenEgg : CharacterBody3D
             if (walking) gait+=dt*12;
             if (!rest.HandlesPose && !arrived)
             {
-                ImportedChao.Gait(visual,gait,walking,false);
-                visual.Position=Vector3.Up*.034f; visual.Rotation=Vector3.Zero;
+                ImportedChao.MovePose(visual,gait,walking,false,false,false,false,false);
             }
             if (arrived) { Asleep=true; napRemaining=ChaoRest.MinimumSleep; ImportedChao.SleepPose(visual,manners:state.Manners); }
             return false;

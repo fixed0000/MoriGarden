@@ -41,7 +41,7 @@ internal sealed class ChaoPillarVisit
                     elapsed=0;
                     return true;
                 }
-                if (elapsed>45 || motion.BlockedTime>2)
+                if (elapsed>(pet.Run<50 ? 125 : 45) || motion.BlockedTime>2)
                 {
                     Cancel();
                     return false;
