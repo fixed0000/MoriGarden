@@ -19,6 +19,7 @@ internal sealed class ChaoLeisure
     private readonly ChaoWander steer=new();
     private readonly ChaoRising rising=new();
     public bool Active => route>=0 || sky || rising.Active;
+    internal bool CanPauseForSocial => !sky && !rising.Active;
     internal bool WatchingSky => sky && pause>0;
     public void Cancel(Node3D art)
     {

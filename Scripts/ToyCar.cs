@@ -310,7 +310,7 @@ public partial class ToyCar : CharacterBody3D
         float wobble=Mathf.Sin(playing*7);
         if (IsDrums)
         {
-            Position=actor.Position+playForward*.27f; Rotation=new(0,actor.Rotation.Y,0);
+            Position=actor.Position+playForward*.21f; Rotation=new(0,actor.Rotation.Y,0);
             GardenContact.SupportItem(this,actor.Position.Y+.04f);
             ImportedChao.MovePose(art,0,false,false,false,false,false,false);
             ImportedChao.InstrumentHands(art,ToGlobal(new(-.095f,.20f+.045f*Mathf.Max(0,Mathf.Sin(playing*Mathf.Tau*2)),0)),

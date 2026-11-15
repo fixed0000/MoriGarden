@@ -51,7 +51,7 @@ internal sealed class ChaoMusicGroup
                     .OrderBy(t=>t.Position.DistanceSquaredTo(candidate.Actor.Position)).FirstOrDefault();
                 if (prop==null) continue;
                 visitor=candidate; leader=musician; instrument=prop; leadInstrument=lead;
-                prop.Hold(prop.Position); stage=0; time=0; lease=35; motion.Reset();
+                prop.Hold(prop.Position); stage=0; time=0; lease=90; motion.Reset();
                 stand=musician.Actor.Position+musician.Actor.Basis.X*(candidate.Actor.Position.X<musician.Actor.Position.X ? -.78f : .78f);
                 return true;
             }
@@ -60,7 +60,7 @@ internal sealed class ChaoMusicGroup
     }
 
     public void Advance(float dt,PetState root,IReadOnlyList<ChaoIntroductions.Candidate> all,
-        IReadOnlyList<ChaoIntroductions.Candidate> free,IEnumerable<ToyCar> toys)
+        IReadOnlyList<ChaoIntroductions.Candidate> free,IEnumerable<ToyCar> toys,System.Action<ChaoIntroductions.Candidate>? reserve=null)
     {
         if (!Active)
         {
@@ -68,10 +68,11 @@ internal sealed class ChaoMusicGroup
             if (scan>0) return;
             scan=3;
             if (GD.Randf()>.38f || !TryJoin(root,all,free,toys)) return;
+            reserve?.Invoke(visitor!);
         }
         if (visitor==null || leader==null || instrument==null || leadInstrument==null) return;
         if (!GodotObject.IsInstanceValid(visitor.Art) || !GodotObject.IsInstanceValid(leader.Art) ||
-            !leadInstrument.CanJoin || !visitor.Pet.CanAct || GardenArt.IsPondWater(visitor.Actor.Position) || (lease-=dt)<=0)
+            !leadInstrument.Performing || !visitor.Pet.CanAct || GardenArt.IsPondWater(visitor.Actor.Position) || (lease-=dt)<=0)
         { Cancel(); return; }
         time+=dt;
         var orb=visitor.Art.GetNodeOrNull<EmotionOrb>("MoodOrb");

@@ -52,9 +52,13 @@ public partial class GardenEgg : CharacterBody3D
     private float swimBeat;
     public bool Asleep { get; private set; }
     public bool CanReceive => !rising.Active && !touch.Active && !motion.IsSwimmingAt(Position) && Courtship?.IsBlooming(this)!=true && !Asleep && !islandNap.IsNapping && !InFlight && !distress.Busy && !reserved;
-    internal bool CanSocialize => Chao?.CanAct==true && CanReceive && !held && !islandNap.IsVisiting &&
+    internal bool CanSocialize => SocialReady(false);
+    internal bool CanJoinPlay => SocialReady(true);
+    internal void PauseForSocial() { interests.Cancel(this,visual); leisure.Cancel(visual); ImportedChao.ClearActionPause(visual); }
+    private bool SocialReady(bool forPlay) => Chao?.CanAct==true && CanReceive && !held && !islandNap.IsVisiting &&
         !motion.Airborne && !motion.Recovering && !motion.LeavingPond && !motion.OnCliffRoute &&
-        !rest.Requested && !interests.Busy && !leisure.Active && !pillar.Active && !fruitReaction.Busy &&
+        !rest.Requested && (!interests.Busy || forPlay && interests.CanPauseForSocial) &&
+        (!leisure.Active || forPlay && leisure.CanPauseForSocial) && !pillar.Active && !fruitReaction.Busy &&
         callRemaining<=0 && petAnimation<=0 && !GardenArt.IsPondWater(Position);
     public bool CanPet => !rising.Active && !motion.IsSwimmingAt(Position) && !Asleep && !islandNap.IsNapping && !InFlight && !held && !reserved && !distress.Busy && Chao?.CanAct==true && (petCooldown<=0 || interests.HasMeal);
 

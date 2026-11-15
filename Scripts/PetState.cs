@@ -6,6 +6,7 @@ namespace Mori;
 public sealed class PetState
 {
     public GardenSaveLocation? ManualLocation { get; set; }
+    public ExpeditionProgress Expedition { get; set; }=new();
     public int Version { get; set; } = 1;
     public string Name { get; set; } = "Mori";
     public float Fullness { get; set; } = 72;
@@ -241,6 +242,7 @@ public sealed class PetState
 
     public void Validate()
     {
+        Expedition??=new(); Expedition.Validate();
         if (Version != 1 || !float.IsFinite(Fullness) || !float.IsFinite(Joy) || !float.IsFinite(Energy)
             || !double.IsFinite(AgeSeconds) || AgeSeconds<0 || !double.IsFinite(GardenSeconds) || GardenSeconds<0 || !float.IsFinite(Fun)
             || Care < 0 || Agility < 0 || Care > 100000 || Agility > 100000 || Bond < 0 || Stars < 0
@@ -339,7 +341,7 @@ public sealed class GardenEggState
 
 
 public sealed record GardenSaveLocation(int Zone,int MoriZone,float PlayerX,float PlayerY,float PlayerZ,
-    float MoriX,float MoriY,float MoriZ,GardenFruitSave[]? Trees=null);
+    float MoriX,float MoriY,float MoriZ,GardenFruitSave[]? Trees=null,string? AreaId=null);
 
 public sealed record GardenFruitSave(float X,float Z,GardenFruitSlotSave[] Slots);
 public sealed record GardenFruitSlotSave(float Growth,int Bites,float? X,float? Y,float? Z);

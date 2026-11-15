@@ -24,6 +24,7 @@ internal sealed class ChaoInterests
     public void Reconsider() => delay=0;
 
     public bool Busy => stage!=Stage.Idle;
+    internal bool CanPauseForSocial => stage is Stage.Idle or Stage.Approach;
     public bool HasMeal => stage==Stage.Meal;
 
     public FruitTree? TakeMeal(Node3D art,PetState chao)

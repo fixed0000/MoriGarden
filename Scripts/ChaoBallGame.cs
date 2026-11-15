@@ -35,7 +35,7 @@ internal sealed class ChaoBallGame
     }
 
     public void Advance(float dt,PetState owner,IReadOnlyList<ChaoIntroductions.Candidate> all,
-        IReadOnlyList<ChaoIntroductions.Candidate> available,IEnumerable<ToyCar> toys)
+        IReadOnlyList<ChaoIntroductions.Candidate> available,IEnumerable<ToyCar> toys,Action<ChaoIntroductions.Candidate>? reserve=null)
     {
         if (a==null)
         {
@@ -61,12 +61,13 @@ internal sealed class ChaoBallGame
                     Mathf.Abs(c.Actor.Position.Y-a.Actor.Position.Y)<.16f && ClearPath(a.Actor,c.Actor.Position))
                     .OrderBy(c=>c.Actor.Position.DistanceSquaredTo(a.Actor.Position)).FirstOrDefault();
                 Orb(a)?.SetIdea("",true); ImportedChao.EndThink(a.Art);
+                if (b!=null) reserve?.Invoke(b);
                 Next(b==null ? Phase.Solo : Phase.Approach);
                 break;
             case Phase.Approach:
                 Face(a,b!.Actor.Position,dt); Carry(a); Normal(b);
                 if (Walk(a,b.Actor.Position,.48f,dt)) Next(Phase.Offer);
-                else if (time>9) { Place(); Cancel(); }
+                else if (time>24) { Place(); Cancel(); }
                 break;
             case Phase.Offer:
                 Face(a,b!.Actor.Position,dt); Face(b,a.Actor.Position,dt);
@@ -123,7 +124,7 @@ internal sealed class ChaoBallGame
                 bool readyA=Walk(a,spotA,.04f,dt),readyB=Walk(b!,spotB,.04f,dt);
                 Face(a,b!.Actor.Position,dt); Face(b,a.Actor.Position,dt);
                 if (readyA && readyB) BeginToss();
-                else if (time>5) { Place(); Cancel(); }
+                else if (time>12) { Place(); Cancel(); }
                 break;
             case Phase.Toss:
                 Face(a,b!.Actor.Position,dt); Face(b,a.Actor.Position,dt);
@@ -164,13 +165,13 @@ internal sealed class ChaoBallGame
                 ball.Position=start.Lerp(end,Mathf.Sin(roll*Mathf.Pi*.5f));
                 ball.RotateX(dt*(1-roll)*6);
                 if (roll>=1 && Walk(receiver!,end,.20f,dt)) { Next(Phase.Return); }
-                else if (time>7) { Place(); Cancel(); }
+                else if (time>16) { Place(); Cancel(); }
                 break;
             case Phase.Return:
                 receiver=towardB ? b! : a;
                 Carry(receiver!);
                 if (Walk(receiver!,towardB ? spotB : spotA,.05f,dt)) CompletePass();
-                else if (time>7) { Place(); Cancel(); }
+                else if (time>16) { Place(); Cancel(); }
                 break;
             case Phase.Solo:
                 a.Pet.Fun=Mathf.Min(100,a.Pet.Fun+dt*4);

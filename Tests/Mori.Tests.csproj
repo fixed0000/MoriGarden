@@ -3,5 +3,6 @@
   <ItemGroup>
     <Compile Include="../Scripts/PetState.cs" Link="PetState.cs" />
     <Compile Include="../Scripts/SaveStore.cs" Link="SaveStore.cs" />
+    <Compile Include="../Scripts/WorldCatalog.cs" Link="WorldCatalog.cs" />
   </ItemGroup>
 </Project>

@@ -70,6 +70,7 @@ public partial class GardenGame : Node3D
     private ThirdPersonCamera cameraRig = null!;
     private Node3D world = null!;
     private GardenZone zone = GardenZone.Garden, destination;
+    private readonly WorldTravel travel=new();
     private Label zoneLabel = null!;
     private ColorRect fade = null!;
     private Control details = null!;
@@ -186,7 +187,7 @@ public partial class GardenGame : Node3D
         AddChild(gardenSky);
         moriRest.Spaces=bedSpaces; moriIslandNap.Spaces=islandSpaces;
         EnsureGardenTrees();
-        world = new Node3D(); AddChild(world); ZoneArt.Build(world,zone,pet.GardenTrees);
+        world = new Node3D(); AddChild(world); travel.Build(world,zone,pet);
         PopulateEggs();
         player = new CharacterBody3D { Position = new(0,0,5), Rotation = new(0,Mathf.Pi,0), CollisionLayer = 2 };
         PhysicsInterpolationMode=PhysicsInterpolationModeEnum.Off;
@@ -272,7 +273,8 @@ public partial class GardenGame : Node3D
         if (testMode && frame is 254 or 269 or 289)
             GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath(
                 $"res://artifacts/{(frame==254 ? "gorilla" : frame==269 ? "drums" : "crawling-chao")}.png"));
-        if (testMode && frame==290)
+        if (testMode) PreviewExpedition();
+        if (testMode && frame==311)
         {
             GD.Print("SMOKE_OK: scene, interactions, evolution, music, swimming, save, grips, petting, mountain room; screenshots captured");
             GetTree().Quit();
@@ -482,9 +484,9 @@ public partial class GardenGame : Node3D
         if (!racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null) MovePlayer((float)delta);
         foreach (var toy in world.GetChildren().OfType<ToyCar>()) toy.Advance((float)delta);
         if (zone==GardenZone.Garden)
-            musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(),world.GetChildren().OfType<ToyCar>());
+            musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
         if (zone==GardenZone.Garden)
-            ballGame.Advance((float)delta,pet,BallParticipants(),SocialCandidates(),world.GetChildren().OfType<ToyCar>());
+            ballGame.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
         CanInGarden?.Advance((float)delta);
         UpdatePetSession((float)delta);
         UpdatePickupPose((float)delta);
@@ -851,6 +853,7 @@ public partial class GardenGame : Node3D
     private Vector3 KeepInGarden(Vector3 point, bool allowWater = false,bool allowFeeder=false)
     {
         point.Y = 0;
+        if (zone==GardenZone.Expedition) return point; // Physical cliffs bound expedition terrain.
         if (zone==GardenZone.CoastalCove) return new(Mathf.Clamp(point.X,-29,29),0,Mathf.Clamp(point.Z,-22,22));
         if (zone != GardenZone.Garden)
             return point.Length() > 11.7f ? point.Normalized()*11.7f : point;
@@ -1249,6 +1252,7 @@ public partial class GardenGame : Node3D
             return;
         }
         if (pickingItem || machineOpening || machineLoad>0 || treeReachTime>0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return;
+        var pickup=NearestPickup();
         bool throwItem=MovementAxes().LengthSquared()>0 ||
             ((carrying && pet.CanAct || heldEgg?.Chao!=null) && IsPlayerAirborne());
         if (heldEgg!=null)
@@ -1274,7 +1278,7 @@ public partial class GardenGame : Node3D
         if (zone==GardenZone.Lobby && FlatDistance(player.Position,ZoneArt.PlazaShop)<2.5f && !carrying)
         { shopOpen=true; return; }
         if (CanOpenEmptyMachine()) { OpenMachine(null,null); return; }
-        if (!carrying && heldAnimal==null && heldFruit==null && NearbyToy() is { } toy)
+        if (!carrying && heldAnimal==null && heldFruit==null && pickup is ToyCar toy)
         {
             heldToy=toy;
             if (toy.TakeFromPlay()) Save();
@@ -1283,7 +1287,7 @@ public partial class GardenGame : Node3D
             Notify($"Face a Chao to offer the {toy.ItemName}.");
             return;
         }
-        if (!carrying && heldAnimal==null && heldFruit==null && NearbyEgg() is GardenEgg egg)
+        if (!carrying && heldAnimal==null && heldFruit==null && pickup is GardenEgg egg)
         {
             introductions.Cancel(egg); ballGame.Cancel(egg); musicGroup.Cancel(egg);
             heldEgg=egg;
@@ -1316,7 +1320,7 @@ public partial class GardenGame : Node3D
             return;
         }
         if (racing) { FinishRace(0,cancelled:true); Notify("Race cancelled."); return; }
-        if (friend.Visible && !pet.CanAct && FlatDistance(player.Position,friend.Position)<2.6f)
+        if (pickup==friend && !pet.CanAct)
         {
             if (pet.IsEgg && !carrying)
             {
@@ -1340,14 +1344,14 @@ public partial class GardenGame : Node3D
             Notify("You set the animal down here.");
             return;
         }
-        if (!carrying && NearbyAnimal() is TrainingAnimal animal)
+        if (!carrying && pickup is TrainingAnimal animal)
         {
             heldAnimal = animal;
             BeginPickup(animal.Position);
             Notify($"Picked up {animal.AnimalName}. Bring it to Mori and press E.");
             return;
         }
-        if (zone == GardenZone.Garden && !carrying && NearbyTree() is FruitTree tree)
+        if (zone == GardenZone.Garden && !carrying && pickup is FruitTree tree)
         {
             if (!tree.HasFruitOnGround)
             {
@@ -1369,7 +1373,7 @@ public partial class GardenGame : Node3D
             ReleaseMori(false);
             return;
         }
-        if (friend.Visible && pet.CanAct && !courtship.IsPaired(friend) && FlatDistance(player.Position, friend.Position) < 2.2f)
+        if (pickup==friend && pet.CanAct)
         {
             CanInGarden?.Cancel(friend);
             introductions.Cancel(friend); ballGame.Cancel(friend); musicGroup.Cancel(friend);
@@ -1522,13 +1526,19 @@ public partial class GardenGame : Node3D
         {
             GardenEgg? candidate=zone==GardenZone.Garden ? world.GetChildren().OfType<GardenEgg>()
                 .Where(egg=>egg.Chao is { CanAct:true } && egg.CanReceive && !introductions.Uses(egg) &&
-                    (heldFruit==null || heldFruit.IsHeartFruit || UsingItem(egg) || egg.CanAcceptFruit) && Faces(egg.Position,1.25f))
+                    Faces(egg.Position,1.25f))
                 .OrderBy(egg=>player.Position.DistanceSquaredTo(egg.Position)).FirstOrDefault() : null;
             bool mainReady=!moriRising.Active && !moriTouch.Active && !chaoMotion.IsSwimmingAt(friend.Position) && friend.Visible && !introductions.Uses(friend) && !courtship.IsBlooming(friend) && !moriDistress.Busy && !sleeping && !moriIslandNap.IsNapping && pet.CanAct && !moriInFlight &&
-                (heldFruit==null || heldFruit.IsHeartFruit || zone!=GardenZone.Garden || UsingItem(friend) || moriFruitReaction.CanAcceptFruit(pet)) &&
                 Faces(friend.Position,1.25f);
             if (candidate!=null && mainReady && player.Position.DistanceSquaredTo(friend.Position)<=
                 player.Position.DistanceSquaredTo(candidate.Position)) candidate=null;
+            mainReady=mainReady && candidate==null;
+            // Choose the closest receiver first; a temporarily unwilling neighbour must not send the gift past it.
+            if (heldFruit is { IsHeartFruit:false })
+            {
+                if (candidate!=null && !UsingItem(candidate) && !candidate.CanAcceptFruit) candidate=null;
+                if (mainReady && zone==GardenZone.Garden && !UsingItem(friend) && !moriFruitReaction.CanAcceptFruit(pet)) mainReady=false;
+            }
             if (candidate!=null || mainReady)
             {
                 offeredResident=candidate;
@@ -1788,8 +1798,9 @@ public partial class GardenGame : Node3D
     }
 
     private TrainingAnimal? NearbyAnimal() => zone == GardenZone.Garden
-        ? world.GetChildren().OfType<TrainingAnimal>().FirstOrDefault(animal =>
+        ? world.GetChildren().OfType<TrainingAnimal>().Where(animal =>
             animal.Available && FlatDistance(player.Position,animal.Position)<1.65f)
+            .OrderBy(animal=>player.Position.DistanceSquaredTo(animal.Position)).FirstOrDefault()
         : null;
 
     private void PopulateEggs()
@@ -1803,8 +1814,8 @@ public partial class GardenGame : Node3D
     }
 
     private GardenEgg? NearbyEgg() => zone!=GardenZone.Garden ? null :
-        world.GetChildren().OfType<GardenEgg>().FirstOrDefault(egg=>egg!=machineResident && !egg.InFlight && !courtship.IsPaired(egg) &&
-            player.Position.DistanceTo(egg.Position)<1.25f);
+        world.GetChildren().OfType<GardenEgg>().Where(egg=>egg!=machineResident && !egg.InFlight && !courtship.IsPaired(egg) &&
+            player.Position.DistanceTo(egg.Position)<1.25f).OrderBy(egg=>player.Position.DistanceSquaredTo(egg.Position)).FirstOrDefault();
 
     private static Vector3 MachineRest => ZoneArt.ChaoMachine+Vector3.Up*.22f;
 
@@ -1936,20 +1947,27 @@ public partial class GardenGame : Node3D
         return result;
     }
 
-    private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates()
+    private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates() => SocialCandidates(false);
+    private void PauseForSocial(ChaoIntroductions.Candidate candidate)
+    {
+        if(candidate.Actor is GardenEgg egg) egg.PauseForSocial();
+        else { moriInterests.Cancel(friend,friendArt); moriLeisure.Cancel(friendArt); ImportedChao.ClearActionPause(friendArt); }
+    }
+    private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates(bool forPlay)
     {
         var candidates=new List<ChaoIntroductions.Candidate>();
         if (racing || machineOpen || machineOpening || machineLoad>0) return candidates;
         bool mainFree=!moriRising.Active && !moriTouch.Active && !ImportedChao.Pausing(friendArt) && !ballGame.Uses(friend) && !musicGroup.Uses(friend) && !introductions.Uses(friend) && friend.Visible && pet.CanAct && !carrying && !sleeping && !moriInFlight &&
             !moriDistress.Busy && !moriRest.Requested && !moriIslandNap.IsVisiting && !moriPillar.Active &&
-            !moriInterests.Busy && !moriLeisure.Active && !moriFruitReaction.Busy && !swimmingTrip && !chaoMotion.Airborne &&
+            (!moriInterests.Busy || forPlay && moriInterests.CanPauseForSocial) &&
+            (!moriLeisure.Active || forPlay && moriLeisure.CanPauseForSocial) && !moriFruitReaction.Busy && !swimmingTrip && !chaoMotion.Airborne &&
             !chaoMotion.Recovering && !chaoMotion.LeavingPond && !chaoMotion.OnCliffRoute && callTime<=0 &&
             pettingTime<=0 && releasePose<=0 && !GardenArt.IsPondWater(friend.Position) &&
             (offeredResident!=null || (offerTime<=0 && thinkTime<=0 && eatTime<=0));
         if (mainFree && CanSocializeHere(friend))
             candidates.Add(new("main",friend,friendArt,pet));
         foreach (var egg in world.GetChildren().OfType<GardenEgg>())
-            if (!ballGame.Uses(egg) && !musicGroup.Uses(egg) && !introductions.Uses(egg) && egg!=heldEgg && egg!=machineResident && egg!=offeredResident && egg.CanSocialize && !ImportedChao.Pausing(egg.Art) && CanSocializeHere(egg))
+            if (!ballGame.Uses(egg) && !musicGroup.Uses(egg) && !introductions.Uses(egg) && egg!=heldEgg && egg!=machineResident && egg!=offeredResident && (forPlay ? egg.CanJoinPlay : egg.CanSocialize) && !ImportedChao.Pausing(egg.Art) && CanSocializeHere(egg))
                 candidates.Add(new(egg.Data.Id,egg,egg.Art,egg.Chao!));
         return candidates;
     }
@@ -2256,20 +2274,17 @@ public partial class GardenGame : Node3D
 
     private void CheckPortals()
     {
-        if (portalCooldown > 0 || transition >= 0 || player.Position.Y > 1 ||
+        if (portalCooldown > 0 || transition >= 0 ||
             pickingItem || releasePose>0 || offerTime>0 || eatTime>0 || thinkTime>0 || machineOpening || machineOpen) return;
-        Vector3 exit = zone == GardenZone.Garden ? ZoneArt.GardenLobbyGate : zone==GardenZone.CoastalCove ? new(0,0,-18) : new(0,0,-10);
-        if (FlatDistance(player.Position, exit) < 1.3f)
-            BeginTransition(zone == GardenZone.Lobby ? GardenZone.Garden : GardenZone.Lobby);
-        else if (zone==GardenZone.Lobby && FlatDistance(player.Position,ZoneArt.PlazaCoastalGate)<1.3f)
-            BeginTransition(GardenZone.CoastalCove);
-        else if (zone == GardenZone.Lobby && FlatDistance(player.Position, ZoneArt.PlazaStadiumPad) < 1.35f)
-            BeginTransition(GardenZone.Stadium);
+        if (travel.Detect(zone,player.Position,pet.Expedition) is not { } route) return;
+        if (WorldCatalog.Default.IsExpedition(route.To) && (carrying || heldEgg!=null || heldToy!=null || heldAnimal!=null || heldFruit!=null))
+        { travel.Arrived(); Notify("Leave Chao and carried items in the garden before exploring."); return; }
+        BeginTransition(WorldTravel.Zone(route.To));
     }
 
     private void BeginTransition(GardenZone next)
     {
-        if (transition >= 0 || next == zone) return;
+        if (transition >= 0 || (next == zone && (travel.Pending==null || travel.Pending.To==travel.AreaId(zone)))) return;
         if (racing) FinishRace(0, cancelled:true);
         destination = next; transition = 0; zoneSwapped = false; Save();
     }
@@ -2313,7 +2328,10 @@ public partial class GardenGame : Node3D
         chaoMotion.Reset(); tossedMori=false;
         releasePose = 0;
         swimmingTrip = false; callTime = 0; following = false; wanderTime = 0;
-        zone = next; EnsureGardenTrees(); world = new Node3D(); AddChild(world); ZoneArt.Build(world,zone,pet.GardenTrees);
+        var arrival=travel.Pending;
+        if (next==GardenZone.Expedition && arrival!=null) travel.ExpeditionArea=arrival.To;
+        zone = next; EnsureGardenTrees(); world = new Node3D(); AddChild(world); travel.Build(world,zone,pet);
+        if (zone==GardenZone.Expedition) pet.Expedition.VisitedAreas.Add(travel.ExpeditionArea);
         if (zone==GardenZone.Garden)
             foreach (var tree in world.GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder))
                 if (fruitGrowth.TryGetValue(tree.Position,out var growth))
@@ -2325,14 +2343,18 @@ public partial class GardenGame : Node3D
             ? ZoneArt.GardenLobbyGate + new Vector3(0,0,3)
             : zone==GardenZone.CoastalCove ? new(0,0,-14) : previous==GardenZone.CoastalCove && zone==GardenZone.Lobby ? ZoneArt.PlazaCoastalGate+Vector3.Back*3 : new(0,0,-7);
         player.Rotation = Vector3.Zero; verticalSpeed = 0;
+        if (arrival!=null && WorldTravel.Zone(arrival.To)==next)
+        { player.Position=WorldTravel.Point(arrival.Arrival); player.Rotation=new(0,arrival.ArrivalYaw,0); }
         player.ResetPhysicsInterpolation();
-        cameraRig.Yaw = Mathf.Pi; cameraRig.Follow(player.Position, 0, true);
+        cameraRig.Yaw = player.Rotation.Y+Mathf.Pi; cameraRig.Follow(player.Position, 0, true);
         if (carrying) { petZone = zone; sleeping = false; }
         friend.Visible = petZone == zone;
         if (friend.Visible) friend.Position = carrying ? player.Position + Vector3.Right : KeepInGarden(GardenArt.RelocateFromRear(petZonePosition));
         if (carrying) pickupTime = PickupDuration;
         portalCooldown = 1.3f;
-        Notify(ZoneArt.Title(zone) + (friend.Visible ? " · Mori is here" : " · Mori is in another area"), 5);
+        travel.Arrived();
+        travel.Detect(zone,player.Position,pet.Expedition);
+        Notify(travel.Title(zone) + (zone==GardenZone.Expedition ? " · Explore freely" : friend.Visible ? " · Mori is here" : " · Mori is in another area"), 5);
         UpdateUi();
     }
 
@@ -2614,7 +2636,8 @@ public partial class GardenGame : Node3D
         var treeSaves=trees.Select(entry=>new GardenFruitSave(entry.Key.X,entry.Key.Z,entry.Value.Select(slot=>
             new GardenFruitSlotSave(slot.Growth,slot.Bites,slot.GroundPosition?.X,slot.GroundPosition?.Y,slot.GroundPosition?.Z))
             .ToArray())).ToArray();
-        snapshot.ManualLocation=new((int)zone,(int)petZone,at.X,at.Y,at.Z,mori.X,mori.Y,mori.Z,treeSaves);
+        snapshot.ManualLocation=new((int)zone,(int)petZone,at.X,at.Y,at.Z,mori.X,mori.Y,mori.Z,treeSaves,
+            zone==GardenZone.Expedition ? travel.ExpeditionArea : null);
         foreach (var actor in world.GetChildren().OfType<GardenEgg>())
         {
             var entry=snapshot.GardenEggs.FirstOrDefault(egg=>egg.Id==actor.Data.Id);
@@ -2663,13 +2686,15 @@ public partial class GardenGame : Node3D
         moriDistress.Reset();
         upsetTime=pettingTime=petCooldown=0;
         pet=loaded;
+        travel.ExpeditionArea=travel.RestoreArea(location.AreaId,pet.Expedition);
         petZone=(GardenZone)location.MoriZone;
         petZonePosition=petZone==GardenZone.Garden ? GardenArt.RelocateFromRear(new(location.MoriX,location.MoriY,location.MoriZ)) : new(location.MoriX,location.MoriY,location.MoriZ);
         SwitchZone((GardenZone)location.Zone,restoring:true);
         friendArt.QueueFree();
         friendArt=BuildLifeArt();
         var at=new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
-        if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) : at;
+        if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) :
+            zone==GardenZone.Expedition ? new(Mathf.Clamp(at.X,-35,35),Mathf.Clamp(at.Y,-.1f,18),Mathf.Clamp(at.Z,-27,27)) : at;
         if (friend.Visible && petZonePosition.IsFinite()) friend.Position=petZonePosition;
         player.ResetPhysicsInterpolation();
         cameraRig.Follow(player.Position,0,true);
@@ -2711,7 +2736,7 @@ public partial class GardenGame : Node3D
         favoritesLabel.Text=$"Favorite toy   {inspected.PreferredToy}\nFavorite fruit   {inspected.FavoriteFruit.Replace(" Fruit","")}\nFavorite instrument   {inspected.FavoriteInstrument}\nSociability   {inspected.Sociability}/100";
         raceLabel.Text = racing ? $"{Sections[Math.Min((int)moriProgress,Sections.Length-1)].ToUpperInvariant()}  ·  Mori {Mathf.RoundToInt(moriProgress/Sections.Length*100)}%  /  Kite {Mathf.RoundToInt(rivalProgress/Sections.Length*100)}%" : "";
         var gardenTime=TimeSpan.FromSeconds(pet.GardenSeconds);
-        zoneLabel.Text = $"{ZoneArt.Title(zone)}   ·   Garden {(int)gardenTime.TotalHours:00}:{gardenTime:mm\\:ss}";
+        zoneLabel.Text = $"{travel.Title(zone)}   ·   Garden {(int)gardenTime.TotalHours:00}:{gardenTime:mm\\:ss}";
         shopPanel.Visible=shopOpen;
         shopText.Text=$"{ShopItemLabel}\nBalance: {pet.Stars} stars\n\nLeft / Right: Item    Enter: Buy    Esc: Close";
         bagPanel.Visible = showBag;
@@ -2732,6 +2757,7 @@ public partial class GardenGame : Node3D
         if (paused || transition>=0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return "";
         if (racing) return CanCheer() ? "Q: Cheer     E: Cancel race" : "E: Cancel race";
         string action = "";
+        var pickup=NearestPickup();
         if (heldEgg is { Data.Hatched:true }) return $"E: Set down or throw {heldEgg.Chao?.Name}";
         if (heldEgg!=null) return $"Hold X: Rock egg ({heldEgg.ShakeTime:0.0}s)     E: Set down or throw";
         if (heldToy!=null) return $"Face a Chao to offer the {heldToy.ItemName}   |   E: Set down or throw";
@@ -2739,18 +2765,18 @@ public partial class GardenGame : Node3D
         if (zone==GardenZone.Lobby && !carrying && FlatDistance(player.Position,ZoneArt.PlazaShop)<2.5f)
             return "E: Egg Shop";
         if (CanOpenEmptyMachine()) return "E: Open Chao Machine";
-        if (!carrying && heldFruit==null && heldAnimal==null && NearbyToy() is { } toy) return $"E: Pick up {toy.ItemName}";
-        if (!carrying && heldFruit==null && heldAnimal==null && NearbyEgg() is GardenEgg egg) return egg.Data.Hatched ? $"E: Pick up {egg.Chao?.Name}" : "E: Pick up egg";
+        if (!carrying && heldFruit==null && heldAnimal==null && pickup is ToyCar toy) return $"E: Pick up {toy.ItemName}";
+        if (!carrying && heldFruit==null && heldAnimal==null && pickup is GardenEgg egg) return egg.Data.Hatched ? $"E: Pick up {egg.Chao?.Name}" : "E: Pick up egg";
         if (heldFruit!=null) action=CanStoreFruit() ? "E: Release fruit     G: Store in bag" : "E: Release fruit";
         else if (heldAnimal!=null) action=MoriNearby(2.6f) && pet.CanAct && !sleeping ? "Face Mori to hand over animal  |  E: Release" : "E: Release animal";
         else if (carrying) action="E: Set Mori down or throw while moving";
-        else if (pet.IsEgg && MoriNearby(2.6f)) action="E: Pick up egg";
+        else if (pet.IsEgg && pickup==friend) action="E: Pick up egg";
         else if (zone==GardenZone.Stadium && friend.Visible && pet.CanAct && pet.Energy>=15 &&
             FlatDistance(player.Position,new(0,0,5))<2.5f) action="E: Start race";
-        else if (NearbyAnimal() is TrainingAnimal animal) action=$"E: Pick up {animal.AnimalName}";
-        else if (NearbyTree() is FruitTree tree && tree.CanInteract)
+        else if (pickup is TrainingAnimal animal) action=$"E: Pick up {animal.AnimalName}";
+        else if (pickup is FruitTree tree && tree.CanInteract)
             action=tree.HasFruitOnGround ? "E: Pick up fruit" : "E: Shake tree";
-        else if (MoriNearby(2.2f) && pet.CanAct) action=$"E: Pick up {pet.Name}";
+        else if (pickup==friend && pet.CanAct) action=$"E: Pick up {pet.Name}";
         if (CanPetMori()) action=AppendAction(action,$"F: Pet {pet.Name}");
         else if (zone==GardenZone.Garden && !carrying && heldEgg==null && heldFruit==null && heldAnimal==null &&
             world.GetChildren().OfType<GardenEgg>().Any(egg=>egg.CanPet && egg.Position.DistanceTo(player.Position)<1.65f))
@@ -3493,6 +3519,8 @@ public partial class GardenGame : Node3D
         CheckGiftSwitchingAndWaterGait();
         CheckCaveFurnishingAndWaterContacts();
         CheckCrawlingTurnsAndNewItems();
+        CheckSocialAndAnimationCorrections();
+        CheckExpeditionFoundation();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }

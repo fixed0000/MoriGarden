@@ -16,11 +16,11 @@ internal sealed class ChaoGreeting
     {
         age+=dt;
         if (rise.Active) rise.Step(art,dt);
-        else ImportedChao.MovePose(art,0,false,false,false,false,false,false);
         var delta=player-actor.Position;
         float target=Mathf.Atan2(delta.X,delta.Z);
-        actor.Rotation=new(0,Mathf.RotateToward(actor.Rotation.Y,target,dt*2.6f),0);
-        if (rise.Active || age<.30f || Mathf.Abs(Mathf.AngleDifference(actor.Rotation.Y,target))>.06f) return false;
+        actor.Rotation=new(0,Mathf.RotateToward(actor.Rotation.Y,target,dt*8),0);
+        if (!rise.Active) ImportedChao.MovePose(art,0,false,false,false,false,false,false);
+        if (rise.Active || age<.18f || Mathf.Abs(Mathf.AngleDifference(actor.Rotation.Y,target))>.06f) return false;
         ImportedChao.ClearActionPause(art);
         return true;
     }

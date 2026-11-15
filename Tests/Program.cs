@@ -72,4 +72,29 @@ personality.SocialLinks.Add(relation);
 var restoredPersonality=System.Text.Json.JsonSerializer.Deserialize<PetState>(System.Text.Json.JsonSerializer.Serialize(personality))!;
 restoredPersonality.Validate();
 Check(restoredPersonality.AdultSeconds==1234 && restoredPersonality.Clumsy && restoredPersonality.ActivityPreference==5 && restoredPersonality.FavoriteInstrument=="Synthesizer" && restoredPersonality.SocialLinks[0].ScoreFrom("b")==-40, "Development, personality and directed attitudes survive serialization");
+var oldSave=System.Text.Json.JsonSerializer.Deserialize<PetState>("{\"Version\":1,\"Name\":\"Old Mori\",\"ManualLocation\":{\"Zone\":0,\"MoriZone\":0,\"PlayerX\":1,\"PlayerY\":0,\"PlayerZ\":2,\"MoriX\":3,\"MoriY\":0,\"MoriZ\":4}}")!;
+oldSave.Validate();
+Check(oldSave.Expedition.VisitedAreas.Count==0 && oldSave.ManualLocation!.AreaId==null && oldSave.Name=="Old Mori", "Old garden saves load without expedition fields");
+var catalog=WorldCatalog.Default;
+Check(catalog.IsOpen(WorldCatalog.Meadow,oldSave.Expedition) && !catalog.IsExpedition("garden") && catalog.IsExpedition(WorldCatalog.Meadow), "Expeditions are available separately from permanent gardens");
+var extension=new WorldCatalog(new[]{new WorldArea("region-a","Region A",WorldAreaKind.ExpeditionRegion,InitiallyOpen:true),
+    new WorldArea("region-b","Region B",WorldAreaKind.ExpeditionRegion),new WorldArea("site-a","Site A",WorldAreaKind.ExpeditionSite,"region-a")},
+    new[]{new WorldRoute("a-b","region-a","region-b",new(0,0,0),new(1,0,0)),new WorldRoute("a-site","region-a","site-a",new(2,0,0),new(0,0,1))});
+var progress=new ExpeditionProgress();
+Check(!System.Linq.Enumerable.Any(extension.Exits("region-a",progress)), "Locked regions and sites cannot be entered");
+progress.UnlockedAreas.Add("region-b"); progress.UnlockedAreas.Add("site-a");
+Check(System.Linq.Enumerable.Count(extension.Exits("region-a",progress))==2,"New regions and nested sites unlock through data without new travel code");
+progress.VisitedAreas.Add("region-b"); progress.AreaFlags["region-b"]=new() { "route-opened" }; progress.UnlockedAreas.Add("future-id");
+var expeditionSave=new PetState { Expedition=progress,ManualLocation=new(4,0,1,0,2,3,0,4,AreaId:"region-b") };
+var expeditionDir=Path.Combine(Path.GetTempPath(),"MoriExpeditionTests-"+Guid.NewGuid());
+try {
+    var expeditionPath=Path.Combine(expeditionDir,"pet.json"); SaveStore.Save(expeditionPath,expeditionSave);
+    var loaded=SaveStore.Load(expeditionPath,out var notice);
+    Check(notice=="" && loaded.ManualLocation?.AreaId=="region-b" && loaded.Expedition.VisitedAreas.Contains("region-b") &&
+        loaded.Expedition.AreaFlags["region-b"].Contains("route-opened") && loaded.Expedition.UnlockedAreas.Contains("future-id"),"Expedition unlocks, progress and location survive disk save/load, including future IDs");
+} finally { if(Directory.Exists(expeditionDir)) Directory.Delete(expeditionDir,true); }
+var invalid=false;
+try { _=new WorldCatalog(new[]{new WorldArea("bad","Bad",WorldAreaKind.ExpeditionSite,"missing")},Array.Empty<WorldRoute>()); }
+catch(ArgumentException) { invalid=true; }
+Check(invalid,"Catalog rejects orphan expedition sites");
 Console.WriteLine($"{checks} checks passed.");

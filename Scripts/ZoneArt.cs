@@ -2,7 +2,7 @@ using Godot;
 
 namespace Mori;
 
-public enum GardenZone { Garden, Lobby, Stadium, CoastalCove }
+public enum GardenZone { Garden, Lobby, Stadium, CoastalCove, Expedition }
 
 public static class ZoneArt
 {
@@ -111,6 +111,7 @@ public static class ZoneArt
         for (int i=0;i<24;i++)
         {
             float a = i * Mathf.Tau / 24;
+            if (zone==GardenZone.Lobby && i is 8 or 9) continue;
             Vector3 p = new(Mathf.Cos(a)*13,1.5f,Mathf.Sin(a)*13);
             GardenArt.Shape(root,new BoxMesh(),p,new(1.4f,3,1.4f),new(zone==GardenZone.Lobby?"7d91ad":"b4a591"));
             Solid(root,p,new(1.4f,3,1.4f));
