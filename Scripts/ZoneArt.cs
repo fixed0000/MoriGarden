@@ -53,8 +53,8 @@ public static class ZoneArt
 
     public static void Build(Node3D root, GardenZone zone,System.Collections.Generic.IReadOnlyList<GardenTreeState>? trees=null)
     {
-        if (zone != GardenZone.Garden) Solid(root,new(0,-.25f,0),new(76,.5f,76));
         if (zone==GardenZone.CoastalCove) { GardenLandscape.BuildCoastal(root); return; }
+        if (zone != GardenZone.Garden) Solid(root,new(0,-.25f,0),new(76,.5f,76));
         if (zone == GardenZone.Garden)
         {
             GardenArt.BuildGarden(root,trees);

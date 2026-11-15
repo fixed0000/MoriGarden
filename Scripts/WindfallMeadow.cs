@@ -9,13 +9,18 @@ internal static class WindfallMeadow
     internal static readonly Vector2 Pond=new(13,3);
     internal static readonly Vector2 PondRadii=new(4.9f,3.7f);
     internal const float WaterLevel=.055f;
+    internal static readonly NaturalWaterBody Water=new("MeadowWater",new Rect2(5,-4,16,14),WaterLevel,Height,Area:p=>PondDistance(p)<1.6f);
     private static readonly Vector2[][] Paths={
         NatureTerrain.SmoothPath(new(0,28),new(0,17),new(-5,8),new(-8,-2),new(-6,-12),new(2,-21),new(14,-22)),
         NatureTerrain.SmoothPath(new(-5,8),new(3,9),new(8,10),new(17,9),new(24,1),new(26,-12)),
         NatureTerrain.SmoothPath(new(-8,-2),new(-17,0),new(-24,5),new(-26,14),new(-18,19),new(-5,8))
     };
     private static readonly Vector2[] ForestCenters={new(-27,4),new(-21,-12),new(-30,18),new(27,17),new(28,-15)};
-    internal static float PondDistance(Vector2 at) => ((at-Pond)/PondRadii).Length();
+    internal static float PondDistance(Vector2 at)
+    {
+        var p=(at-Pond)/PondRadii; float a=Mathf.Atan2(p.Y,p.X);
+        return p.Length()/(1+.065f*Mathf.Sin(a*3+.6f)+.04f*Mathf.Sin(a*5));
+    }
     internal static float Height(float x,float z)
     {
         float hill=4.4f*Mathf.Exp(-((x+23)*(x+23)+(z+13)*(z+13))/155)+
@@ -26,10 +31,12 @@ internal static class WindfallMeadow
         hill+=edge;
         float pool=1-Mathf.SmoothStep(.65f,1.4f,PondDistance(new(x,z)));
         hill=Mathf.Lerp(hill,-.245f,pool);
+        float rim=(PondDistance(new(x,z))-1.38f)/.25f;
+        hill+=.28f*Mathf.Exp(-rim*rim);
         float entrance=(1-Mathf.SmoothStep(3,8,Mathf.Abs(x)))*Mathf.SmoothStep(9,18,z);
         return Mathf.Lerp(hill,0,entrance);
     }
-    internal static bool Wet(Vector3 p)=>p.Y<WaterLevel+.06f && PondDistance(new(p.X,p.Z))<1;
+    internal static bool Wet(Vector3 p)=>Water.Contains(p);
     internal static float RouteDistance(Vector2 p)=>NatureTerrain.PathDistance(p,Paths);
     internal static void Build(Node3D root)
     {
@@ -38,9 +45,9 @@ internal static class WindfallMeadow
         NatureTerrain.Build(root,Height,p=>new Color(
             1-Mathf.SmoothStep(.65f,1.6f,RouteDistance(p)+Mathf.Sin(p.X*3+p.Y)*.10f),
             Forest(p),Mathf.Exp(-p.DistanceSquaredTo(new(22,-22))/65),
-            (1-Mathf.SmoothStep(1,1.7f,PondDistance(p)))*.8f));
+            1-Mathf.SmoothStep(1,1.7f,PondDistance(p))));
         NatureTerrain.DistantHills(root,Height);
-        WaterArt.Ellipse(root,new(Pond.X,WaterLevel,Pond.Y),PondRadii,"MeadowWater");
+        WaterArt.Build(root,Water);
         ZoneArt.Solid(root,new(0,-5,0),new(84,1,68));
         var models=new NatureModels(root);
         var bark=GardenArt.Material(new("544a38")); var stone=NatureModels.StoneMaterial();
@@ -97,7 +104,7 @@ internal static class WindfallMeadow
         {
             var p=new Vector2(rng.RandfRange(-36,36),rng.RandfRange(-27,27));
             float path=RouteDistance(p),forest=Forest(p),pool=PondDistance(p);
-            if(path<1.45f || pool<1.12f || (Mathf.Abs(p.X)<6 && p.Y>20)) continue;
+            if(path<1.45f || pool<1.42f || Water.Depth(p)>.002f || (Mathf.Abs(p.X)<6 && p.Y>20)) continue;
             float patch=.5f+.5f*Mathf.Sin(p.X*.7f+Mathf.Cos(p.Y*.52f)*2)*Mathf.Sin(p.Y*.63f);
             if(patch<.47f && forest<.6f) continue;
             int kind=forest>.55f && i%7==0 ? 4 : i%13==0 ? 2 : forest>.5f && i%3==0 ? 1 : i%9==0 ? 3 : 0;

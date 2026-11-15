@@ -24,6 +24,7 @@ internal sealed class ChaoMotion
     public bool Recovering => recovery>0;
     public bool OnCliffRoute => cliffLeg>=0;
     public bool LeavingPond => shoreExit;
+    internal bool GardenPond { get; set; }=true;
     public bool Sprinting { get; private set; }
     public bool Airborne => airborne;
     public bool Flying => airborne && flying;
@@ -156,7 +157,7 @@ internal sealed class ChaoMotion
         return true;
     }
 
-    public bool IsSwimmingAt(Vector3 at) => !airborne && GardenArt.IsPondWater(at);
+    public bool IsSwimmingAt(Vector3 at) => GardenPond && !airborne && GardenArt.IsPondWater(at);
 
     public bool Step(CharacterBody3D body,Vector3 direction,PetState pet,bool running,bool water,float dt,
         bool ledges,out bool hardLanding,bool directIsland=false,bool leavingIsland=false,bool allowIslandDrift=false)
@@ -433,9 +434,9 @@ internal sealed class ChaoMotion
         }
     }
 
-    private static bool FlatLawn(CharacterBody3D body)
+    private bool FlatLawn(CharacterBody3D body)
     {
-        if (Mathf.Abs(body.Position.Y)>.08f || GardenArt.IsPondWater(body.Position)) return false;
+        if (Mathf.Abs(body.Position.Y)>.08f || GardenPond && GardenArt.IsPondWater(body.Position)) return false;
         var floor=body.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(
             body.Position+Vector3.Up*.12f,body.Position-Vector3.Up*.15f,1));
         return floor.Count>0 && ((Vector3)floor["normal"]).Y>.999f && Mathf.Abs(((Vector3)floor["position"]).Y)<.001f;

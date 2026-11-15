@@ -104,6 +104,47 @@ internal sealed class NatureModels
         }
         mesh.GenerateNormals(); return mesh.Commit();
     }
+    internal static (Mesh Trunk,Mesh Crown) Palm(int seed)
+    {
+        var rng=new RandomNumberGenerator { Seed=(ulong)seed };
+        var trunk=new SurfaceTool();trunk.Begin(Mesh.PrimitiveType.Triangles);trunk.SetSmoothGroup(0);
+        var foliage=new SurfaceTool();foliage.Begin(Mesh.PrimitiveType.Triangles);
+        float height=rng.RandfRange(6.2f,9.2f),lean=rng.RandfRange(.6f,1.8f);
+        Vector3 Center(float t)=>new(lean*t*t,height*t,Mathf.Sin(t*2.2f)*.28f);
+        Vector3 Ring(int i,int j)
+        {
+            var axis=(Center(Mathf.Min(1,(i+1)/12f))-Center(Mathf.Max(0,(i-1)/12f))).Normalized();
+            var right=axis.Cross(Vector3.Forward).Normalized();var forward=axis.Cross(right);
+            return Center(i/12f)+(right*Mathf.Cos(j*Mathf.Tau/9)+forward*Mathf.Sin(j*Mathf.Tau/9))*(.28f-i*.014f);
+        }
+        for(int i=0;i<12;i++)for(int j=0;j<9;j++)foreach(var p in new[]{Ring(i,j),Ring(i+1,j),Ring(i,j+1),Ring(i,j+1),Ring(i+1,j),Ring(i+1,j+1)})trunk.AddVertex(p);
+        var crown=Center(1);
+        for(int f=0;f<10;f++)
+        {
+            float angle=f*Mathf.Tau/10+rng.RandfRange(-.12f,.12f),length=rng.RandfRange(2.8f,4.0f);
+            var direction=new Vector3(Mathf.Sin(angle),0,Mathf.Cos(angle));
+            Vector3 Spine(float t)=>crown+direction*(t*length)+Vector3.Up*(Mathf.Sin(t*Mathf.Pi)*.5f-t*t*1.65f);
+            for(int i=0;i<14;i++)
+            {
+                float t=(i+1)/15f;var p=Spine(t);float leaflet=(.30f+Mathf.Sin(t*Mathf.Pi)*.45f)*(1-t*.4f);
+                foreach(int side in new[]{-1,1})
+                    Leaf(foliage,p+direction.Cross(Vector3.Up)*side*leaflet*.65f,leaflet,angle+side*1.15f,.18f+t*.35f,new(.85f+rng.Randf()*.2f,1,.85f));
+                Tube(foliage,Spine(i/14f),Spine((i+1)/14f),.020f*(1-i/16f),.017f*(1-i/16f),5);
+            }
+        }
+        for(int i=0;i<5;i++) { float a=i*Mathf.Tau/5;Tube(trunk,new(0,.12f,0),new(Mathf.Cos(a)*.7f,.02f,Mathf.Sin(a)*.7f),.11f,.015f,5); }
+        trunk.Index();trunk.GenerateNormals();foliage.GenerateNormals();return(trunk.Commit(),foliage.Commit());
+    }
+    internal static Mesh Shell()
+    {
+        var mesh=new SurfaceTool();mesh.Begin(Mesh.PrimitiveType.Triangles);
+        for(int i=0;i<10;i++)
+        {
+            float a=-1.3f+i*2.6f/10,b=-1.3f+(i+1)*2.6f/10;
+            foreach(var p in new[]{new Vector3(0,.015f,-.055f),new Vector3(Mathf.Sin(b)*.09f,.025f,Mathf.Cos(b)*.10f),new Vector3(Mathf.Sin(a)*.09f,.025f,Mathf.Cos(a)*.10f)})mesh.AddVertex(p);
+        }
+        mesh.GenerateNormals();return mesh.Commit();
+    }
     internal static Mesh Understory(int kind)
     {
         var mesh=new SurfaceTool(); mesh.Begin(Mesh.PrimitiveType.Triangles);

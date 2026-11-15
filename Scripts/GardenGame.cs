@@ -169,7 +169,7 @@ public partial class GardenGame : Node3D
             music = new AudioStreamPlayer { Stream=loop, VolumeDb=-18, Autoplay=true };
             AddChild(music);
         }
-        meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review");
+        meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
         testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test");
         savePath = ProjectSettings.GlobalizePath(testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
@@ -241,6 +241,7 @@ public partial class GardenGame : Node3D
     {
         if(meadowReview)
         {
+            if(OS.GetCmdlineUserArgs().Contains("--water-review")) { ReviewWaters(); return; }
             if(reviewFrame==0) { carrying=false; SwitchZone(GardenZone.Expedition); }
             ReviewMeadow(); return;
         }
@@ -610,13 +611,19 @@ public partial class GardenGame : Node3D
         if (inWater) dashTime=0;
         float speed = inWater ? 3.7f*.63f : dashTime > 0 ? 10 : Held(Key.Shift) ? 5.5f : 3.7f;
         if (carrying) speed *= .7f;
-        playerWake.Visible = inWater && player.Position.Y<.16f;
+        playerWake.Visible = inWater && player.Position.Y<WaterArt.Level(zone)+.156f;
         playerWake.Scale = Vector3.One*(1+.12f*Mathf.Sin(time*7));
         playerWake.Position = new(0,WaterArt.Level(zone)+.013f-player.Position.Y,0);
         pushResistance=Mathf.MoveToward(pushResistance,0,dt);
         if (pushResistance>0) speed*=.965f;
         if (machineLoad>0 || pickingItem || (carrying && pickupTime<PickupDuration) || (releasePose>0 && !throwingPose) || pettingTime>0 || treeReachTime>0) speed = 0;
         Vector3 target = KeepInGarden(player.Position + direction*speed*dt,allowWater:true,allowFeeder:verticalSpeed!=0 || player.Position.Y>.16f);
+        if(zone==GardenZone.CoastalCove)
+        {
+            var safe=CoastalCove.WadingTarget(player.Position,target);
+            if(FlatDistance(safe,target)>.003f && messageTime<=0)Notify("Deep water beyond the reef. Stay in the lagoon.");
+            target=safe;
+        }
         Vector3 horizontal = new(target.X-player.Position.X,0,target.Z-player.Position.Z);
         var wall = horizontal.LengthSquared()>.000001f ? player.MoveAndCollide(horizontal) : null;
         if (wall!=null)
@@ -651,7 +658,7 @@ public partial class GardenGame : Node3D
         }
         if (direction.LengthSquared() > 0 && speed>0)
             player.Rotation = new(0, Mathf.LerpAngle(player.Rotation.Y, Mathf.Atan2(direction.X, direction.Z), 1-Mathf.Exp(-15*dt)), 0);
-        if (zone==GardenZone.Garden) PushGardenObjects(before);
+        if (zone is GardenZone.Garden or GardenZone.CoastalCove) PushGardenObjects(before);
         float speedNow = FlatDistance(before,player.Position)/Math.Max(dt,.001f);
         if (grounded) groundHold=.065f;
         else groundHold=verticalSpeed>0 ? 0 : Math.Max(0,groundHold-dt);
@@ -666,12 +673,12 @@ public partial class GardenGame : Node3D
         playerArt.Position=new(0,Mathf.Lerp(playerArt.Position.Y,-.47f*offerLean,1-Mathf.Exp(-12*dt)),0);
         bool wetNow=WaterArt.PlayerWet(zone,player.Position);
         bool wading=wetNow && grounded && speedNow>.2f;
-        SetSplashes(playerSplashes,wading,player.Position.Y);
+        SetSplashes(playerSplashes,wading,player.Position.Y,WaterArt.Level(zone)+.021f);
         SwimAudio.Wade(wadeSound,wading ? FlatDistance(before,player.Position) : 0,wetNow && grounded,ref wadeStride);
-        if (wetNow && before.Y>.025f && player.Position.Y<=.025f && fallingSpeed<-5.8f)
+        if (wetNow && before.Y>WaterArt.Level(zone)+.021f && player.Position.Y<=WaterArt.Level(zone)+.021f && fallingSpeed<-5.8f)
         {
             var drift=player.Position-before; drift.Y=0;
-            impactSpray.Position=new(0,.025f-player.Position.Y,0);
+            impactSpray.Position=new(0,WaterArt.Level(zone)+.021f-player.Position.Y,0);
             impactSpray.Direction=player.GlobalBasis.Inverse()*(Vector3.Up+drift.Normalized()*.48f).Normalized();
             impactSpray.Restart();
             impactSpray.Emitting=true;
@@ -692,7 +699,7 @@ public partial class GardenGame : Node3D
             });
             GardenContact.SeparatePlayer(player,actor.Position+offset,radius,height);
         }
-        bool MoriSwimming=GardenArt.IsPondWater(friend.Position) && pet.CanAct;
+        bool MoriSwimming=zone==GardenZone.Garden && GardenArt.IsPondWater(friend.Position) && pet.CanAct;
         if (friend.Visible && !carrying && !moriInFlight && !loweringMori)
             Push(friend,MoriSwimming ? .25f : .16f,.40f,MoriSwimming ? friend.Basis.Z*.17f : Vector3.Zero);
         foreach (var egg in world.GetChildren().OfType<GardenEgg>())
@@ -739,9 +746,9 @@ public partial class GardenGame : Node3D
         return drops;
     }
 
-    private static void SetSplashes(CpuParticles3D drops,bool active,float feetY)
+    private static void SetSplashes(CpuParticles3D drops,bool active,float feetY,float waterY=.025f)
     {
-        drops.Position=new(0,.025f-feetY,0);
+        drops.Position=new(0,waterY-feetY,0);
         drops.Emitting=active;
     }
 
@@ -860,7 +867,11 @@ public partial class GardenGame : Node3D
     {
         point.Y = 0;
         if (zone==GardenZone.Expedition) return point; // Physical cliffs bound expedition terrain.
-        if (zone==GardenZone.CoastalCove) return new(Mathf.Clamp(point.X,-29,29),0,Mathf.Clamp(point.Z,-22,22));
+        if (zone==GardenZone.CoastalCove)
+        {
+            point=new(Mathf.Clamp(point.X,-29,29),0,Mathf.Clamp(point.Z,-22,22));
+            return allowWater ? point : CoastalCove.LandPoint(point);
+        }
         if (zone != GardenZone.Garden)
             return point.Length() > 11.7f ? point.Normalized()*11.7f : point;
         point.X = Mathf.Clamp(point.X,GardenArt.GardenMinX,GardenArt.GardenHalfWidth);
@@ -1064,13 +1075,14 @@ public partial class GardenGame : Node3D
                     leavingWater=false;
                     swimTime=0;
                 }
-                wanderTarget=KeepInGarden(ChaoWander.PickGoal(friend,friend.Position,5.4f));
+                wanderTarget=KeepInGarden(ChaoWander.PickGoal(friend,friend.Position,5.4f,zone==GardenZone.Garden));
                 wanderTime=4.5f+GD.Randf()*2;
             }
             target=wanderTarget;
         }
 
-        target=chaoMotion.RouteOffUpperPlatform(friend.Position,target);
+        if(zone==GardenZone.Garden)target=chaoMotion.RouteOffUpperPlatform(friend.Position,target);
+        if(zone==GardenZone.CoastalCove)target=CoastalCove.LandPoint(target);
         var difference=FlatDistance(target,friend.Position)<.17f ? Vector3.Zero :
             KeepInGarden(target,allowWater:swimmingTrip || inWater || cliff!=null || following)-friend.Position;
         difference.Y=0;
@@ -2338,7 +2350,8 @@ public partial class GardenGame : Node3D
         var arrival=travel.Pending;
         if (next==GardenZone.Expedition && arrival!=null) travel.ExpeditionArea=arrival.To;
         zone = next; EnsureGardenTrees(); world = new Node3D(); AddChild(world); travel.Build(world,zone,pet);
-        gardenSky.SetNatureAtmosphere(zone==GardenZone.Expedition);
+        chaoMotion.GardenPond=zone==GardenZone.Garden; moriWander.GardenLandmarks=zone==GardenZone.Garden;
+        gardenSky.SetNatureAtmosphere(zone is GardenZone.Expedition or GardenZone.CoastalCove);
         gardenSky.Advance((float)pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
         if (zone==GardenZone.Expedition) pet.Expedition.VisitedAreas.Add(travel.ExpeditionArea);
         if (zone==GardenZone.Garden)
@@ -2354,11 +2367,13 @@ public partial class GardenGame : Node3D
         player.Rotation = Vector3.Zero; verticalSpeed = 0;
         if (arrival!=null && WorldTravel.Zone(arrival.To)==next)
         { player.Position=WorldTravel.Point(arrival.Arrival); player.Rotation=new(0,arrival.ArrivalYaw,0); }
+        if(zone==GardenZone.CoastalCove)player.Position=CoastalCove.Restore(player.Position);
         player.ResetPhysicsInterpolation();
         cameraRig.Yaw = player.Rotation.Y+Mathf.Pi; cameraRig.Follow(player.Position, 0, true);
         if (carrying) { petZone = zone; sleeping = false; }
         friend.Visible = petZone == zone;
         if (friend.Visible) friend.Position = carrying ? player.Position + Vector3.Right : KeepInGarden(GardenArt.RelocateFromRear(petZonePosition));
+        if(friend.Visible && zone==GardenZone.CoastalCove && !carrying)friend.Position=CoastalCove.LandPoint(petZonePosition);
         if (carrying) pickupTime = PickupDuration;
         portalCooldown = 1.3f;
         travel.Arrived();
@@ -2703,8 +2718,8 @@ public partial class GardenGame : Node3D
         friendArt=BuildLifeArt();
         var at=new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
         if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) :
-            zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player) : at;
-        if (friend.Visible && petZonePosition.IsFinite()) friend.Position=petZonePosition;
+            zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player) : zone==GardenZone.CoastalCove ? CoastalCove.Restore(at) : at;
+        if (friend.Visible && petZonePosition.IsFinite()) friend.Position=zone==GardenZone.CoastalCove ? CoastalCove.LandPoint(petZonePosition) : petZonePosition;
         player.ResetPhysicsInterpolation();
         cameraRig.Follow(player.Position,0,true);
         wanderTarget=friend.Position+Vector3.Left*2;
@@ -3530,6 +3545,7 @@ public partial class GardenGame : Node3D
         CheckCrawlingTurnsAndNewItems();
         CheckSocialAndAnimationCorrections();
         CheckLandscapeRefinements();
+        CheckNaturalWaterAndCoast();
         CheckExpeditionFoundation();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);

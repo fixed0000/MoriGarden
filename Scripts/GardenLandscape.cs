@@ -114,21 +114,7 @@ public static class GardenLandscape
         }
     }
 
-    public static void BuildCoastal(Node3D root)
-    {
-        var sand=GardenArt.Cylinder(root,new(0,-.03f,0),22,.06f,new("b5a78b"));
-        sand.Scale=new(1.4f,1,1.04f);
-        WaterArt.Ellipse(root,new(-16,.022f,2),new(14.56f,17.16f),"CoastalWater");
-        GardenArt.Cylinder(root,new(-23,.07f,1),3.8f,.14f,new("787f61"));
-        for(int i=0;i<8;i++) Palm(root,new(-15+i*5.3f,0,11+Mathf.Sin(i*1.5f)*5));
-        GardenArt.Sign(root,"COASTAL COVE",new(0,2.2f,-10),GardenArt.Cream);
-        foreach(int side in new[]{-1,1})
-        {
-            ZoneArt.Solid(root,new(side*31,6,0),new(2,12,50));
-            ZoneArt.Solid(root,new(0,6,side*24),new(64,12,2));
-        }
-        ZoneArt.Portal(root,new(0,0,-18),"PLAZA",new("a6a18a"));
-    }
+    public static void BuildCoastal(Node3D root) => CoastalCove.Build(root);
 
     private static void Palm(Node3D root,Vector3 position)
     {

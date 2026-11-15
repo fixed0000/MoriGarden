@@ -33,7 +33,7 @@ internal static class NatureTerrain
         }
         return best;
     }
-    internal static MeshInstance3D Build(Node3D root,Func<float,float,float> height,Func<Vector2,Color> masks)
+    internal static MeshInstance3D Build(Node3D root,Func<float,float,float> height,Func<Vector2,Color> masks,ShaderMaterial? surfaceMaterial=null,string name="MeadowTerrain")
     {
         var surface=new SurfaceTool(); surface.Begin(Mesh.PrimitiveType.Triangles); surface.SetSmoothGroup(0);
         Vector3 At(float x,float z)=>new(x,height(x,z),z);
@@ -61,12 +61,13 @@ internal static class NatureTerrain
                 vec3 rock=mix(vec3(.34,.36,.31),vec3(.48,.47,.39),grain);
                 vec3 base=mix(grass,dirt,smoothstep(.04,.97,mask.r));
                 base=mix(base,rock,mask.b*.75);
-                base=mix(base,vec3(.26,.27,.19),mask.a*.6);
+                base=mix(base,vec3(.30,.27,.20),mask.a*.94);
                 ALBEDO=base*(.94+grain*.12); ROUGHNESS=.97;
             }
             """ } };
+        material=surfaceMaterial ?? material;
         material.SetShaderParameter("masks",ImageTexture.CreateFromImage(image));
-        var terrain=new MeshInstance3D { Name="MeadowTerrain",Mesh=surface.Commit(),MaterialOverride=material };
+        var terrain=new MeshInstance3D { Name=name,Mesh=surface.Commit(),MaterialOverride=material };
         root.AddChild(terrain); terrain.CreateTrimeshCollision(); return terrain;
     }
     internal static void DistantHills(Node3D root,Func<float,float,float> height)
