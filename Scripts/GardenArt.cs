@@ -18,6 +18,7 @@ public static class GardenArt
     // Legacy save positions only: never use this rescue during movement.
     public static Vector3 RelocateFromRear(Vector3 at)
     {
+        at=MountainInterior.RestorePosition(at);
         if (at.Z<RearBoundary+.5f) at=new(at.X,0,19);
         if (at.X<GardenMinX+2 || at.X>GardenHalfWidth-2 || at.Z>GardenHalfDepth-2)
             at=new(Mathf.Clamp(at.X,GardenMinX+2,GardenHalfWidth-2),0,Mathf.Min(at.Z,GardenHalfDepth-2));
@@ -134,8 +135,8 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
-                bool room=world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25;
-                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16;
+                bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2;
+                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72;
                 if (room || tunnel) discard;
                 vec2 p = world.xz;
                 float grain = fract(sin(dot(floor(p*13.0),vec2(127.1,311.7)))*43758.5453);
@@ -186,8 +187,8 @@ public static class GardenArt
             varying vec3 world;
             void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
             void fragment() {
-                bool room=world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25 && world.y>-.35 && world.y<2.6;
-                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16 && world.y>-.35 && world.y<2.6;
+                bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2 && world.y>-.35 && world.y<2.6;
+                bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72 && world.y>-.35 && world.y<2.6;
                 if (room || tunnel) discard;
                 vec2 gate=vec2(world.x+18.45,world.y-.43);
                 float arch=max(0.0,gate.y-2.53);
@@ -406,8 +407,8 @@ public static class GardenArt
                 float streak = waterfall ? sin(world.y*1.8+TIME*9.0+bands*.45) : sin(world.z*7.0-TIME*2.0+bands*1.8);
                 float whitewater = waterfall ? smoothstep(-.25,.92,bands*.78+streak*.22) : smoothstep(.3,1.0,streak*.65+bands*.35);
                 ALBEDO = mix(vec3(.19,.38,.43),vec3(.67,.79,.79),whitewater*(waterfall ? .87 : .36));
-                if (transparent_pond && ((world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25) ||
-                    (world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16))) discard;
+                if (transparent_pond && ((world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2) ||
+                    (world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72))) discard;
                 if (transparent_pond && distance(world.xz,pond_center)>pond_radius) { discard; }
                 ALPHA = transparent_pond ? .39+whitewater*.13 : waterfall ? .61+whitewater*.25 : 1.0;
                 ROUGHNESS = .35;

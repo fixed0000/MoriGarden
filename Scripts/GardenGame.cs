@@ -264,7 +264,10 @@ public partial class GardenGame : Node3D
         if (testMode && frame is 177 or 189 or 201 or 209)
             GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath(
                 $"res://artifacts/{(frame==177 ? "rattle-grip" : frame==189 ? "parrot" : frame==201 ? "wading-steps" : "happy-eyes")}.png"));
-        if (testMode && frame==210)
+        if (testMode && frame is 220 or 239)
+            GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath(
+                $"res://artifacts/cave-exterior-{(frame==220 ? "left" : "right")}.png"));
+        if (testMode && frame==240)
         {
             GD.Print("SMOKE_OK: scene, interactions, evolution, music, swimming, save, grips, petting, mountain room; screenshots captured");
             GetTree().Quit();
@@ -381,9 +384,9 @@ public partial class GardenGame : Node3D
         }
         if (testMode && frame is >=146 and <=165)
         {
-            player.Position=new(-11,0,-21);
-            camera.GlobalPosition=frame<=155 ? new(-11,1.5f,-19) : new(-8,2,-13.6f);
-            camera.LookAt(frame<=155 ? new(-16,1.1f,-24) : new(-11,1.2f,-18));
+            player.Position=new(-10.8f,0,-22.8f);
+            camera.GlobalPosition=frame<=155 ? new(-10.1f,1.45f,-21.6f) : new(-8,2,-13.6f);
+            camera.LookAt(frame<=155 ? new(-12.6f,.5f,-23) : new(-11,1.2f,-18));
         }
         if (testMode && frame is >=166 and <=177)
         {
@@ -422,6 +425,12 @@ public partial class GardenGame : Node3D
             ImportedChao.MovePose(friendArt,0,false,false,false,false,false,false);
             camera.GlobalPosition=friend.Position+new Vector3(.22f,.34f,.58f);
             camera.LookAt(friend.Position+Vector3.Up*.26f);
+        }
+        if (testMode && frame is >=210 and <=239)
+        {
+            player.Position=new(0,0,5);
+            camera.GlobalPosition=frame<=220 ? new(-21,3,-16) : new(-3,4,-14);
+            camera.LookAt(new(-11,2.4f,-22));
         }
         CheckPortals();
         UpdateTrainingAnimals(dt);
@@ -554,13 +563,13 @@ public partial class GardenGame : Node3D
         Vector2 axes = MovementAxes();
         Vector3 direction = cameraRig.RelativeDirection(axes);
         // Скорость — первое удобное место для твоих экспериментов с кодом.
-        float speed = dashTime > 0 ? 10 : Held(Key.Shift) ? 5.5f : 3.7f;
-        if (carrying) speed *= .7f;
         bool inWater=zone==GardenZone.Garden && GardenArt.IsPondWater(player.Position);
+        if (inWater) dashTime=0;
+        float speed = inWater ? 3.7f*.63f : dashTime > 0 ? 10 : Held(Key.Shift) ? 5.5f : 3.7f;
+        if (carrying) speed *= .7f;
         playerWake.Visible = inWater && player.Position.Y<.16f;
         playerWake.Scale = Vector3.One*(1+.12f*Mathf.Sin(time*7));
         playerWake.Position = new(0,.017f-player.Position.Y,0);
-        if (inWater) speed *= .63f;
         pushResistance=Mathf.MoveToward(pushResistance,0,dt);
         if (pushResistance>0) speed*=.965f;
         if (machineLoad>0 || pickingItem || (carrying && pickupTime<PickupDuration) || (releasePose>0 && !throwingPose) || pettingTime>0 || treeReachTime>0) speed = 0;
@@ -630,19 +639,25 @@ public partial class GardenGame : Node3D
 
     private void PushGardenObjects(Vector3 previous)
     {
-        void Push(CharacterBody3D actor,float radius,float height)
+        void Push(CharacterBody3D actor,float radius,float height,Vector3 offset=default)
         {
-            GardenContact.Resolve(player,previous,actor.Position,radius,height,travel=>
+            GardenContact.Resolve(player,previous,actor.Position+offset,radius,height,travel=>
             {
                 if (actor is ToyCar) pushResistance=.08f;
                 if (actor is ToyCar toy) toy.PushAside(travel);
                 else GardenContact.Move(actor,travel);
             });
-            GardenContact.SeparatePlayer(player,actor.Position,radius,height);
+            GardenContact.SeparatePlayer(player,actor.Position+offset,radius,height);
         }
-        if (friend.Visible && !carrying && !moriInFlight && !loweringMori) Push(friend,.16f,.40f);
+        bool MoriSwimming=GardenArt.IsPondWater(friend.Position) && pet.CanAct;
+        if (friend.Visible && !carrying && !moriInFlight && !loweringMori)
+            Push(friend,MoriSwimming ? .25f : .16f,.40f,MoriSwimming ? friend.Basis.Z*.17f : Vector3.Zero);
         foreach (var egg in world.GetChildren().OfType<GardenEgg>())
-            if (egg!=heldEgg && egg!=machineResident && !egg.InFlight && !egg.IsCarried) Push(egg,.17f,.40f);
+            if (egg!=heldEgg && egg!=machineResident && !egg.InFlight && !egg.IsCarried)
+            {
+                bool swimming=egg.Data.Hatched && GardenArt.IsPondWater(egg.Position);
+                Push(egg,swimming ? .25f : .17f,.40f,swimming ? egg.Basis.Z*.17f : Vector3.Zero);
+            }
         foreach (var fruit in FruitSlots())
         {
             if (!fruit.Pushable || fruit==heldFruit || fruit.IsFeeder && !fruit.SingleUse) continue;
@@ -1102,7 +1117,7 @@ public partial class GardenGame : Node3D
             var floor = player.MoveAndCollide(Vector3.Down*.08f, testOnly:true);
             if (floor != null && floor.GetNormal().Y > .6f) verticalSpeed = 7;
         }
-        if (code == Key.Ctrl && dashCooldown <= 0) { dashTime = .3f; dashCooldown = 2; }
+        if (code == Key.Ctrl && dashCooldown <= 0 && !(zone==GardenZone.Garden && GardenArt.IsPondWater(player.Position))) { dashTime = .3f; dashCooldown = 2; }
         if (code == Key.E) Interact();
         if (code == Key.F) PetFriend();
         if (code == Key.Q)
@@ -3428,6 +3443,7 @@ public partial class GardenGame : Node3D
         CheckGardenExpansionAndRest();
         CheckInstrumentContactAndMountainRoom();
         CheckGiftSwitchingAndWaterGait();
+        CheckCaveFurnishingAndWaterContacts();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }
@@ -3497,13 +3513,14 @@ public partial class GardenGame : Node3D
             throw new Exception("Cloud watching has no pauses or changes of direction");
         player.Position=new(-11,0,-15.7f); verticalSpeed=0; cameraRig.Yaw=0;
         DriveShoreCheck(125,Key.W);
-        if (player.Position.Z>-23 || player.Position.Y<-.05f || player.Position.Y>.1f)
-            throw new Exception($"Hidden waterfall entrance is blocked: {player.Position}");
+        if (!MountainInterior.Room.HasPoint(player.Position+Vector3.Up*.1f) || player.Position.Z>MountainInterior.Room.End.Z-.5f || player.Position.Y<-.05f || player.Position.Y>.1f)
+            throw new Exception($"Hidden waterfall entrance is blocked: {player.Position}, hit={player.MoveAndCollide(Vector3.Forward*.1f,testOnly:true)?.GetCollider()}, normal={player.MoveAndCollide(Vector3.Forward*.1f,testOnly:true)?.GetNormal()}, yspeed={verticalSpeed}");
         foreach(var direction in new[]{Vector3.Left,Vector3.Right})
         {
-            player.Position=new(-12,0,-22);
+            player.Position=new(-11.75f,0,-21.7f);
             for(int i=0;i<45;i++) player.MoveAndCollide(direction*.20f);
-            if (Mathf.Abs(player.Position.X+12)<8) throw new Exception("The mountain room is obstructed inside");
+            float wall=direction.X<0 ? MountainInterior.Room.Position.X+.30f : MountainInterior.Room.End.X-.30f;
+            if (Mathf.Abs(player.Position.X-wall)>.08f) throw new Exception($"The compact mountain room is obstructed: {player.Position}");
         }
         player.Position=new(30,0,GardenArt.RearBoundary+1); verticalSpeed=0;
         var previous=player.Position;
@@ -3518,6 +3535,52 @@ public partial class GardenGame : Node3D
         Input.ParseInputEvent(new InputEventKey { PhysicalKeycode=Key.W,Keycode=Key.W,Pressed=false }); Input.FlushBufferedEvents();
         if (player.Position.Z<GardenArt.RearBoundary+.28f) throw new Exception("Player crossed the unclimbable ridge");
         ImportedChao.ClearActionPause(friendArt);
+    }
+
+    private void CheckCaveFurnishingAndWaterContacts()
+    {
+        if (!MountainInterior.Room.HasPoint(GardenArt.RelocateFromRear(new(-20,0,-23))))
+            throw new Exception("A save inside the old cave room would restore inside solid rock");
+        var table=world.GetNode<Node3D>("ChaoWoodenFurniture");
+        var space=GetWorld3D().DirectSpaceState;
+        var top=space.IntersectRay(PhysicsRayQueryParameters3D.Create(table.Position+Vector3.Up*.6f,table.Position,1));
+        var seat=space.IntersectRay(PhysicsRayQueryParameters3D.Create(table.Position+new Vector3(0,.25f,.68f),table.Position+new Vector3(0,.05f,.68f),1));
+        if (top.Count==0 || Mathf.Abs(((Vector3)top["position"]).Y-.3375f)>.01f ||
+            seat.Count==0 || Mathf.Abs(((Vector3)seat["position"]).Y-.19f)>.01f)
+            throw new Exception("Chao-sized table or chair has no solid surface");
+        foreach(string name in new[]{"CaveLeftWall","CaveRightWall","CaveBackWall","CaveCarpet"})
+        {
+            var panel=world.GetNode<MeshInstance3D>(name);
+            if (panel.Mesh is not QuadMesh || panel.MaterialOverride is not ShaderMaterial)
+                throw new Exception("Cave room lacks its inward-facing patterned surfaces");
+        }
+        player.Position=table.Position+Vector3.Left*.8f;
+        if (player.MoveAndCollide(Vector3.Right*1.3f)==null) throw new Exception("Player can pass through cave furniture");
+        friend.Position=new(30,0,15);
+        var waterStart=GardenArt.Pond+new Vector3(5,-GardenArt.PondDepth,4);
+        float Travel(params Key[] keys)
+        {
+            player.Position=waterStart; verticalSpeed=dashTime=pushResistance=0; cameraRig.Yaw=0;
+            DriveShoreCheck(24,keys); return FlatDistance(waterStart,player.Position);
+        }
+        float walk=Travel(Key.D),run=Travel(Key.D,Key.Shift);
+        if (walk<.8f || Mathf.Abs(walk-run)>.02f) throw new Exception($"Shift changes water speed: walk={walk}, run={run}");
+        player.Position=waterStart; dashCooldown=dashTime=0;
+        _UnhandledKeyInput(new InputEventKey { PhysicalKeycode=Key.Ctrl,Pressed=true });
+        if (dashTime>0) throw new Exception("The player can dash in the pond");
+        var swimmerAt=GardenArt.Pond+new Vector3(4,0,4);
+        void Bump(CharacterBody3D swimmer)
+        {
+            swimmer.Position=swimmerAt; swimmer.Rotation=Vector3.Zero;
+            player.Position=swimmerAt+new Vector3(0,-GardenArt.PondDepth,.85f); verticalSpeed=0; cameraRig.Yaw=0;
+            var start=swimmer.Position; var playerStart=player.Position;
+            DriveShoreCheck(28,Key.W);
+            if (FlatDistance(start,swimmer.Position)<.4f || FlatDistance(playerStart,player.Position)<.6f || !GardenArt.IsPondWater(swimmer.Position))
+                throw new Exception($"A swimming Chao cannot be pushed aside: {start}/{swimmer.Position}");
+        }
+        Bump(friend); friend.Position=new(30,0,15);
+        var guest=new GardenEgg { Data=new GardenEggState { Hatched=true,Chao=new PetState { Swim=200 } } };
+        world.AddChild(guest); Bump(guest); world.RemoveChild(guest); guest.QueueFree();
     }
 
     private void CheckGiftSwitchingAndWaterGait()

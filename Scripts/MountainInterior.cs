@@ -6,12 +6,15 @@ namespace Mori;
 
 internal static class MountainInterior
 {
-    internal static readonly Aabb Room=new(new(-24.8f,-.35f,-25.9f),new(24.2f,2.95f,7.65f));
-    internal static readonly Aabb Passage=new(new(-12.15f,-.35f,-18.26f),new(2.3f,2.95f,2.10f));
+    internal static readonly Aabb Room=new(new(-14f,-.35f,-24f),new(4.5f,2.95f,2.8f));
+    internal static readonly Aabb Passage=new(new(-12.15f,-.35f,-21.21f),new(2.3f,2.95f,4.49f));
     public static bool Contains(Vector3 p) => Room.HasPoint(p) || Passage.HasPoint(p);
+    internal static Vector3 RestorePosition(Vector3 at) =>
+        new Aabb(new(-24.8f,-.35f,-25.9f),new(24.2f,2.95f,7.65f)).HasPoint(at) && !Contains(at)
+            ? new(-11,0,-22.1f) : at;
     private const string VoidDiscard="""
-        bool room=world.x>-24.8 && world.x<-.6 && world.z>-25.9 && world.z<-18.25 && world.y>-.35 && world.y<2.6;
-        bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-18.26 && world.z<-16.16 && world.y>-.35 && world.y<2.6;
+        bool room=world.x>-14.0 && world.x<-9.5 && world.z>-24.0 && world.z<-21.2 && world.y>-.35 && world.y<2.6;
+        bool tunnel=world.x>-12.15 && world.x<-9.85 && world.z>-21.21 && world.z<-16.72 && world.y>-.35 && world.y<2.6;
         if (room || tunnel) discard;
         """;
     public static void Build(Node3D root,Material rockMaterial)
@@ -67,25 +70,96 @@ internal static class MountainInterior
             collider.AddChild(new CollisionShape3D { Shape=new ConcavePolygonShape3D { Data=faces.ToArray(),BackfaceCollision=true } });
             root.AddChild(collider);
         }
-        var stone=new Color("677168");
-        void Slab(Vector3 at,Vector3 size)
+        BuildRoom(root);
+    }
+
+    private static void BuildRoom(Node3D root)
+    {
+        var brick=new ShaderMaterial { Shader=new Shader { Code="""
+            shader_type spatial;
+            varying vec3 world;
+            varying vec3 wall_normal;
+            void vertex() { world=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; wall_normal=MODEL_NORMAL_MATRIX*NORMAL; }
+            void fragment() {
+                vec2 p=abs(wall_normal.x)>.5 ? world.zy : world.xy;
+                vec2 cell=p/vec2(.38,.16); cell.x+=mod(floor(cell.y),2.0)*.5;
+                vec2 edge=min(fract(cell),1.0-fract(cell));
+                float joint=smoothstep(.018,.055,min(edge.x,edge.y));
+                float grain=fract(sin(dot(floor(world*280.0),vec3(12.99,78.23,45.61)))*43758.54);
+                float variation=fract(sin(dot(floor(cell),vec2(12.99,78.23)))*43758.54);
+                ALBEDO=mix(vec3(.009,.010,.012),vec3(.034,.037,.041)*( .82+variation*.36)+grain*.005,joint);
+                ROUGHNESS=.96;
+            }
+            """ } };
+        var carpet=new ShaderMaterial { Shader=new Shader { Code="""
+            shader_type spatial;
+            varying vec3 world;
+            void vertex() { world=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; }
+            void fragment() {
+                float zig=abs(fract(world.x/.65)*2.0-1.0)*.18;
+                float distance_to_line=abs(fract((world.z-zig)/.55)-.5)*.55;
+                float pattern=1.0-smoothstep(.016,.025,distance_to_line);
+                float fiber=fract(sin(dot(floor(world.xz*740.0),vec2(127.1,311.7)))*43758.54);
+                ALBEDO=mix(vec3(.18,.073,.026),vec3(.86,.84,.79),pattern)*( .91+fiber*.12);
+                ROUGHNESS=1.0;
+            }
+            """ } };
+        void Panel(string name,Vector3 at,Vector2 size,Vector3 normal,Material material)
         {
-            var surface=GardenArt.Shape(root,new BoxMesh(),at,size,stone);
-            surface.CreateTrimeshCollision();
+            var panel=GardenArt.Shape(root,new QuadMesh { Size=size },at,Vector3.One,Colors.White);
+            panel.Name=name; panel.Quaternion=new Quaternion(Vector3.Back,normal); panel.MaterialOverride=material;
+            // Only the face toward the room is drawn. The solid thickness stays inside the rock.
+            var extents=new Vector3(Mathf.Abs(normal.X)>.5f ? .18f : size.X,
+                Mathf.Abs(normal.Y)>.5f ? .18f : size.Y,Mathf.Abs(normal.Z)>.5f ? .18f : Mathf.Abs(normal.X)>.5f ? size.X : size.Y);
+            var solid=new StaticBody3D { Name=name+"Collider",Position=at-normal*.09f };
+            if (normal.Y<.5f) solid.SetMeta("no_step",true);
+            solid.AddChild(new CollisionShape3D { Shape=new BoxShape3D { Size=extents } }); root.AddChild(solid);
         }
-        Slab(new(-12.7f,-.125f,-22.075f),new(24.6f,.25f,8.05f));
-        Slab(new(-12.7f,2.78f,-22.075f),new(24.6f,.36f,8.05f));
-        Slab(new(-24.98f,1.3f,-22.075f),new(.36f,2.6f,8.05f));
-        Slab(new(-.42f,1.3f,-22.075f),new(.36f,2.6f,8.05f));
-        Slab(new(-12.7f,1.3f,-26.08f),new(24.6f,2.6f,.36f));
-        Slab(new(-18.57f,1.3f,-18.07f),new(12.5f,2.6f,.36f));
-        Slab(new(-5.12f,1.3f,-18.07f),new(9.0f,2.6f,.36f));
-        Slab(new(-11,2.78f,-18.07f),new(2.8f,.36f,.36f));
-        Slab(new(-11,-.125f,-17.18f),new(2.3f,.25f,2.2f));
-        Slab(new(-12.33f,1.3f,-17.18f),new(.36f,2.6f,2.2f));
-        Slab(new(-9.67f,1.3f,-17.18f),new(.36f,2.6f,2.2f));
-        foreach(float x in new[]{-20f,-6f})
-            root.AddChild(new OmniLight3D { Position=new(x,2.3f,-22),OmniRange=15,LightEnergy=.8f,LightColor=new("c5ceb7") });
+        Panel("CaveCarpet",new(-11.75f,0,-22.6f),new(4.5f,2.8f),Vector3.Up,carpet);
+        Panel("CaveCeiling",new(-11.75f,2.6f,-22.6f),new(4.5f,2.8f),Vector3.Down,brick);
+        Panel("CaveLeftWall",new(-14,1.3f,-22.6f),new(2.8f,2.6f),Vector3.Right,brick);
+        Panel("CaveRightWall",new(-9.5f,1.3f,-22.6f),new(2.8f,2.6f),Vector3.Left,brick);
+        Panel("CaveBackWall",new(-11.75f,1.3f,-24),new(4.5f,2.6f),Vector3.Back,brick);
+        Panel("CaveFrontLeft",new(-13.075f,1.3f,-21.2f),new(1.85f,2.6f),Vector3.Forward,brick);
+        Panel("CaveFrontRight",new(-9.675f,1.3f,-21.2f),new(.35f,2.6f),Vector3.Forward,brick);
+        Panel("CavePassageFloor",new(-11,0,-18.96f),new(2.3f,4.49f),Vector3.Up,GardenArt.Material(new("282421")));
+        Panel("CavePassageCeiling",new(-11,2.6f,-18.96f),new(2.3f,4.49f),Vector3.Down,brick);
+        Panel("CavePassageLeft",new(-12.15f,1.3f,-18.96f),new(4.49f,2.6f),Vector3.Right,brick);
+        Panel("CavePassageRight",new(-9.85f,1.3f,-18.96f),new(4.49f,2.6f),Vector3.Left,brick);
+        var ramp=new SurfaceTool(); ramp.Begin(Mesh.PrimitiveType.Triangles);
+        var a=new Vector3(-12.15f,-.305f,-15.25f); var b=new Vector3(-9.85f,-.305f,-15.25f);
+        var c=new Vector3(-12.15f,0,-16.74f); var d=new Vector3(-9.85f,0,-16.74f);
+        foreach(var vertex in new[]{a,c,b,b,c,d}) ramp.AddVertex(vertex);
+        ramp.GenerateNormals();
+        var threshold=GardenArt.Shape(root,ramp.Commit(),Vector3.Zero,Vector3.One,new("a49b7d"));
+        threshold.Name="SubmergedCaveApproach"; threshold.CreateTrimeshCollision();
+        var furniture=new Node3D { Name="ChaoWoodenFurniture",Position=new(-12.8f,0,-22.85f) }; root.AddChild(furniture);
+        var wood=new ShaderMaterial { Shader=new Shader { Code="""
+            shader_type spatial;
+            varying vec3 world;
+            void vertex() { world=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; }
+            void fragment() {
+                float grain=.5+.5*sin(world.z*180.0+sin(world.x*35.0)*2.0);
+                ALBEDO=mix(vec3(.17,.075,.027),vec3(.31,.17,.075),grain*.45);
+                ROUGHNESS=.83;
+            }
+            """ } };
+        void Timber(string name,Vector3 at,Vector3 size)
+        {
+            var part=GardenArt.Shape(furniture,new BoxMesh(),at,size,Colors.White); part.Name=name; part.MaterialOverride=wood;
+            part.CreateConvexCollision();
+            foreach(var solid in part.GetChildren().OfType<StaticBody3D>()) solid.SetMeta("no_step",true);
+        }
+        Timber("TableTop",new(0,.31f,0),new(.68f,.055f,.48f));
+        foreach(float x in new[]{-.265f,.265f}) foreach(float z in new[]{-.17f,.17f})
+            Timber("TableLeg",new(x,.14f,z),new(.045f,.28f,.045f));
+        Timber("ChairSeat",new(0,.17f,.68f),new(.32f,.04f,.30f));
+        foreach(float x in new[]{-.125f,.125f}) foreach(float z in new[]{.565f,.795f})
+            Timber("ChairLeg",new(x,.075f,z),new(.035f,.15f,.035f));
+        foreach(float x in new[]{-.125f,.125f}) Timber("ChairBackPost",new(x,.28f,.81f),new(.035f,.27f,.035f));
+        foreach(float y in new[]{.30f,.38f}) Timber("ChairBackSlat",new(0,y,.81f),new(.30f,.05f,.035f));
+        root.AddChild(new OmniLight3D { Position=new(-11.5f,2.15f,-22.6f),OmniRange=8,LightEnergy=1.15f,LightColor=new("ead6b4") });
+        root.AddChild(new OmniLight3D { Position=new(-11,1.9f,-18.8f),OmniRange=6,LightEnergy=.5f,LightColor=new("d8ddd6") });
     }
 
     private static IEnumerable<List<Vector3>> Subtract(List<Vector3> polygon,Aabb box)
