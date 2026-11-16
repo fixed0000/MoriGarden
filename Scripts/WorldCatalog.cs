@@ -47,6 +47,13 @@ public sealed class WorldCatalog
 
 public sealed class ExpeditionProgress
 {
+    public double ExplorationSeconds { get; set; }
+    public Dictionary<string,DiscoveryMemory> Discoveries { get; set; }=new(StringComparer.Ordinal);
+    public DiscoveryMemory Memory(string petId)
+    {
+        if(!Discoveries.TryGetValue(petId,out var memory))Discoveries[petId]=memory=new();
+        return memory;
+    }
     public List<string> LastTeamIds { get; set; }=new();
     public HashSet<string> UnlockedAreas { get; set; }=new(StringComparer.Ordinal);
     public HashSet<string> VisitedAreas { get; set; }=new(StringComparer.Ordinal);
@@ -54,6 +61,9 @@ public sealed class ExpeditionProgress
     public Dictionary<string,HashSet<string>> AreaFlags { get; set; }=new(StringComparer.Ordinal);
     public void Validate()
     {
+        ExplorationSeconds=double.IsFinite(ExplorationSeconds) ? Math.Clamp(ExplorationSeconds,0,1e12) : 0;
+        Discoveries=(Discoveries ?? new()).Where(p=>DiscoveryMemory.ValidId(p.Key) && p.Value!=null).Take(13).ToDictionary(p=>p.Key,p=>p.Value,StringComparer.Ordinal);
+        foreach(var memory in Discoveries.Values)memory.Validate();
         LastTeamIds=(LastTeamIds ?? new()).Where(id=>!string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).Take(3).ToList();
         UnlockedAreas??=new(); VisitedAreas??=new(); AreaFlags??=new();
         UnlockedAreas.RemoveWhere(string.IsNullOrWhiteSpace); VisitedAreas.RemoveWhere(string.IsNullOrWhiteSpace);

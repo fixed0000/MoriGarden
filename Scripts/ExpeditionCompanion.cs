@@ -15,7 +15,10 @@ internal sealed class ExpeditionCompanion
     internal bool WalkedTogether { get; set; }
     internal float Remaining { get; private set; }
     internal Vector3 Goal { get; private set; }
-    internal bool Busy=>rising.Active || think>0 || (Remaining>0 && Intent is ExpeditionIntent.Rest or ExpeditionIntent.Sleep or ExpeditionIntent.Social);
+    internal bool Busy=>rising.Active || think>0 || (Remaining>0 && Intent is ExpeditionIntent.Rest or ExpeditionIntent.Sleep or ExpeditionIntent.Social or ExpeditionIntent.Investigate);
+    internal bool ReadyForDiscovery=>!rising.Active && !lying && think<=0 && !ImportedChao.Pausing(Art);
+    internal bool Transitioning=>rising.Active || ImportedChao.Pausing(Art);
+    internal float NavigationFailure=>failures;
     internal bool Sleeping=>Intent==ExpeditionIntent.Sleep && resting>2 && !rising.Active;
     internal int Recoveries { get; private set; }
     internal readonly Random Random;
@@ -50,9 +53,10 @@ internal sealed class ExpeditionCompanion
     }
     internal void SetIntent(ExpeditionIntent intent,Vector3 goal,float duration,bool idea=false)
     {
-        if(lying && !rising.Active) { rising.Begin(Art); lying=false; }
+        if((lying || intent==ExpeditionIntent.Investigate && ImportedChao.IsCrawling(Art)) && !rising.Active) { rising.Begin(Art); lying=false; }
         ImportedChao.EndThink(Art); Orb?.SetIdea(null,false); Orb?.SetMealHappy(false);
         Intent=intent; Goal=goal; Remaining=duration; elapsed=0; resting=0; repath=0; think=idea ? 6.5f : 0;
+        if(intent==ExpeditionIntent.Investigate)stuck=failures=hiddenStuck=0;
         sitRest=intent==ExpeditionIntent.Rest && Random.NextDouble()<.6;
         SocialContact=SocialApproach=0;WalkedTogether=false;
         path=Array.Empty<Vector3>(); waypoint=0;
@@ -128,7 +132,7 @@ internal sealed class ExpeditionCompanion
                 head.Rotation=new(-.12f,Mathf.Sin(elapsed*.36f)*.35f,0);
         }
     }
-    private void Face(Vector3 target,float dt)
+    internal void Face(Vector3 target,float dt)
     {
         var d=target-Body.Position; if(d.LengthSquared()>.1f)Body.Rotation=new(0,Mathf.RotateToward(Body.Rotation.Y,Mathf.Atan2(d.X,d.Z),dt*1.65f),0);
     }

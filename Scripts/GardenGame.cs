@@ -170,8 +170,8 @@ public partial class GardenGame : Node3D
             AddChild(music);
         }
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
-        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review");
-        savePath = ProjectSettings.GlobalizePath(testMode ? "user://smoke/pet.json" : "user://pet.json");
+        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review");
+        savePath = ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
@@ -240,6 +240,7 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--discovery-review")) { ReviewDiscoveries((float)delta);return; }
         if(OS.GetCmdlineUserArgs().Contains("--team-review")) { ReviewExpeditionTeam((float)delta);return; }
         if(meadowReview)
         {

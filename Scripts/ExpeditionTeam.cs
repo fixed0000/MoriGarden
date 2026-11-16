@@ -8,6 +8,7 @@ internal enum ExpeditionOrder { Follow, Wait }
 internal sealed class ExpeditionTeam
 {
     internal List<ExpeditionCompanion> Members { get; }=new();
+    internal DiscoverySystem Discoveries { get; }
     internal ExpeditionOrder Order { get; private set; }
     internal string Message { get; private set; }="Following · Free to explore";
     private PetState owner;
@@ -24,6 +25,7 @@ internal sealed class ExpeditionTeam
             var spawn=Spawn(player,Members.Count,Members.Select(m=>m.Body.Position));
             Members.Add(new(world,entry,spawn,Members.Count));
         }
+        Discoveries=new(world,()=>this.owner,nav,Members,m=>m.SetIntent(m.Pet.State.Energy<15 ? ExpeditionIntent.Sleep : ExpeditionIntent.Observe,m.Body.Position,m.Pet.State.Energy<15 ? 30 : 2));
     }
     private Vector3 Spawn(Vector3 center,int slot,IEnumerable<Vector3> occupied)
     {
@@ -52,6 +54,7 @@ internal sealed class ExpeditionTeam
     }
     internal void Command(string command,Vector3 player)
     {
+        Discoveries.CancelAll("command");
         if(command=="Wait") { Order=ExpeditionOrder.Wait;anchor=nav.Nearest(player);Message="Wait here · Exploring nearby"; }
         else if(command=="Follow") { Order=ExpeditionOrder.Follow;Message="Follow · Travelling together"; }
         else { Message="Come here · Calling the team";if(Order==ExpeditionOrder.Wait)anchor=nav.Nearest(player); }
@@ -80,6 +83,7 @@ internal sealed class ExpeditionTeam
     internal void Step(float dt,Vector3 player,Camera3D camera)
     {
         playerSpeed=Mathf.Lerp(playerSpeed,ExpeditionCompanion.Flat(player,lastPlayer)/Mathf.Max(dt,.001f),1-Mathf.Exp(-4*dt));lastPlayer=player;
+        Discoveries.Step(dt,player,playerSpeed,Order==ExpeditionOrder.Wait ? anchor : null);
         foreach(var m in Members)
             if(m.Partner is {} other && other.Partner==m && m.Intent==ExpeditionIntent.Social && other.Intent==ExpeditionIntent.Social && !m.WalkedTogether)
             {
@@ -98,6 +102,7 @@ internal sealed class ExpeditionTeam
             if(m.Remaining<=0 && !m.Busy)Decide(m,player);
             if(m.Partner is {} partner && (partner.Partner!=m || partner.Remaining<=0))m.Partner=null;
             m.Step(dt,nav,camera,player);
+            Discoveries.Present(m,player,dt);
         }
         ChaoContacts.Resolve(Members.Select(m=>new ChaoContacts.Member(m.Body,false,m.Sleeping || m.Intent==ExpeditionIntent.Rest ? .28f : .17f)).ToList());
         foreach(var m in Members)
@@ -165,6 +170,7 @@ internal sealed class ExpeditionTeam
     }
     internal void Reposition(Vector3 player)
     {
+        Discoveries.CancelAll("relocated");
         lastPlayer=player;
         var placed=new List<Vector3>();
         foreach(var m in Members) { m.Body.Position=Spawn(player,placed.Count,placed);placed.Add(m.Body.Position);m.Body.ResetPhysicsInterpolation();m.SetIntent(ExpeditionIntent.Observe,m.Body.Position,3); }

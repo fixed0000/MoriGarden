@@ -5,5 +5,7 @@
     <Compile Include="../Scripts/SaveStore.cs" Link="SaveStore.cs" />
     <Compile Include="../Scripts/WorldCatalog.cs" Link="WorldCatalog.cs" />
     <Compile Include="../Scripts/ExpeditionRoster.cs" Link="ExpeditionRoster.cs" />
+    <Compile Include="../Scripts/DiscoveryMemory.cs" Link="DiscoveryMemory.cs" />
+    <Compile Include="../Scripts/DiscoveryDecisions.cs" Link="DiscoveryDecisions.cs" />
   </ItemGroup>
 </Project>

@@ -122,4 +122,5 @@ try {
         ReferenceEquals(ExpeditionRoster.Available(read)[1].State,read.GardenEggs.Find(e=>e.Id=="black")!.Chao),"Team survives save/load and rebinds existing identities");
 } finally { if(Directory.Exists(teamDir))Directory.Delete(teamDir,true); }
 Check(ExpeditionRoster.Resolve(new PetState(),null).Count==0,"Old saves require no new party fields");
+DiscoveryChecks.Run(Check);
 Console.WriteLine($"{checks} checks passed.");

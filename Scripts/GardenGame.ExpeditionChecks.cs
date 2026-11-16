@@ -33,6 +33,7 @@ public partial class GardenGame
             !pet.Expedition.VisitedAreas.Contains(WorldCatalog.Meadow))
             throw new Exception("Expedition arrival, population isolation, or discovery failed");
         CheckExpeditionTeam();
+        CheckDiscoveries();
         portalCooldown=0; CheckPortals();
         if(transition>=0) throw new Exception("Expedition arrival immediately retriggered a portal");
         foreach(var point in new[]{new Vector3(0,0,18),new Vector3(-21,0,-10),new Vector3(15,0,12)})

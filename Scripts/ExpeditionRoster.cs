@@ -22,7 +22,7 @@ public static class ExpeditionRoster
         (ids ?? Array.Empty<string>()).Where(id=>Available(owner).Any(p=>p.Id==id)).Distinct(StringComparer.Ordinal).Take(3).ToList();
 }
 
-public enum ExpeditionIntent { Observe, Explore, Rest, Sleep, Social, Follow }
+public enum ExpeditionIntent { Observe, Explore, Rest, Sleep, Social, Follow, Investigate }
 public static class ExpeditionDecisions
 {
     // Continuous parameters and a weighted draw, followed by a committed action window.
@@ -40,7 +40,7 @@ public static class ExpeditionDecisions
     }
     public static ExpeditionIntent Choose(PetState pet,bool company,Random random)
     {
-        var actions=Enum.GetValues<ExpeditionIntent>();
+        var actions=Enum.GetValues<ExpeditionIntent>().Where(a=>a!=ExpeditionIntent.Investigate).ToArray();
         double total=actions.Sum(a=>Math.Max(0,Weight(a,pet,company))), draw=random.NextDouble()*total;
         foreach(var action in actions) { draw-=Math.Max(0,Weight(action,pet,company)); if(draw<=0)return action; }
         return ExpeditionIntent.Observe;

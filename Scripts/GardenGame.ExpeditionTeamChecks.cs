@@ -18,6 +18,7 @@ public partial class GardenGame
         {
             owner.Expedition.LastTeamIds=ExpeditionRoster.Available(owner).Take(size).Select(e=>e.Id).ToList();
             var team=new ExpeditionTeam(world,owner,new(0,0,18));
+            team.Discoveries.Enabled=false; // Isolate stage-two locomotion and social contracts from optional discoveries.
             if(team.Members.Count!=size || team.Members.Select(m=>m.Pet.Id).Distinct().Count()!=size ||
                 !ReferenceEquals(team.Members[0].Pet.State,owner))throw new Exception("Team identity/reference binding failed");
             foreach(var boundary in new[]{new Vector3(35,0,0),new Vector3(13,0,3),new Vector3(-34,0,-24)})
