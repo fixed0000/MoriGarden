@@ -80,6 +80,7 @@ public partial class GardenGame : Node3D
     private Vector3 petZonePosition = new(1.8f,0,3);
     private Label stats = null!, formLabel = null!, hint = null!, toast = null!, raceLabel = null!;
     private Label controlsHint=null!,cameraHint=null!;
+    private Control gardenHudRoot=null!;
     private TrainingAnimal? heldAnimal;
     private GardenEgg? heldEgg, recentHatch, machineResident;
     private float recentCardTime, groundHold;
@@ -173,7 +174,7 @@ public partial class GardenGame : Node3D
         testMode = stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
-        if(stadiumMode!=null)savePath=ProjectSettings.GlobalizePath($"user://{stadiumMode[2..]}/pet.json");
+        if(stadiumMode!=null)savePath=ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--outcomes-only") ? "user://stadium-outcomes/pet.json" : $"user://{stadiumMode[2..]}/pet.json");
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         pet.Stadium.Cancel(); // Interrupted competitions return safely to the stadium, never claim an unfinished result.
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
@@ -2389,7 +2390,7 @@ public partial class GardenGame : Node3D
     {
         var layer = new CanvasLayer(); AddChild(layer);
         var ui = new Control { MouseFilter = Control.MouseFilterEnum.Ignore }; layer.AddChild(ui);
-        ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);gardenHudRoot=ui;
         Panel(ui, new(24, 20, 340, 76), new("f9f3e5"));
         Text(ui, "Mori · Garden Adventure", 23, new(40, 29, 320, 32), GardenArt.Ink);
         zoneLabel = Text(ui, "", 13, new(40, 65, 320, 25), new("50685c"));
@@ -2720,6 +2721,7 @@ public partial class GardenGame : Node3D
     private void UpdateUi()
     {
         if (formLabel == null) return;
+        gardenHudRoot.Visible=!StadiumBlocking;
         mainName.Text=pet.Name;
         PetState inspected=carrying ? pet : heldEgg?.Chao ?? (recentCardTime>0 ? recentHatch?.Chao : null) ?? pet;
         details.Visible=!StadiumBlocking && (carrying || showStats || heldEgg?.Chao!=null || recentCardTime>0);

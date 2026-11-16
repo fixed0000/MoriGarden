@@ -25,7 +25,7 @@ public partial class GardenGame
         if(sportsPetPicker.Selected<0 || sportsPetPicker.Selected>=sportsPetIds.Length)return;
         var selected=ExpeditionRoster.Available(pet).FirstOrDefault(p=>p.Id==sportsPetIds[sportsPetPicker.Selected]);if(selected==null)return;
         var progress=selected.State.Athletics;
-        sportsRecords.Text=$"{selected.State.Name} · Medals {progress.Medals.Count} · Cups {progress.Cups.Count}\n\n"+
+        sportsRecords.Text=$"{selected.State.Name} · Medals {progress.Medals.Count} · Cups {progress.Cups.Count}\nKarate rank: {progress.KarateRank}\n\n"+
             string.Join("\n\n",progress.Results.Select(p=>{var e=SportsCatalog.Find(p.Key);return (e?.Title ?? "Past competition")+$"\nEntries {p.Value.Entries} · Wins {p.Value.Wins} · Best place {(p.Value.BestPlace<99 ? p.Value.BestPlace.ToString() : "—")}"+(p.Value.BestSeconds>0 ? $" · {p.Value.BestSeconds:0.00}s" : "")+(progress.Cups.Contains(p.Key) ? "\nCup won" : "");}))+
             (progress.Results.Count==0 ? "Visit Chao Stadium to begin a sporting journey." : "")+
             "\n\nUnlocked competitions\n"+string.Join(" · ",SportsCatalog.Events.Where(e=>SportsCatalog.Open(e,selected.State)).Select(e=>e.Title));

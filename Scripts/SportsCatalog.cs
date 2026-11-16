@@ -5,42 +5,42 @@ using System.Linq;
 namespace Mori;
 
 public enum SportMode { Race,Karate }
-public enum RaceSurface { Run,Swim,Fly,Power,Rest }
-public sealed record SportsEvent(string Id,string Title,SportMode Mode,string Category,int Level,int Rating,RaceSurface[] Sections,int Bouts=3);
+public enum RaceSurface { Run,Swim,Fly,Power,Rest,Puzzle,Choice }
+public sealed record SportsEvent(string Id,string Title,SportMode Mode,string Category,int Level,int Rating,RaceSurface[] Sections,int Bouts=5,string Course="");
 public static class SportsCatalog
 {
-    public static readonly string[] RaceCategories={"Beginner","Swim","Fly","Run","Power","Challenge"};
-    public static readonly string[] KarateRanks={"Beginner","Standard","Expert","Master"};
+    public static readonly string[] RaceCategories={"Beginner"};
+    public static readonly string[] KarateRanks={"Beginner","Standard","Expert","Super"};
+    public static readonly (string Id,string Title,RaceSurface Skill)[] BeginnerCourses={
+        ("crab-pool","Crab Pool",RaceSurface.Swim),("stump-valley","Stump Valley",RaceSurface.Fly),
+        ("mushroom-forest","Mushroom Forest",RaceSurface.Run),("block-canyon","Block Canyon",RaceSurface.Power)};
     public static readonly SportsEvent[] Events=Build();
+    // Historical IDs remain readable; they do not masquerade as wins on the new courses.
+    private static readonly SportsEvent[] Legacy=BuildLegacy();
     private static SportsEvent[] Build()
     {
         var list=new List<SportsEvent>();
-        foreach(string category in RaceCategories)for(int level=1;level<=3;level++)
-        {
-            var sections=category switch {
-                "Beginner"=>new[]{RaceSurface.Run,RaceSurface.Run,RaceSurface.Rest,RaceSurface.Run,RaceSurface.Run,RaceSurface.Rest},
-                "Swim"=>new[]{RaceSurface.Run,RaceSurface.Swim,RaceSurface.Swim,RaceSurface.Rest,RaceSurface.Swim,RaceSurface.Run},
-                "Fly"=>new[]{RaceSurface.Run,RaceSurface.Fly,RaceSurface.Fly,RaceSurface.Rest,RaceSurface.Fly,RaceSurface.Run},
-                "Run"=>new[]{RaceSurface.Run,RaceSurface.Run,RaceSurface.Run,RaceSurface.Rest,RaceSurface.Run,RaceSurface.Run},
-                "Power"=>new[]{RaceSurface.Run,RaceSurface.Power,RaceSurface.Power,RaceSurface.Rest,RaceSurface.Power,RaceSurface.Run},
-                _=>new[]{RaceSurface.Run,RaceSurface.Swim,RaceSurface.Fly,RaceSurface.Power,RaceSurface.Rest,RaceSurface.Run}};
-            list.Add(new("race-"+category.ToLowerInvariant()+"-"+level,category+" Race · Level "+level,SportMode.Race,category,level,
-                category=="Beginner" ? 25+level*45 : category=="Challenge" ? 350+level*170 : 130+level*130,sections));
-        }
-        for(int rank=0;rank<4;rank++)list.Add(new("karate-"+KarateRanks[rank].ToLowerInvariant(),KarateRanks[rank]+" Karate",SportMode.Karate,KarateRanks[rank],rank+1,
-            new[]{45,220,480,770}[rank],Array.Empty<RaceSurface>()));
+        foreach(var course in BeginnerCourses)for(int level=1;level<=3;level++)
+            list.Add(new("race-"+course.Id+"-"+level,course.Title+" · Level "+level,SportMode.Race,"Beginner",level,25+level*45,new[]{RaceSurface.Run,course.Skill,RaceSurface.Run},Course:course.Id));
+        for(int rank=0;rank<4;rank++)list.Add(new("karate-"+KarateRanks[rank].ToLowerInvariant(),KarateRanks[rank]+" Karate",SportMode.Karate,KarateRanks[rank],rank+1,new[]{45,220,480,770}[rank],Array.Empty<RaceSurface>()));
         return list.ToArray();
     }
-    public static SportsEvent? Find(string id)=>Events.FirstOrDefault(e=>e.Id==id);
+    private static SportsEvent[] BuildLegacy()
+    {
+        var list=new List<SportsEvent>();
+        foreach(string category in new[]{"beginner","swim","fly","run","power","challenge"})for(int level=1;level<=3;level++)
+            list.Add(new("race-"+category+"-"+level,"Previous "+category+" race · Level "+level,SportMode.Race,"Legacy",level,70,new[]{RaceSurface.Run},Course:"mushroom-forest"));
+        list.Add(new("karate-master","Previous Master Karate",SportMode.Karate,"Legacy",4,770,Array.Empty<RaceSurface>(),3));return list.ToArray();
+    }
+    public static SportsEvent? Find(string id)=>Events.Concat(Legacy).FirstOrDefault(e=>e.Id==id);
     public static bool Open(SportsEvent e,PetState pet)
     {
         bool Won(string id)=>pet.Athletics.Results.TryGetValue(id,out var result) && result.Wins>0;
-        if(e.Mode==SportMode.Karate)return e.Level==1 || Won("karate-"+KarateRanks[e.Level-2].ToLowerInvariant());
-        if(e.Category=="Beginner")return e.Level==1 || Won("race-beginner-"+(e.Level-1));
-        if(e.Level>1)return Won("race-"+e.Category.ToLowerInvariant()+"-"+(e.Level-1));
-        return e.Category=="Challenge" ? new[]{"swim","fly","run","power"}.All(c=>Won("race-"+c+"-1")) : Won("race-beginner-3");
+        if(e.Category=="Legacy")return false;
+        if(e.Mode==SportMode.Karate)return e.Level<4 || KarateRanks.Take(3).All(rank=>Won("karate-"+rank.ToLowerInvariant()));
+        return e.Level==1 || Won("race-"+e.Course+"-"+(e.Level-1));
     }
-    public static string Requirement(SportsEvent e)=>e.Mode==SportMode.Karate ? "Win the preceding Karate tournament." : e.Level>1 ? "Win the preceding level in this category." : e.Category=="Challenge" ? "Win level 1 in all four specialist races." : "Win all Beginner Race levels.";
+    public static string Requirement(SportsEvent e)=>e.Mode==SportMode.Karate ? "Clear Beginner, Standard and Expert to unlock Super." : "Win the preceding level on this course.";
 }
 public sealed record SportsRival(string Id,string Name,string Color,string Style,float Run,float Swim,float Fly,float Power,float Stamina,int Initiative,int Intelligence,int Aggression)
 {
@@ -57,5 +57,7 @@ public static class SportsRivals
         new("zephyr","Zephyr","White","Glider",1,.7f,1.4f,.65f,.9f,700,480,0),
         new("ember","Ember","Red","Striker",.85f,.7f,.75f,1.4f,1,850,250,75),
         new("moss","Moss","Green","Defender",.8f,.95f,.8f,1.1f,1.3f,270,850,-65),
+        new("luma","Luma","Yellow","Balanced",1,1,.95f,1,1.1f,480,450,-15),
+        new("pebble","Pebble","Black","Climber",.9f,.8f,.8f,1.3f,1.15f,580,440,25),
         new("pipkin","Pipkin","Purple","Agile",1.25f,.8f,1.15f,.7f,1.05f,650,670,-10)};
 }

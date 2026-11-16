@@ -12,6 +12,7 @@ internal sealed class StadiumView
     private readonly int[] impacts=new int[2];
     private Vector3 cameraAt;
     private bool cameraReady;
+    private readonly SphereShape3D cameraShell=new(){Radius=.13f};
     private float endAge;
     internal float MaxHitGap {get;private set;}
     internal int ContactSamples {get;private set;}
@@ -24,28 +25,49 @@ internal sealed class StadiumView
         var art=(ImportedChao)GardenEgg.BuildChaoArt(body,state,color);ImportedChao.BindPresentation(art,state,false,id);ImportedChao.ApplyDevelopment(art,state);
         var name=new Label3D{Text=state.Name,Position=Vector3.Up*.58f,FontSize=22,PixelSize=.002f,Billboard=BaseMaterial3D.BillboardModeEnum.Enabled,Modulate=new("fff1c7")};body.AddChild(name);actors.Add((body,art));
     }
-    internal void BuildRace(ChaoRace race){StadiumArt.Race(Root,race.Course);foreach(var racer in race.Entrants)Actor(racer.Id,racer.Color,racer.Pet);}
-    internal void BuildKarate(ChaoKarate fight){StadiumArt.Karate(Root);Actor(fight.A.Id,fight.A.Color,fight.A.Pet);Actor(fight.B.Id,fight.B.Color,fight.B.Pet);}
+    internal void BuildRace(ChaoRace race){Root.Position=new(100,0,0);StadiumArt.Race(Root,race.Course);foreach(var racer in race.Entrants)Actor(racer.Id,racer.Color,racer.Pet);}
+    internal void BuildKarate(ChaoKarate fight){Root.Position=new(-100,0,0);StadiumArt.Karate(Root);Actor(fight.A.Id,fight.A.Color,fight.A.Pet);Actor(fight.B.Id,fight.B.Color,fight.B.Pet);}
     private void Camera(Camera3D camera,Vector3 desired,Vector3 focus,float dt)
-    {cameraAt=cameraReady ? cameraAt.Lerp(desired,1-Mathf.Exp(-5*dt)) : desired;cameraReady=true;camera.GlobalPosition=cameraAt;camera.LookAt(focus);}
+    {
+        var space=Root.GetWorld3D().DirectSpaceState;
+        Vector3 Clear(Vector3 at)
+        {
+            var motion=at-focus;using var query=new PhysicsShapeQueryParameters3D{Shape=cameraShell,CollisionMask=1,Transform=new(Basis.Identity,focus),Motion=motion};var safe=space.CastMotion(query);
+            return focus+motion*Mathf.Max(0,safe[0]-.012f);
+        }
+        desired=Clear(desired);cameraAt=cameraReady ? cameraAt.Lerp(desired,1-Mathf.Exp(-4*dt)) : desired;cameraAt=Clear(cameraAt);cameraReady=true;camera.GlobalPosition=cameraAt;
+        if(cameraAt.DistanceSquaredTo(focus)>.0001f)camera.LookAt(focus);
+    }
+
     internal void Race(ChaoRace race,string playerId,Camera3D camera,float dt)
     {
+        endAge=race.Finished ? endAge+dt : 0;camera.Fov=50;
+        bool ceremony=race.Finished && endAge>.45f;var podium=StadiumRaceArt.V(race.Course.Anchors[^1])+new Vector3(0,0,5);
         for(int i=0;i<actors.Count;i++)
         {
-            var racer=race.Entrants[i];var (section,fraction)=race.Course.Locate(racer.Distance);var point=race.Course.At(racer.Distance,(i-1.5f)*1.15f);
-            var direction=race.Course.Points[section+1]-race.Course.Points[section];var surface=race.Course.Surfaces[section];
-            var (body,art)=actors[i];float lift=surface==RaceSurface.Fly ? Mathf.Sin(fraction*Mathf.Pi)*1.3f : surface==RaceSurface.Power ? Mathf.Max(0,1-Mathf.Abs(fraction-.5f)*15)*.38f : 0;
-            float swimBlend=surface==RaceSurface.Swim ? Mathf.SmoothStep(0,.06f,fraction)*(1-Mathf.SmoothStep(.94f,1,fraction)) : 0;
-            body.Position=new(point.X,Mathf.Lerp(.18f,.115f,swimBlend)+lift,point.Y);body.Rotation=new(0,Mathf.LerpAngle(body.Rotation.Y,Mathf.Atan2(direction.X,direction.Y),1-Mathf.Exp(-7*dt)),0);
-            bool moving=race.Countdown<=0 && racer.FinishedAt<0;
-            ImportedChao.MovePose(art,racer.Distance*13,moving,surface==RaceSurface.Swim,moving && racer.Pet.Swim>=100,racer.Speed>3.1f,surface==RaceSurface.Fly,surface==RaceSurface.Fly);
-            if(surface==RaceSurface.Power && Mathf.Abs(fraction-.5f)<.1f && moving)ImportedChao.ClimbPose(art,race.Time);
-            if(race.Finished){ImportedChao.Pose(art,ChaoPoseKind.Idle);ImportedChao.Express(art,racer.Place==1 ? ChaoExpression.Delighted : ChaoExpression.Sad,1,.6f+racer.Pet.Sociability*.004f);art.GetNode<EmotionOrb>("MoodOrb").SetIdea(racer.Place==1 ? "!" : null,racer.Place==1);}
-            else if(racer.Reaction.Length>0){ImportedChao.Express(art,racer.Reaction=="stumble" ? ChaoExpression.Surprised : ChaoExpression.Happy);}
+            var racer=race.Entrants[i];var point=race.Course.Position(racer.Distance,(i-(actors.Count-1)*.5f)*RaceCourse.LaneSpacing,racer.Pet);
+            var next=race.Course.Position(Mathf.Min(race.Course.Length,racer.Distance+.15f),(i-(actors.Count-1)*.5f)*RaceCourse.LaneSpacing,racer.Pet);
+            var (body,art)=actors[i];body.Position=StadiumRaceArt.V(point);var direction=StadiumRaceArt.V(next-point);
+            if(new Vector2(direction.X,direction.Z).LengthSquared()>.00001f)body.Rotation=new(0,Mathf.LerpAngle(body.Rotation.Y,Mathf.Atan2(direction.X,direction.Z),1-Mathf.Exp(-8*dt)),0);
+            ImportedChao.RacingPose(art,racer,race.Course.TravelSurface(racer.Distance,racer.Pet),race.Time,dt);
+            if(ceremony)
+            {
+                float x=racer.Place==1 ? 0 : racer.Place==2 ? -.85f : racer.Place==3 ? .85f : (racer.Place-6)*.7f;
+                float height=racer.Place==1 ? .8f : racer.Place==2 ? .48f : racer.Place==3 ? .28f : 0;
+                body.Position=podium+new Vector3(x,height,racer.Place<=3 ? 0 : -1.6f);body.Rotation=new(0,racer.Place<=3 ? Mathf.Pi : 0,0);
+                ImportedChao.MovePose(art,0,false,false,false,false,false,false);ImportedChao.Express(art,racer.Place<=3 ? ChaoExpression.Delighted : ChaoExpression.Sad);
+                if(racer.Place==1)art.Position+=Vector3.Up*Mathf.Abs(Mathf.Sin(endAge*4))*.05f;
+            }
         }
-        int selected=race.Entrants.FindIndex(e=>e.Id==playerId);var at=actors[Math.Max(0,selected)].Body.Position;
-        var lead=actors[race.Entrants.IndexOf(race.Standings[0])].Body.Position;var focus=at.Lerp(lead,.2f);
-        Camera(camera,at+new Vector3(2.7f,1.6f,2.8f),focus+Vector3.Up*.3f,dt);
+        int selected=race.Entrants.FindIndex(e=>e.Id==playerId);var racerAt=race.Entrants[Math.Max(0,selected)];var at=actors[Math.Max(0,selected)].Body.Position;
+        if(ceremony){var focus=Root.ToGlobal(podium+new Vector3(-.45f,.7f,0));Camera(camera,Root.ToGlobal(podium+new Vector3(-.45f,1.9f,-3.7f)),focus,dt);return;}
+        if(race.Countdown>0){var start=StadiumRaceArt.V(race.Course.Anchors[0]);Camera(camera,Root.ToGlobal(start+new Vector3(1.8f,1.2f,4.3f)),Root.ToGlobal(start+Vector3.Up*.25f),dt);return;}
+        var surface=race.Course.Sample(racerAt.Distance).Surface;
+        var cameraOffset=surface==RaceSurface.Fly ? new Vector3(4.3f,3.5f,-4.8f) : surface==RaceSurface.Power ? new Vector3(3.5f,2.1f,-3.8f) : new Vector3(2.6f,1.9f,-3.4f);
+        if(race.Time<5){float orbit=Mathf.Clamp((race.Time-3)/2,0,1)*Mathf.Pi;cameraOffset=new(4*Mathf.Sin(orbit),1.9f,4*Mathf.Cos(orbit));}
+        var ahead=StadiumRaceArt.V(race.Course.Position(Mathf.Min(race.Course.Length,racerAt.Distance+1.2f),0,racerAt.Pet));
+        var look=at.Lerp(ahead,.28f)+Vector3.Up*.3f;
+        Camera(camera,Root.ToGlobal(at+cameraOffset),Root.ToGlobal(look),dt);
     }
     internal void Karate(ChaoKarate fight,string playerId,Camera3D camera,float dt)
     {
@@ -54,20 +76,32 @@ internal sealed class StadiumView
         for(int i=0;i<2;i++)
         {
             var f=fighters[i];var other=fighters[1-i];var (body,art)=actors[i];body.Position=StadiumArt.Ring+new Vector3(f.Position.X,.03f,f.Position.Y);body.Rotation=new(0,Mathf.Atan2(f.Facing.X,f.Facing.Y),0);
-            var target=StadiumArt.Ring+new Vector3(other.Position.X,.03f,other.Position.Y);
+            var target=Root.ToGlobal(StadiumArt.Ring+new Vector3(other.Position.X,.03f,other.Position.Y));
+            if(fight.Finished && endAge>.3f && fight.Winner==f.Id)body.Rotation=new(0,Mathf.LerpAngle(Mathf.Atan2(f.Facing.X,f.Facing.Y),0,Mathf.SmoothStep(.3f,1,endAge)),0);
+            if(fight.Finished && fight.Winner!=f.Id && fight.Method=="Ring Out")
+            {
+                var outward=Mathf.Abs(f.Position.X)>Mathf.Abs(f.Position.Y) ? new Vector3(Mathf.Sign(f.Position.X),0,0) : new Vector3(0,0,Mathf.Sign(f.Position.Y));
+                body.Position+=outward*.42f*Mathf.SmoothStep(0,.35f,endAge);body.Position-=Vector3.Up*.35f*Mathf.SmoothStep(.2f,.65f,endAge);
+            }
             ImportedChao.KaratePose(art,f,target,fight.Finished,fight.Winner==f.Id,endAge);
+            if(fight.Finished && fight.Winner==f.Id && endAge>.3f)ImportedChao.Attend(art,body.GlobalPosition+Vector3.Back*3+Vector3.Up*.3f,100);
             if(f.Impact!=impacts[i])
             {
-                var impactNode=art.FindChild(f.AttackKind==2 ? "FootR" : f.AttackKind==0 ? "PaddleL" : "PaddleR",true,false) as Node3D;
-                if(impactNode!=null){var tip=f.AttackKind==2 ? impactNode.GlobalPosition : impactNode.ToGlobal(Vector3.Down*.0541f);float gap=tip.DistanceTo(target+Vector3.Up*.2f);MaxHitGap=Mathf.Max(MaxHitGap,gap);ContactSamples++;if(gap>.22f)GD.Print($"SPORTS_CONTACT_GAP: {gap} kind={f.AttackKind} action={f.Action} age={f.ActionTime} ended={fight.Finished}");}
+                var impactNode=art.FindChild(f.AttackKind is 2 or 4 ? "FootR" : f.AttackKind==0 ? "PaddleL" : "PaddleR",true,false) as Node3D;
+                if(impactNode!=null){var tip=f.AttackKind is 2 or 4 ? impactNode.GlobalPosition : impactNode.ToGlobal(Vector3.Down*.0541f);float gap=tip.DistanceTo(target+Vector3.Up*.2f);MaxHitGap=Mathf.Max(MaxHitGap,gap);ContactSamples++;if(gap>.22f)GD.Print($"SPORTS_CONTACT_GAP: {gap} kind={f.AttackKind} action={f.Action} age={f.ActionTime} ended={fight.Finished}");}
                 impacts[i]=f.Impact;ChaoSounds.Play(art,"ball");
                 var flash=new Node3D{Position=StadiumArt.Ring+new Vector3(f.ImpactPoint.X,.2f,f.ImpactPoint.Y)};Root.AddChild(flash);GardenEgg.ShellBurst(flash,new("fff1bb"),true);
                 var fade=flash.CreateTween();fade.TweenInterval(.9);fade.TweenCallback(Callable.From(flash.QueueFree));
             }
         }
-        var middle=(actors[0].Body.Position+actors[1].Body.Position)*.5f;
-        Camera(camera,middle+new Vector3(1.55f,1.15f,2.5f),middle+Vector3.Up*.22f,dt);
+        var middle=(actors[0].Body.Position+actors[1].Body.Position)*.5f;float separation=actors[0].Body.Position.DistanceTo(actors[1].Body.Position);
+        camera.Fov=48;float distance=1.65f+Mathf.Max(0,separation-.7f)*.65f+(fight.Countdown>0 ? .5f : 0);
+        var center=middle.Lerp(StadiumArt.Ring,.18f);
+        Camera(camera,Root.ToGlobal(center+new Vector3(.28f,.52f,distance)),Root.ToGlobal(center+Vector3.Up*.30f),dt);
+        if(Root.FindChild("RefereeFlagL",true,false) is Node3D left)left.Rotation=new(0,0,fight.Finished && fight.Winner==fight.A.Id ? -.1f : -.65f);
+        if(Root.FindChild("RefereeFlagR",true,false) is Node3D right)right.Rotation=new(0,0,fight.Finished && fight.Winner==fight.B.Id ? .1f : .65f);
     }
-    internal void Celebrate(){if(actors.Count>0)actors[0].Art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.Celebrate();}
-    internal void Dispose(){if(GodotObject.IsInstanceValid(Root)){Root.GetParent().RemoveChild(Root);Root.QueueFree();}}
+
+    internal void Celebrate(){if(actors.Count>0)actors[0].Art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea("!",true);}
+    internal void Dispose(){cameraShell.Dispose();if(GodotObject.IsInstanceValid(Root)){Root.GetParent().RemoveChild(Root);Root.QueueFree();}}
 }

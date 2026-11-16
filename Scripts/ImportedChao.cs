@@ -281,7 +281,7 @@ public partial class ImportedChao : Node3D
                 var pose=LyingBasis(key).Scaled(scale);
                 foreach (var node in art.GetChild(0).FindChildren("*","MeshInstance3D",true,false))
                 {
-                    if (node is not MeshInstance3D mesh || mesh.Mesh==null) continue;
+                    if (node is not MeshInstance3D mesh || mesh.Mesh==null || !mesh.IsVisibleInTree()) continue;
                     var relative=inverse*mesh.GlobalTransform;
                     for (int surface=0;surface<mesh.Mesh.GetSurfaceCount();surface++)
                         foreach (var vertex in mesh.Mesh.SurfaceGetArrays(surface)[(int)Mesh.ArrayType.Vertex].AsVector3Array())

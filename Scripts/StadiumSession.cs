@@ -24,27 +24,31 @@ internal sealed class StadiumSession
     internal bool Blocking=>InCompetition || Ui.MenuVisible;
     internal bool BetweenBouts {get;private set;}
     internal bool ResultsReady {get;private set;}
-    internal bool CanCheer=>InCompetition && !ResultsReady && !BetweenBouts && (Race==null || Race.Entrants[0].FinishedAt<0) && (Race?.Countdown ?? Fight?.Countdown ?? 1)<=0 && (Race?.CheerCooldown ?? Fight?.CheerCooldown ?? 1)<=0;
+    internal bool CanCheer=>InCompetition && !ResultsReady && !BetweenBouts && (Race==null || Race.CanCheer(Entrant!.Id)) && (Race?.Countdown ?? Fight?.Countdown ?? 1)<=0 && (Race?.CheerCooldown ?? Fight?.CheerCooldown ?? 1)<=0;
     private string ticket="";
     private int seed;
     private float elapsed;
+    private Camera3D? activeCamera;
+    private float voiceWait;
+    internal int WatchIndex {get;private set;}
     internal StadiumSession(Node3D parent,Node3D world,Func<PetState> owner,Action save,Action<string> message,Action<bool> showResident)
     {
         this.world=world;this.owner=owner;this.save=save;this.message=message;this.showResident=showResident;
         Ui=new();parent.AddChild(Ui);Ui.Initialize(owner);Ui.Start=Start;Ui.Leave=Leave;Ui.Next=Next;Ui.Cheer=Cheer;
     }
+    internal void Watch(int index){if(Race!=null)WatchIndex=Math.Clamp(index,0,Race.Entrants.Count-1);}
     internal void Open(){if(InCompetition)return;Ui.Open();}
     internal void Start(string petId,string eventId)
     {
         var entrant=ExpeditionRoster.Available(owner()).FirstOrDefault(p=>p.Id==petId);var competition=SportsCatalog.Find(eventId);
         if(entrant==null || competition==null || !SportsCatalog.Open(competition,entrant.State) || entrant.State.Energy<15){message("Choose an eligible Chao and an unlocked competition.");return;}
         ClearView();Entrant=entrant;Event=competition;owner().Stadium.LastPet=petId;ticket=owner().Stadium.Begin(petId,eventId);seed=Random.Shared.Next();
-        Bout=BoutWins=0;ResultsReady=BetweenBouts=false;Prize=null;elapsed=0;showResident(false);
+        Bout=BoutWins=0;ResultsReady=BetweenBouts=false;Prize=null;elapsed=0;WatchIndex=0;showResident(false);
         entrant.State.History.Visit("stadium","Chao Stadium");
         if(competition.Mode==SportMode.Race)
         {
             var entrants=new System.Collections.Generic.List<RaceEntrant>{new(petId,entrant.Color,entrant.State,seed)};
-            for(int i=0;i<3;i++){var rival=SportsRivals.All[(i+competition.Level)%SportsRivals.All.Length];entrants.Add(new("npc-"+rival.Id,rival.Color,rival.Create(competition.Rating),seed+i+1));}
+            for(int i=0;i<7;i++){var rival=SportsRivals.All[(i+competition.Level)%SportsRivals.All.Length];entrants.Add(new("npc-"+rival.Id,rival.Color,rival.Create(competition.Rating),seed+i+1));}
             Race=new(competition,entrants);View=new(world);View.BuildRace(Race);
         }
         else BeginBout();
@@ -55,23 +59,23 @@ internal sealed class StadiumSession
         ClearView();Race=null;ResultsReady=BetweenBouts=false;
         var rival=SportsRivals.All[(Bout+Event!.Level+2)%SportsRivals.All.Length];
         var opponent=rival.Create(Event.Rating+Bout*18);
-        Fight=new(new(Entrant!.Id,Entrant.Color,Entrant.State,new System.Numerics.Vector2(-1.1f,0),seed+Bout*17),new("npc-"+rival.Id,rival.Color,opponent,new System.Numerics.Vector2(1.1f,0),seed+Bout*17+7));
+        Fight=new(new(Entrant!.Id,Entrant.Color,Entrant.State,new System.Numerics.Vector2(-.65f,0),seed+Bout*17),new("npc-"+rival.Id,rival.Color,opponent,new System.Numerics.Vector2(.65f,0),seed+Bout*17+7));
         View=new(world);View.BuildKarate(Fight);
     }
     internal void Step(float dt,Camera3D camera)
     {
-        if(!InCompetition)return;elapsed+=dt;
+        if(!InCompetition)return;activeCamera=camera;elapsed+=dt;voiceWait=Math.Max(0,voiceWait-dt);
         if(!ResultsReady && !BetweenBouts)Entrant!.State.Tick(dt,false);
         if(Race is {} race)
         {
-            if(!ResultsReady)race.Step(dt);View!.Race(race,Entrant!.Id,camera,dt);
+            if(!ResultsReady)race.Step(dt);View!.Race(race,race.Entrants[WatchIndex].Id,camera,dt);
             string countdown=race.Countdown>0 ? $"Starting in {Mathf.CeilToInt(race.Countdown)}" : "";
             string board=string.Join("\n",race.Standings.Select(e=>$"{e.Place}. {e.Pet.Name}  {(e.FinishedAt>=0 ? e.FinishedAt.ToString("0.00")+"s" : (e.Distance/race.Course.Length*100).ToString("0")+"%")}"));
             var selected=race.Entrants[0];string segment=race.Course.Surfaces[race.Course.Locate(selected.Distance).Section].ToString();
-            if(!ResultsReady)Ui.Hud($"{Event!.Title} · {countdown}\n{board}\n{segment} · Stamina {selected.Fatigue/selected.Capacity*100:0}%",CanCheer,race.CheerCooldown);
+            if(!ResultsReady)Ui.RaceHud(race,race.Entrants[WatchIndex]);
             if(race.Finished && !ResultsReady)
             {
-                var result=Race.Entrants[0];Prize=SportsRewards.Apply(owner(),new(ticket,Entrant.Id,Event!.Id,result.Place,result.FinishedAt<0 ? elapsed : result.FinishedAt,Cleared:result.FinishedAt>=0));ResultsReady=true;
+                var result=Race.Entrants[0];Prize=SportsRewards.Apply(owner(),new(ticket,Entrant!.Id,Event!.Id,result.Place,result.FinishedAt<0 ? elapsed : result.FinishedAt,Cleared:result.FinishedAt>=0));ResultsReady=true;
                 Ui.Results(board+$"\n\n{Entrant.State.Name}: place {result.Place}\n"+(Prize?.Message ?? "Entry closed.")+(Prize?.NewRecord==true ? "\nNew personal record!" : ""),false);save();
                 ChaoSounds.Play(View.Bodies[0],"mood");
             }
@@ -79,8 +83,7 @@ internal sealed class StadiumSession
         else if(Fight is {} fight)
         {
             if(!ResultsReady && !BetweenBouts)fight.Step(dt);View!.Karate(fight,Entrant!.Id,camera,dt);
-            if(!ResultsReady && !BetweenBouts)Ui.Hud($"{Event!.Title} · Bout {Bout+1}/{Event.Bouts}"+(fight.Countdown>0 ? $" · {Mathf.CeilToInt(fight.Countdown)}" : "")+
-                $"\n{fight.A.Pet.Name}: HP {fight.A.Health:0}/{fight.A.MaxHealth:0} · Stamina {fight.A.Stamina:0}\n{fight.B.Pet.Name}: HP {fight.B.Health:0}/{fight.B.MaxHealth:0} · Stamina {fight.B.Stamina:0}\n{fight.A.Action}  /  {fight.B.Action}",CanCheer,fight.CheerCooldown);
+            Ui.KarateHud(fight,Bout+1,Event!.Bouts,BoutWins);
             if(fight.Finished && !ResultsReady && !BetweenBouts)
             {
                 bool won=fight.Winner==Entrant.Id,draw=fight.Winner==null;if(won)BoutWins++;
@@ -88,9 +91,9 @@ internal sealed class StadiumSession
                 string result=draw ? "Draw" : (won ? Entrant.State.Name : fight.B.Pet.Name)+" wins";
                 if(!BetweenBouts)
                 {
-                    Prize=SportsRewards.Apply(owner(),new(ticket,Entrant.Id,Event!.Id,won ? 1 : 2,elapsed,BoutWins,won));ResultsReady=true;save();
+                    Prize=SportsRewards.Apply(owner(),new(ticket,Entrant!.Id,Event!.Id,won ? 1 : 2,elapsed,BoutWins,won));ResultsReady=true;save();
                 }
-                Ui.Results($"{result} · {fight.Method}\nTournament victories: {BoutWins}/{Event!.Bouts}\n\n"+(BetweenBouts ? "Rest between bouts. You may continue or leave.\nTournament prizes are awarded when the entry closes." : Prize?.Message ?? "Entry closed."),BetweenBouts,draw ? "Retry bout" : "Next bout");
+                Ui.Results($"Tournament victories: {BoutWins}/{Event!.Bouts}\n"+(BetweenBouts ? "Next bout is ready. You may continue or leave." : Prize?.Message ?? "Entry closed."),BetweenBouts,draw ? "Retry bout" : "Next bout");
                 ChaoSounds.Play(View.Bodies[0],"mood");
             }
         }
@@ -98,11 +101,11 @@ internal sealed class StadiumSession
     internal void Cheer()
     {
         bool heard=Race?.Cheer(Entrant!.Id) ?? Fight?.Cheer(Entrant!.Id) ?? false;
-        if(heard && View!=null){View.Celebrate();ChaoSounds.Play(View.Bodies[0],"voice");}
+        if(heard && View!=null){View.Celebrate();if(voiceWait<=0){ChaoSounds.Play(View.Bodies[0],"voice");voiceWait=.3f;}}
     }
     internal void Next()
     {
-        if(!BetweenBouts || Fight==null)return;if(Fight.Winner==Entrant!.Id)Bout++;
+        if(!BetweenBouts || Fight==null)return;if(Fight.Winner==Entrant!.Id)Bout++;else seed=unchecked(seed+104729);
         BeginBout();
     }
     internal void Leave()
@@ -113,9 +116,9 @@ internal sealed class StadiumSession
             else owner().Stadium.Cancel();
             save();
         }
-        Race=null;Fight=null;ResultsReady=BetweenBouts=false;ClearView();Ui.HideAll();showResident(true);
+        Race=null;Fight=null;ResultsReady=BetweenBouts=false;ClearView();Ui.HideAll();showResident(true);if(activeCamera!=null && GodotObject.IsInstanceValid(activeCamera))activeCamera.Fov=65;
     }
-    internal void Key(Key key){if(key==Godot.Key.Q)Cheer();else if(key==Godot.Key.Escape)Leave();else if(key==Godot.Key.Enter && BetweenBouts)Next();}
+    internal void Key(Key key){if(key is Godot.Key.Q or Godot.Key.Space)Cheer();else if(Race!=null && key is Godot.Key.Left or Godot.Key.Right){WatchIndex=(WatchIndex+(key==Godot.Key.Right ? 1 : Race.Entrants.Count-1))%Race.Entrants.Count;}else if(key==Godot.Key.Escape)Leave();else if(key==Godot.Key.Enter && BetweenBouts)Next();}
     private void ClearView(){View?.Dispose();View=null;}
     internal void Dispose(){Leave();if(GodotObject.IsInstanceValid(Ui)){Ui.GetParent().RemoveChild(Ui);Ui.QueueFree();}}
 }

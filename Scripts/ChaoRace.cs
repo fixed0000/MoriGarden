@@ -1,43 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 
 namespace Mori;
 
-public sealed class RaceCourse
-{
-    public RaceSurface[] Surfaces {get;}
-    public Vector2[] Points {get;}
-    public float[] Lengths {get;}
-    public float Length=>Lengths.Sum();
-    public RaceCourse(SportsEvent competition)
-    {
-        Surfaces=competition.Sections;Points=new Vector2[Surfaces.Length+1];Lengths=new float[Surfaces.Length];
-        var size=competition.Category switch{"Beginner"=>(12f,8f),"Swim"=>(16f,11f),"Fly"=>(17f,10f),"Run"=>(15f,12f),"Power"=>(13f,10f),_=>(16f,13f)};
-        for(int i=0;i<Points.Length;i++){float angle=-MathF.PI/2+i*MathF.Tau/Surfaces.Length;Points[i]=new(MathF.Cos(angle)*(size.Item1+(competition.Level-1)*.4f),22+MathF.Sin(angle)*(size.Item2+(competition.Level-1)*.4f));}
-        for(int i=0;i<Lengths.Length;i++)Lengths[i]=Vector2.Distance(Points[i],Points[i+1]);
-    }
-    public (int Section,float Fraction) Locate(float distance)
-    {
-        for(int i=0;i<Lengths.Length;i++){if(distance<=Lengths[i] || i==Lengths.Length-1)return(i,Math.Clamp(distance/Lengths[i],0,1));distance-=Lengths[i];}
-        return(0,0);
-    }
-    public Vector2 At(float distance,float lane)
-    {
-        var (section,fraction)=Locate(distance);
-        Vector2 Offset(int index)
-        {
-            int count=Lengths.Length,at=index%count;
-            var before=Vector2.Normalize(Points[at]-Points[(at+count-1)%count]);
-            var after=Vector2.Normalize(Points[at+1]-Points[at]);
-            var normalBefore=new Vector2(-before.Y,before.X);var normalAfter=new Vector2(-after.Y,after.X);
-            var bisector=Vector2.Normalize(normalBefore+normalAfter);
-            return bisector/Math.Max(.3f,Vector2.Dot(bisector,normalAfter))*lane;
-        }
-        return Vector2.Lerp(Points[section]+Offset(section),Points[section+1]+Offset(section+1),fraction);
-    }
-}
+public enum RaceAction { Ready,Move,Fall,Prone,Rise,Finish }
 public sealed class RaceEntrant
 {
     public string Id {get;}
@@ -45,16 +12,20 @@ public sealed class RaceEntrant
     public PetState Pet {get;}
     public float Distance {get;internal set;}
     public float Fatigue {get;internal set;}
-    public float Capacity=>45+Pet.Stamina*.085f;
+    public float Capacity=>30+Pet.Stamina*.10f;
     public float FinishedAt {get;internal set;}=-1;
     public float Speed {get;internal set;}
     public float Delay {get;internal set;}
     public int Place {get;internal set;}
     public string Reaction {get;internal set;}="";
-    internal float ReactionTime,Decision,Form,Boost;
+    public RaceAction Action {get;internal set;}
+    public float TripAge {get;internal set;}
+    public float BoostRemaining {get;internal set;}
+    public bool Blocked=>Delay>0;
+    internal float ReactionTime,Decision,Form;
     internal readonly Random Random;
     internal int LastPosition;
-    public RaceEntrant(string id,string color,PetState pet,int seed){Id=id;Color=color;Pet=pet;Random=new(seed);Form=.97f+(float)Random.NextDouble()*.06f;Fatigue=Capacity*Math.Clamp(pet.Energy/100,0,1);}
+    public RaceEntrant(string id,string color,PetState pet,int seed){Id=id;Color=color;Pet=pet;Random=new(seed);Form=.98f+(float)Random.NextDouble()*.04f;Fatigue=Capacity*Math.Clamp(pet.Energy/100,0,1);}
 }
 public sealed class ChaoRace
 {
@@ -66,56 +37,57 @@ public sealed class ChaoRace
     public float CheerCooldown {get;private set;}
     public int Cheers {get;private set;}
     public IReadOnlyList<RaceEntrant> Standings=>Entrants.OrderBy(e=>e.FinishedAt<0 ? 1 : 0).ThenBy(e=>e.FinishedAt<0 ? -e.Distance : e.FinishedAt).ToArray();
-    public ChaoRace(SportsEvent competition,IEnumerable<RaceEntrant> entrants){Course=new(competition);Entrants=entrants.ToList();if(Entrants.Count<2)throw new ArgumentException("A race needs several entrants.");}
+    public ChaoRace(SportsEvent competition,IEnumerable<RaceEntrant> entrants)
+    {
+        Course=new(competition);Entrants=entrants.ToList();if(Entrants.Count is <2 or >8 || Entrants.Select(e=>e.Id).Distinct().Count()!=Entrants.Count)throw new ArgumentException("A race needs 2–8 distinct entrants.");
+        int place=1;foreach(var racer in Entrants)racer.Place=place++;
+    }
     public static float Pace(PetState pet,RaceSurface surface,float staminaFraction)
     {
         int skill=surface switch{RaceSurface.Swim=>pet.Swim,RaceSurface.Fly=>pet.Fly,RaceSurface.Power=>pet.Power,_=>pet.Run};
-        float baseSpeed=(surface==RaceSurface.Swim ? .72f : surface==RaceSurface.Power ? .65f : 1.0f)+skill*.0048f;
-        float tired=.48f+.52f*Math.Clamp(staminaFraction*2,0,1);
-        return baseSpeed*tired*(.72f+.28f*pet.Energy/100)*(.97f+.03f*pet.Joy/100)*(1+pet.Intelligence/990f*.035f);
+        float speed=surface switch{RaceSurface.Swim=>.36f+skill*.0042f,RaceSurface.Power=>.19f+skill*.0023f,RaceSurface.Fly=>.65f+skill*.0045f,_=>.65f+skill*.0048f};
+        if(surface==RaceSurface.Run && pet.Run<50)speed*=.55f;
+        // Running out of race energy removes at least 80% of the normal pace.
+        float tired=staminaFraction<=0 ? .18f : .82f+.18f*Math.Clamp(staminaFraction*3,0,1);
+        return speed*tired*(.82f+.18f*pet.Energy/100)*(.98f+.02f*pet.Joy/100);
+    }
+    public bool CanCheer(string id)
+    {
+        var runner=Entrants.FirstOrDefault(e=>e.Id==id);return !Finished && Countdown<=0 && CheerCooldown<=0 && runner!=null && runner.FinishedAt<0 && runner.Fatigue>=2.5f && !runner.Blocked && Course.TravelSurface(runner.Distance,runner.Pet) is not (RaceSurface.Puzzle or RaceSurface.Choice);
     }
     public bool Cheer(string id)
     {
-        var runner=Entrants.FirstOrDefault(e=>e.Id==id);if(Finished || Countdown>0 || CheerCooldown>0 || runner==null || runner.FinishedAt>=0)return false;
-        float bond=Math.Clamp(runner.Pet.Bond/100f+runner.Pet.RelationshipWith()/200f,0,1);
-        runner.Boost=.025f+.075f*bond;runner.Reaction="cheer";runner.ReactionTime=2;runner.Fatigue=Math.Min(runner.Capacity,runner.Fatigue+2+bond*3);
-        CheerCooldown=9;Cheers++;return true;
+        if(!CanCheer(id))return false;var runner=Entrants.First(e=>e.Id==id);
+        runner.Fatigue=Math.Max(0,runner.Fatigue-2.5f);runner.BoostRemaining=.65f;runner.Reaction="cheer";runner.ReactionTime=.7f;CheerCooldown=.16f;Cheers++;return true;
     }
+    public void Trip(RaceEntrant racer){if(racer.FinishedAt>=0)return;racer.Delay=1.8f;racer.TripAge=0;racer.Reaction="stumble";racer.ReactionTime=1.8f;racer.BoostRemaining=0;racer.Action=RaceAction.Fall;racer.Speed=0;}
     public void Step(float dt)
     {
         if(Finished || dt<=0 || !float.IsFinite(dt))return;
-        while(dt>0){float step=Math.Min(dt,.05f);Advance(step);dt-=step;if(Finished)break;}
+        while(dt>0){float step=Math.Min(dt,1f/60);Advance(step);dt-=step;if(Finished)break;}
     }
     private void Advance(float dt)
     {
         Time+=dt;CheerCooldown=Math.Max(0,CheerCooldown-dt);if(Countdown>0)return;
         foreach(var racer in Entrants)
         {
-            racer.ReactionTime=Math.Max(0,racer.ReactionTime-dt);if(racer.ReactionTime==0){racer.Reaction="";racer.Boost=0;}
-            if(racer.FinishedAt>=0)continue;
-            var (section,part)=Course.Locate(racer.Distance);var surface=Course.Surfaces[section];
-            racer.Decision-=dt;
+            racer.ReactionTime=Math.Max(0,racer.ReactionTime-dt);if(racer.ReactionTime==0)racer.Reaction="";
+            if(racer.FinishedAt>=0){racer.Action=RaceAction.Finish;continue;}
+            racer.Fatigue=Math.Max(0,racer.Fatigue-dt*(.34f+racer.Speed*.085f)*(racer.BoostRemaining>0 ? 2.4f : 1));
+            if(racer.Blocked){racer.Delay=Math.Max(0,racer.Delay-dt);racer.TripAge+=dt;racer.Action=racer.TripAge<.35f ? RaceAction.Fall : racer.TripAge<1.2f ? RaceAction.Prone : RaceAction.Rise;racer.Speed=0;continue;}
+            var surface=Course.TravelSurface(racer.Distance,racer.Pet);racer.Decision-=dt;
             if(racer.Decision<=0)
             {
-                racer.Decision=2.5f+(float)racer.Random.NextDouble()*2;
-                if(racer.Random.NextDouble()<.025f*(1-racer.Pet.Luck/1200f)){racer.Delay=.25f+(float)racer.Random.NextDouble()*.3f;racer.Reaction="stumble";racer.ReactionTime=.8f;}
+                racer.Decision=4+(float)racer.Random.NextDouble()*3;
+                if(surface==RaceSurface.Run && racer.Random.NextDouble()<.045f*(1-racer.Pet.Luck/1100f)){Trip(racer);continue;}
             }
-            float tactic=1+(racer.Pet.Initiative/990f-.5f)*.08f;
-            if(racer.Fatigue/racer.Capacity<.3f)tactic=1-(.05f+racer.Pet.Intelligence/990f*.05f);
-            float target=Pace(racer.Pet,surface,racer.Fatigue/racer.Capacity)*racer.Form*tactic;
-            if(surface==RaceSurface.Rest)target*=.8f;
-            if(racer.Delay>0){racer.Delay=Math.Max(0,racer.Delay-dt);target*=.15f;}
-            target*=1+racer.Boost;
-            racer.Speed+=(target-racer.Speed)*(1-MathF.Exp(-4*dt));float previous=racer.Distance;racer.Distance=Math.Min(Course.Length,racer.Distance+racer.Speed*dt);
-            racer.Fatigue=Math.Clamp(racer.Fatigue+dt*(surface==RaceSurface.Rest ? 5 : -(.65f+racer.Speed*.38f)*(1-racer.Pet.Intelligence/990f*.20f)),0,racer.Capacity);
-            if(racer.Distance>=Course.Length)racer.FinishedAt=Time-3-dt+(Course.Length-previous)/Math.Max(.001f,racer.Speed);
+            float pace=Pace(racer.Pet,surface,racer.Fatigue/racer.Capacity)*racer.Form*(.985f+racer.Pet.Initiative/990f*.03f);
+            if(racer.BoostRemaining>0 && racer.Fatigue>0)pace*=1.65f;
+            racer.BoostRemaining=Math.Max(0,racer.BoostRemaining-dt);racer.Action=RaceAction.Move;
+            racer.Speed+=(pace-racer.Speed)*(1-MathF.Exp(-6*dt));float previous=racer.Distance;racer.Distance=Math.Min(Course.Length,racer.Distance+racer.Speed*dt);
+            if(racer.Distance>=Course.Length){racer.FinishedAt=Time-3-dt+(Course.Length-previous)/Math.Max(.001f,racer.Speed);racer.Action=RaceAction.Finish;}
         }
-        int place=1;foreach(var racer in Standings)
-        {
-            if(racer.LastPosition>0 && place<racer.LastPosition && racer.ReactionTime<=0){racer.Reaction="overtake";racer.ReactionTime=1;}
-            racer.LastPosition=place;racer.Place=place++;
-        }
-        if(Entrants.All(e=>e.FinishedAt>=0) || Time>=185)
-        {Finished=true;foreach(var racer in Entrants){racer.Reaction=racer.Place==1 ? "win" : "loss";racer.ReactionTime=10;}}
+        int place=1;foreach(var racer in Standings){if(racer.LastPosition>0 && place<racer.LastPosition && racer.ReactionTime<=0){racer.Reaction="overtake";racer.ReactionTime=.6f;}racer.LastPosition=place;racer.Place=place++;}
+        if(Entrants.All(e=>e.FinishedAt>=0) || Time>=420)Finished=true;
     }
 }

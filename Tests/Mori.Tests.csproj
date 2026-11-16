@@ -15,6 +15,7 @@
     <Compile Include="../Scripts/ChaoExperience.cs" Link="ChaoExperience.cs" />
     <Compile Include="../Scripts/SportsCatalog.cs" Link="SportsCatalog.cs" />
     <Compile Include="../Scripts/SportsProgress.cs" Link="SportsProgress.cs" />
+    <Compile Include="../Scripts/RaceCourse.cs" Link="RaceCourse.cs" />
     <Compile Include="../Scripts/ChaoRace.cs" Link="ChaoRace.cs" />
     <Compile Include="../Scripts/ChaoKarate.cs" Link="ChaoKarate.cs" />
   </ItemGroup>

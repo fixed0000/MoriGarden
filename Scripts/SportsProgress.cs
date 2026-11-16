@@ -11,16 +11,25 @@ public sealed class SportsRecord
     public int BestPlace {get;set;}=99;
     public float BestSeconds {get;set;}
     public int BoutWins {get;set;}
+    public int BestBouts {get;set;}
 }
 public sealed class ChaoAthletics
 {
     public Dictionary<string,SportsRecord> Results {get;set;}=new();
     public HashSet<string> Medals {get;set;}=new();
     public HashSet<string> Cups {get;set;}=new();
+    public string KarateRank
+    {
+        get
+        {
+            int progress=0;foreach(var entry in Results){var e=SportsCatalog.Find(entry.Key);if(e?.Mode!=SportMode.Karate)continue;int best=entry.Value.Wins>0 ? 5 : Math.Clamp(entry.Value.BestBouts,0,5);if(best>0)progress=Math.Max(progress,(e.Level-1)*5+best);}
+            return progress==0 ? "Unranked" : progress>=20 ? "Grand Master" : progress<=10 ? (11-progress)+" Kyu" : (progress-10)+" Dan";
+        }
+    }
     public void Validate()
     {
         Results=(Results ?? new()).Where(p=>DiscoveryMemory.ValidId(p.Key) && p.Value!=null).Take(64).ToDictionary(p=>p.Key,p=>p.Value);
-        foreach(var r in Results.Values){r.Entries=Math.Clamp(r.Entries,0,1000000);r.Wins=Math.Clamp(r.Wins,0,r.Entries);r.BestPlace=Math.Clamp(r.BestPlace,1,99);r.BoutWins=Math.Clamp(r.BoutWins,0,1000000);r.BestSeconds=float.IsFinite(r.BestSeconds) ? Math.Clamp(r.BestSeconds,0,3600) : 0;}
+        foreach(var r in Results.Values){r.Entries=Math.Clamp(r.Entries,0,1000000);r.Wins=Math.Clamp(r.Wins,0,r.Entries);r.BestPlace=Math.Clamp(r.BestPlace,1,99);r.BoutWins=Math.Clamp(r.BoutWins,0,1000000);r.BestBouts=Math.Clamp(r.BestBouts,0,5);r.BestSeconds=float.IsFinite(r.BestSeconds) ? Math.Clamp(r.BestSeconds,0,3600) : 0;}
         Medals=new((Medals ?? new()).Where(DiscoveryMemory.ValidId).Take(128));Cups=new((Cups ?? new()).Where(DiscoveryMemory.ValidId).Take(32));
     }
 }
@@ -37,7 +46,7 @@ public sealed class StadiumProgress
     public void Cancel(){ActiveTicket=ActivePet=ActiveEvent=null;}
     public void Validate()
     {
-        Toys=new((Toys ?? new()).Where(t=>t is "champion-rattle" or "karate-ball"));Receipts=(Receipts ?? new()).Where(DiscoveryMemory.ValidId).Distinct().TakeLast(64).ToList();
+        Toys=new((Toys ?? new()).Where(t=>t is "champion-rattle" or "karate-ball" or "canyon-car"));Receipts=(Receipts ?? new()).Where(DiscoveryMemory.ValidId).Distinct().TakeLast(64).ToList();
         LastPet=DiscoveryMemory.ValidId(LastPet) ? LastPet : "main";
         if(!DiscoveryMemory.ValidId(ActiveTicket) || !DiscoveryMemory.ValidId(ActivePet) || SportsCatalog.Find(ActiveEvent ?? "")==null)Cancel();
     }
@@ -55,17 +64,18 @@ public static class SportsRewards
         if(!history.Results.TryGetValue(e.Id,out var record))history.Results[e.Id]=record=new();
         bool firstWin=record.Wins==0,win=outcome.Cleared && outcome.Place==1;
         bool best=e.Mode==SportMode.Race && outcome.Cleared && (record.BestSeconds<=0 || outcome.Seconds<record.BestSeconds);
-        record.Entries++;record.BestPlace=Math.Min(record.BestPlace,outcome.Place);record.BoutWins+=outcome.BoutWins;
+        record.Entries++;record.BestPlace=Math.Min(record.BestPlace,outcome.Place);record.BoutWins+=outcome.BoutWins;record.BestBouts=Math.Max(record.BestBouts,outcome.BoutWins);
         if(best)record.BestSeconds=outcome.Seconds;if(win)record.Wins++;
         string medal="",cup="",toy="";
-        if(outcome.Cleared && outcome.Place<=3)
+        if(win && (e.Mode==SportMode.Karate || e.Level==3))
         {
             string name=outcome.Place==1 ? "Gold" : outcome.Place==2 ? "Silver" : "Bronze";
             if(history.Medals.Add(e.Id+"-"+name.ToLowerInvariant()))medal=name+" Medal";
         }
-        if(win && (e.Mode==SportMode.Karate || e.Level==3) && history.Cups.Add(e.Id))cup=e.Title+" Cup";
-        if(win && (e.Mode==SportMode.Race && e.Category=="Beginner" && e.Level==3 || e.Mode==SportMode.Karate && e.Level==1))
+        if(win && (e.Mode==SportMode.Karate || e.Level==3) && !(e.Id=="karate-super" && history.Cups.Contains("karate-master")) && history.Cups.Add(e.Id))cup=e.Title+" Cup";
+        if(win && (e.Mode==SportMode.Race && e.Course=="mushroom-forest" && e.Level==3 || e.Mode==SportMode.Karate && e.Level==1))
         {string id=e.Mode==SportMode.Race ? "champion-rattle" : "karate-ball";if(ledger.Toys.Add(id))toy=id=="champion-rattle" ? "Champion Rattle" : "Karate Beach Ball";}
+        if(win && e.Course=="block-canyon" && e.Level==3 && ledger.Toys.Add("canyon-car"))toy="Canyon Toy Car";
         int stars=outcome.Withdrawn ? outcome.BoutWins*2 : win ? (firstWin ? 8+e.Level*2 : 3+e.Level) : outcome.Cleared ? Math.Max(1,5-outcome.Place) : outcome.BoutWins*2;
         owner.Stars+=stars;
         if(e.Mode==SportMode.Race && outcome.Cleared)
