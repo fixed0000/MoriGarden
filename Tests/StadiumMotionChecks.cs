@@ -48,7 +48,7 @@ internal static class StadiumMotionChecks
             return new(a,b);
         }
         var hit=Strike(new(.35f,0));hit.Step(3.04f);check(hit.A.Hits==0,"A windup cannot damage before the visible impact phase");hit.Step(.04f);
-        check(hit.A.Hits==1 && Vector2.Distance(hit.A.ImpactPoint,hit.B.Position)<.15f,"A hit records the same finite tip used by the visual animation");
+        check(hit.A.Hits==1 && Vector2.Distance(hit.A.ImpactPoint,new(.35f,0))<.116f,"A hit records the same finite tip used by the visual animation");
         var side=Strike(new(.30f,.25f));side.Step(3.1f);check(side.A.Hits==0 && side.A.Misses==1,"An opponent outside the limb's lateral reach is missed");
         check(Vector2.Distance(KarateContact.Tip(Vector2.Zero,Vector2.UnitX,0),Vector2.Zero)<.34f,"Miss animation reach is bounded independently of opponent distance");
         var edge=Strike(new(1.18f,0));edge.A.Position=new(.83f,0);edge.Step(4);

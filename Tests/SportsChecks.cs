@@ -8,7 +8,7 @@ internal static class SportsChecks
 {
     internal static void Run(Action<bool,string> check)
     {
-        KarateChecks.Run(check);StadiumMotionChecks.Run(check);
+        SportMotionChecks.Run(check);KarateChecks.Run(check);StadiumMotionChecks.Run(check);
         var pool=SportsCatalog.Find("race-crab-pool-1")!;var forest=SportsCatalog.Find("race-mushroom-forest-1")!;
         check(SportsCatalog.Events.Count(e=>e.Mode==SportMode.Race)==12,"Four distinct Beginner courses each have three levels");
         check(SportsCatalog.Events.Count(e=>e.Mode==SportMode.Race && SportsCatalog.Open(e,new()))==4,"Each Beginner course starts at level one");

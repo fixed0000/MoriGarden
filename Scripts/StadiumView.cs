@@ -22,7 +22,7 @@ internal sealed class StadiumView
     {
         var body=new CharacterBody3D{Name="Athlete"+actors.Count,CollisionLayer=0,CollisionMask=1};Root.AddChild(body);
         body.AddChild(new CollisionShape3D{Position=Vector3.Up*.18f,Shape=new SphereShape3D{Radius=.16f}});
-        var art=(ImportedChao)GardenEgg.BuildChaoArt(body,state,color);ImportedChao.BindPresentation(art,state,false,id);ImportedChao.ApplyDevelopment(art,state);
+        var art=(ImportedChao)GardenEgg.BuildChaoArt(body,state,color);ImportedChao.BindPresentation(art,state,false,id);ImportedChao.ApplyDevelopment(art,state);ImportedChao.PrepareSportRig(art);
         var name=new Label3D{Text=state.Name,Position=Vector3.Up*.58f,FontSize=22,PixelSize=.002f,Billboard=BaseMaterial3D.BillboardModeEnum.Enabled,Modulate=new("fff1c7")};body.AddChild(name);actors.Add((body,art));
     }
     internal void BuildRace(ChaoRace race){Root.Position=new(100,0,0);StadiumArt.Race(Root,race.Course);foreach(var racer in race.Entrants)Actor(racer.Id,racer.Color,racer.Pet);}

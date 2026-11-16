@@ -48,7 +48,7 @@ public sealed class KarateFighter
 }
 public sealed class ChaoKarate
 {
-    public const float HalfExtent=1.2f,ContactRange=.43f;
+    public const float HalfExtent=1.2f,ContactRange=.355f;
     public KarateFighter A {get;}
     public KarateFighter B {get;}
     public float Time {get;private set;}
@@ -98,7 +98,7 @@ public sealed class ChaoKarate
         Time+=dt;CheerCooldown=Math.Max(0,CheerCooldown-dt);if(Countdown>0)return;
         var oldA=A.Position;var oldB=B.Position;Act(A,B,dt);Act(B,A,dt);A.Travelled+=Vector2.Distance(oldA,A.Position);B.Travelled+=Vector2.Distance(oldB,B.Position);
         var delta=B.Position-A.Position;float distance=delta.Length();
-        if(distance<.31f){var normal=distance<.001f ? Vector2.UnitX : delta/distance;A.Position-=normal*(.31f-distance)*.5f;B.Position+=normal*(.31f-distance)*.5f;}
+        if(distance<.245f){var normal=distance<.001f ? Vector2.UnitX : delta/distance;A.Position-=normal*(.245f-distance)*.5f;B.Position+=normal*(.245f-distance)*.5f;}
         if((int)(Time*120)%2==0){Strike(A,B);Strike(B,A);}else{Strike(B,A);Strike(A,B);}
         if(A.Health<=0 || B.Health<=0){End(A.Health>B.Health ? A.Id : B.Health>A.Health ? B.Id : null,"Knockout");return;}
         bool Out(KarateFighter f)=>Math.Abs(f.Position.X)>HalfExtent || Math.Abs(f.Position.Y)>HalfExtent;
@@ -142,7 +142,7 @@ public sealed class ChaoKarate
             if(f.Action==KarateAction.Attack){Begin(f,KarateAction.Recover,.18f+.12f*(1-f.Pet.Run/990f));return;}
             if(f.Action==KarateAction.Hit){Begin(f,KarateAction.Recover,.16f);return;}
             if(other.Action is KarateAction.Knockdown or KarateAction.Rise)Begin(f,KarateAction.Wait,.35f);
-            else if(distance>.39f)Begin(f,KarateAction.Approach,.4f);
+            else if(distance>.29f)Begin(f,KarateAction.Approach,.4f);
             else
             {
                 var choices=new[]{KarateAction.Attack,KarateAction.Guard,KarateAction.Dodge,KarateAction.Retreat,KarateAction.Wait};
@@ -152,10 +152,10 @@ public sealed class ChaoKarate
             }
         }
         float speed=(.42f+f.Pet.Run*.0006f)*(.9f+.1f*f.Pet.Energy/100);
-        if(f.Action==KarateAction.Approach && distance>.35f)f.Position+=toward*Math.Min(distance-.35f,speed*dt);
+        if(f.Action==KarateAction.Approach && distance>.265f)f.Position+=toward*Math.Min(distance-.265f,speed*dt);
         else if(f.Action==KarateAction.Retreat)f.Position+=(-toward*.28f-f.Position*.3f)*speed*dt;
         else if(f.Action==KarateAction.Dodge && f.ActionTime<.25f)f.Position+=new Vector2(-toward.Y,toward.X)*speed*dt*.24f;
-        else if(f.Action==KarateAction.Attack && f.Swing<.25f && distance>.33f)f.Position+=toward*Math.Min(distance-.33f,dt*.22f);
+        else if(f.Action==KarateAction.Attack && f.Swing<.25f && distance>.255f)f.Position+=toward*Math.Min(distance-.255f,dt*.22f);
     }
     private static void Miss(KarateFighter f){f.StrikeMissed=true;f.Misses++;f.Zeal=Math.Max(0,f.Zeal-MissCost(f.Pet));}
     private static void Strike(KarateFighter attacker,KarateFighter defender)
@@ -168,7 +168,7 @@ public sealed class ChaoKarate
         float damage=(4+attacker.Pet.Power*.022f)*move*(.92f+.08f*attacker.Pet.Energy/100)/Defence(defender.Pet);
         damage*=.98f+(float)attacker.Random.NextDouble()*.04f;bool guard=defender.Action==KarateAction.Guard;if(guard){damage*=.4f;defender.Blocks++;}
         if(defender.Action==KarateAction.Meditate)damage*=1.12f;
-        defender.Health=Math.Max(0,defender.Health-damage);attacker.Hits++;attacker.Impact++;attacker.ImpactPoint=KarateContact.Tip(attacker.Position,attacker.Facing,attacker.AttackKind);
+        defender.Health=Math.Max(0,defender.Health-damage);attacker.Hits++;attacker.Impact++;attacker.ImpactPoint=KarateContact.SurfacePoint(attacker.Position,attacker.Facing,attacker.AttackKind,defender.Position);
         attacker.Zeal=Math.Min(KarateFighter.MaxZeal,attacker.Zeal+4+attacker.Pet.Luck/990f*2);defender.Zeal=Math.Max(0,defender.Zeal-(guard ? 2 : 7));
         defender.Push=delta/distance*(guard ? .35f : (1.15f+attacker.Pet.Power*.0022f)*move);
         bool fall=!guard && (damage>12 && attacker.AttackKind>=2 || defender.Zeal<=0 && damage>8);

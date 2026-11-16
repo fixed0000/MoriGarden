@@ -8,6 +8,13 @@ public partial class ImportedChao
     private float racingWaterTransition;
     internal static void RacingPose(ImportedChao art,RaceEntrant racer,RaceSurface surface,float time,float dt)
     {
+        art.sportMotionDriven=false;
+        if(racer.Action==RaceAction.Move && racer.Traversal.Phase==RaceObstaclePhase.Run && !racer.Traversal.OwnsMovement && racer.Fatigue>0)
+        {
+            var clip=SportMotions.Find(racer.Pet.Run>=300 ? "race_run_fast" : "race_run_normal")!;
+            ApplySportMotion(art,clip,racer.Traversal.Travelled/(racer.Pet.Run>=300 ? 3.2f : 1.8f));
+            art.GetNode<EmotionOrb>("MoodOrb").SetIdea(racer.Reaction=="cheer" ? "!" : null,racer.Reaction=="cheer");return;
+        }
         var previousRotation=art.Quaternion;var previousPosition=art.Position;
         var traversal=racer.Traversal;var stage=traversal.Phase;
         bool moving=racer.Action==RaceAction.Move && !traversal.OwnsMovement;

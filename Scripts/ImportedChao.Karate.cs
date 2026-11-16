@@ -14,6 +14,27 @@ public partial class ImportedChao
     }
     internal static void KaratePose(Node3D art,KarateFighter fighter,Vector3 target,bool finished,bool won,float endAge=0)
     {
+        if(art is ImportedChao sport)
+        {
+            sport.sportMotionDriven=false;
+            bool impact=fighter.StrikeAge<.12f;int kind=impact ? fighter.StrikeKind : fighter.AttackKind;
+            if(!finished && fighter.Action is KarateAction.Wait or KarateAction.Recover or KarateAction.Approach)
+            {
+                var clip=SportMotions.Find(fighter.Action==KarateAction.Approach ? "karate_approach" : "karate_idle")!;
+                ApplySportMotion(sport,clip,fighter.Action==KarateAction.Approach ? fighter.Travelled/1.0f : fighter.ActionTime);return;
+            }
+            if(!finished && (fighter.Action==KarateAction.Attack || impact) && kind<2)
+            {
+                var clip=SportMotions.Find("karate_punch")!;float phase=impact ? KarateContact.ImpactSwing : fighter.Swing;
+                ApplySportMotion(sport,clip,phase*clip.Seconds,kind==0);
+                float reach=Mathf.SmoothStep(.16f,KarateContact.ImpactSwing,phase)*(1-Mathf.SmoothStep(.55f,.85f,phase));
+                var poseActor=(Node3D)sport.GetParent();var origin=impact ? fighter.StrikeOrigin : fighter.Position;var facing=impact ? fighter.StrikeFacing : fighter.Facing;
+                var poseStage=(Node3D)poseActor.GetParent();var opponentAt=poseStage.ToLocal(target)-StadiumArt.Ring;
+                var tip=impact && !fighter.StrikeMissed ? fighter.ImpactPoint : KarateContact.SurfacePoint(origin,facing,kind,new(opponentAt.X,opponentAt.Z));var contact=poseStage.ToGlobal(StadiumArt.Ring+new Vector3(tip.X,.23f,tip.Y));
+                if(sport.FindChild(kind==0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)paw.GlobalPosition+=(contact-paw.ToGlobal(Vector3.Down*.0541f))*reach;
+                return;
+            }
+        }
         MovePose(art,fighter.Travelled*13,fighter.Action==KarateAction.Approach,false,false,false,false,false);
         if(art is ImportedChao model)model.alignSoles=false;
         art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(fighter.CheerReaction>0 ? "!" : null,fighter.CheerReaction>0);
@@ -35,7 +56,8 @@ public partial class ImportedChao
             float swing=contactFrame ? KarateContact.ImpactSwing : fighter.Swing;int kind=contactFrame ? fighter.StrikeKind : fighter.AttackKind;float reach=Mathf.SmoothStep(.16f,.46f,swing)*(1-Mathf.SmoothStep(.55f,.85f,swing));
             bool kick=kind is 2 or 4;
             var origin=contactFrame ? fighter.StrikeOrigin : fighter.Position;var facing=contactFrame ? fighter.StrikeFacing : fighter.Facing;
-            var tip=KarateContact.Tip(origin,facing,kind);var stage=(Node3D)actor.GetParent();
+            var stage=(Node3D)actor.GetParent();var opponentLocal=stage.ToLocal(target)-StadiumArt.Ring;
+            var tip=contactFrame && !fighter.StrikeMissed ? fighter.ImpactPoint : KarateContact.SurfacePoint(origin,facing,kind,new(opponentLocal.X,opponentLocal.Z));
             var contact=stage.ToGlobal(StadiumArt.Ring+new Vector3(tip.X,.03f+(kick ? .13f : .20f),tip.Y));
             float turn=kind==4 ? Mathf.Tau*Mathf.SmoothStep(0,.44f,swing) : kind==3 ? Mathf.Sin(swing*Mathf.Pi)*.35f : 0;
             art.Rotation=new(.08f*reach,turn,(kind==0 ? 1 : -1)*.06f*reach);

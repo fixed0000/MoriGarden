@@ -47,6 +47,7 @@ public partial class ImportedChao : Node3D
         if (softBody==null || GetParent() is not Node3D actor) return;
         float dt=(float)delta;
         if (dt<=0) return;
+        if(sportMotionDriven){softBody.Rotation=Vector3.Zero;softBody.Scale=development;return;}
         Vector3 at=actor.GlobalPosition;
         Vector3 shift=at-lastPosition;
         Vector3 velocity=tracked && shift.Length()<.5f ? shift/dt : Vector3.Zero;
