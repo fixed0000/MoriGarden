@@ -35,6 +35,7 @@ internal sealed class WorldTravel
         WaterArt.CurrentExpeditionArea=ExpeditionArea;WaterArt.SiteWater=null;
         if (zone==GardenZone.Expedition) ExpeditionArt.Build(world,ExpeditionArea);
         else ZoneArt.Build(world,zone,save.GardenTrees);
+        if(zone==GardenZone.Garden)StadiumArt.PrizeToys(world,save);
         foreach(var route in WorldCatalog.Default.Exits(AreaId(zone),save.Expedition))
             if (WorldCatalog.Default.IsExpedition(route.To) || zone==GardenZone.Expedition)
                 ZoneArt.Portal(world,Point(route.Entrance),WorldCatalog.Default.Areas[route.To].Title,new("849282"));

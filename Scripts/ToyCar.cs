@@ -19,6 +19,7 @@ public partial class ToyCar : CharacterBody3D
     public bool IsSynthesizer { get; init; }
     public bool IsBeachBall { get; init; }
     public bool IsDrums { get; init; }
+    public bool StadiumPrize { get; init; }
     public bool IsInstrument => IsFlute || IsElectricGuitar || IsSynthesizer || IsDrums;
     internal bool IsGroundToy => !IsInstrument && !IsRattle && !IsBeachBall;
     internal CharacterBody3D? PlayActor => player;
@@ -79,6 +80,7 @@ public partial class ToyCar : CharacterBody3D
         CollisionLayer=0;
         AddChild(new CollisionShape3D { Position=Vector3.Up*.055f,
             Shape=new BoxShape3D { Size=new(.15f,.10f,.27f) } });
+        if(StadiumPrize)GardenArt.Shape(this,new TorusMesh{InnerRadius=.035f,OuterRadius=.045f},Vector3.Up*.10f,Vector3.One,new("e9c96e"));
         if (IsDrums)
         {
             foreach(float x in new[]{-.095f,.095f})

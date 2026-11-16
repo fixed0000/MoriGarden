@@ -47,6 +47,8 @@ public sealed class PetState
     public int Agility { get; set; }
     public int Stars { get; set; }
     public ChaoMemory History { get; set; }=new();
+    public ChaoAthletics Athletics { get; set; }=new();
+    public StadiumProgress Stadium { get; set; }=new();
     public WildlifeProgress Wildlife { get; set; }=new();
     public int BagFruit { get; set; }
     public System.Collections.Generic.Dictionary<string,int> SpecialFruitBag { get; set; } = new();
@@ -269,6 +271,7 @@ public sealed class PetState
         ActivityPreference=Math.Clamp(ActivityPreference,1,5);
         if (!float.IsFinite(AdultSeconds) || AdultSeconds<0 || !float.IsFinite(EvolutionFoodSeconds) || EvolutionFoodSeconds<0) throw new ArgumentException("Invalid evolution time");
         History ??=new();History.Validate();
+        Athletics ??=new();Athletics.Validate();Stadium ??=new();Stadium.Validate();
         Wildlife ??=new();Wildlife.Validate();
         SpecialFruitBag ??= new();
         SeedBag ??= new();
@@ -318,7 +321,7 @@ public sealed class PetState
         if (GardenEggs.Count>12 || GardenEggs.Exists(egg=>egg==null || !float.IsFinite(egg.X) || !float.IsFinite(egg.Y) || !float.IsFinite(egg.Z)))
             throw new ArgumentException("Unsupported garden egg data");
         foreach (var egg in GardenEggs)
-            if(egg.Chao is {} resident){resident.EnsureFavoriteFruit();resident.History ??=new();resident.History.Validate();}
+            if(egg.Chao is {} resident){resident.EnsureFavoriteFruit();resident.History ??=new();resident.History.Validate();resident.Athletics ??=new();resident.Athletics.Validate();}
         Swim = Math.Clamp(Swim, 0, 990);
         Fly = Math.Clamp(Fly, 0, 990);
         Run = Math.Clamp(Run, 0, 990);

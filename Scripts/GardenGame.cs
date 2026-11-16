@@ -79,6 +79,7 @@ public partial class GardenGame : Node3D
     private GardenZone petZone = GardenZone.Garden;
     private Vector3 petZonePosition = new(1.8f,0,3);
     private Label stats = null!, formLabel = null!, hint = null!, toast = null!, raceLabel = null!;
+    private Label controlsHint=null!,cameraHint=null!;
     private TrainingAnimal? heldAnimal;
     private GardenEgg? heldEgg, recentHatch, machineResident;
     private float recentCardTime, groundHold;
@@ -145,14 +146,10 @@ public partial class GardenGame : Node3D
     private AudioStreamPlayer music = null!;
     private AudioStreamPlayer machineChime = null!;
     private Button renameButton = null!;
-    private Node3D? rival;
-    private float moriProgress, rivalProgress, cheerTime, cheerCooldown;
-    private static readonly Vector3[] Track = { new(0,0,5),new(-6,0,4),new(-7,0,-2),new(-4,0,-6),new(3,0,-6),new(7,0,-2),new(6,0,4),new(0,0,5) };
-    private static readonly string[] Sections = { "Run", "Swim", "Swim", "Fly", "Power", "Power", "Run" };
     private readonly Vector3 kitchen = new(-5,0,4), bed = new(5,0,4);
     private float pushResistance;
-    private float time, saveTimer, petCooldown, dashTime, dashCooldown, messageTime, raceTime, wanderTime;
-    private bool sleeping, following, paused, racing, testMode;
+    private float time, saveTimer, petCooldown, dashTime, dashCooldown, messageTime, wanderTime;
+    private bool sleeping, following, paused, testMode;
     private float napRemaining;
     private int frame;
     private Vector3 wanderTarget;
@@ -172,10 +169,13 @@ public partial class GardenGame : Node3D
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
         string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
-        testMode = personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        string? stadiumMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--stadium-check" or "--stadium-review" or "--stadium-inspect");
+        testMode = stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
+        if(stadiumMode!=null)savePath=ProjectSettings.GlobalizePath($"user://{stadiumMode[2..]}/pet.json");
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
+        pet.Stadium.Cancel(); // Interrupted competitions return safely to the stadium, never claim an unfinished result.
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
         RenderingServer.SetDefaultClearColor(new Color("849da7"));
         var environment = new WorldEnvironment { Environment = new Godot.Environment
@@ -242,6 +242,9 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--stadium-inspect"))InspectStadium();
+        if(OS.GetCmdlineUserArgs().Contains("--stadium-review")){try{ReviewStadium((float)delta);}catch(Exception ex){GD.PushError("STADIUM_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;}
+        if(OS.GetCmdlineUserArgs().Contains("--stadium-check")){RunStadiumCheckMode();return;}
         if(OS.GetCmdlineUserArgs().Contains("--personality-inspect"))InspectPersonality();
         if(OS.GetCmdlineUserArgs().Contains("--personality-review"))
         {try{ReviewPersonality((float)delta);}catch(Exception ex){GD.PushError("PERSONALITY_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;}
@@ -510,8 +513,8 @@ public partial class GardenGame : Node3D
     public override void _PhysicsProcess(double delta)
     {
         if(OS.GetCmdlineUserArgs().Contains("--personality-review")){ReviewPersonalityPhysics((float)delta);return;}
-        if (paused || teamUi.Choosing || transition >= 0) return;
-        if (!racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null && !memoriesOpen) MovePlayer((float)delta);
+        if (paused || teamUi.Choosing || transition >= 0 || StadiumBlocking) return;
+        if (!StadiumBlocking && !racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null && !memoriesOpen) MovePlayer((float)delta);
         foreach (var toy in world.GetChildren().OfType<ToyCar>()) toy.Advance((float)delta);
         if (zone==GardenZone.Garden)
             musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
@@ -1148,6 +1151,8 @@ public partial class GardenGame : Node3D
     {
         if (@event is not InputEventKey key || !key.Pressed || key.Echo) return;
         Key code = key.PhysicalKeycode;
+        if(StadiumBlocking){stadium!.Key(code);return;}
+        if(sportsCard.Visible){if(code==Key.Escape)sportsCard.Hide();return;}
         if(memoriesOpen){if(code==Key.Escape){memoriesOpen=false;memoriesPanel.Hide();}return;}
         if(teamUi.Choosing)
         {
@@ -2245,92 +2250,9 @@ public partial class GardenGame : Node3D
         }
     }
 
-    private void BuildRaceCourse()
-    {
-        for (int i=0;i<Sections.Length;i++)
-        {
-            Vector3 direction = Track[i+1]-Track[i];
-            Color color = new(Sections[i] switch
-            {
-                "Swim" => "638e9d", "Fly" => "9c9eb1", "Power" => "947f69", _ => "c4ad80"
-            });
-            var strip = GardenArt.Shape(world,new BoxMesh(),(Track[i]+Track[i+1])*.5f+Vector3.Up*.115f,
-                new(2.1f,.045f,direction.Length()+.13f),color);
-            strip.Rotation = new(0,Mathf.Atan2(direction.X,direction.Z),0);
-            if(Sections[i]=="Swim") strip.MaterialOverride=WaterArt.Material();
-            if (i == 0 || Sections[i] != Sections[i-1])
-                GardenArt.Sign(world,Sections[i].ToUpperInvariant(),Track[i]+Vector3.Up*1.1f,GardenArt.Cream);
-        }
-    }
-
-    private void StartRace()
-    {
-        if (zone != GardenZone.Stadium || racing || !pet.CanAct) return;
-        if (!friend.Visible) { Notify("Bring Mori from the garden first."); return; }
-        if (pet.Energy < 15) { Notify("Mori is tired. Let him rest in the garden."); return; }
-        racing = true; sleeping = false; carrying = false; callTime = 0;
-        raceTime = 45;
-        moriProgress = 0; rivalProgress = 0;
-        cheerTime = 0; cheerCooldown = 0;
-        wake.Hide();
-        rival = new Node3D();
-        AddChild(rival);
-        GardenArt.Creature(rival,false,"comet");
-        GardenArt.Sign(rival,"Kite",new(0,.64f,0),GardenArt.Cream);
-        PlaceRacer(friend,0,-.58f);
-        PlaceRacer(rival,0,.58f);
-        Notify("Mori vs. Kite. Press Q when Mori falls behind and the cheer prompt appears.",6);
-    }
-
-    private bool CanCheer() => racing && cheerCooldown<=0 && moriProgress+.10f<rivalProgress;
-
-    private void Cheer()
-    {
-        if (!CanCheer()) return;
-        cheerTime = 2.2f;
-        cheerCooldown = 3.5f;
-    }
-
-    private void UpdateRace(float dt)
-    {
-        raceTime -= dt;
-        cheerTime = Math.Max(0,cheerTime-dt);
-        cheerCooldown = Math.Max(0,cheerCooldown-dt);
-        int section = Math.Min((int)moriProgress,Sections.Length-1);
-        int skill = Sections[section] switch
-        {
-            "Swim" => pet.Swim,
-            "Fly" => pet.Fly,
-            "Power" => pet.Power,
-            _ => pet.Run
-        };
-        float speed = .25f+Math.Min(skill,500)*.0018f;
-        if (cheerTime > 0) speed *= 1.43f;
-        moriProgress += speed*dt;
-        rivalProgress += .29f*dt;
-        PlaceRacer(friend,moriProgress,-.58f);
-        PlaceRacer(rival!,rivalProgress,.58f);
-        friendArt.RotationDegrees = Vector3.Zero;
-        friendArt.Position = new(0,Math.Abs(Mathf.Sin(time*13))*.10f,0);
-        if (moriProgress >= Sections.Length || rivalProgress >= Sections.Length || raceTime <= 0)
-            FinishRace(moriProgress >= Sections.Length && moriProgress >= rivalProgress ? 8 :
-                raceTime > 0 && moriProgress >= Sections.Length*.65f ? 5 : 0);
-    }
-
-    private static void PlaceRacer(Node3D racer,float progress,float lane)
-    {
-        int section = Math.Min((int)progress,Sections.Length-1);
-        Vector3 direction = (Track[section+1]-Track[section]).Normalized();
-        float t = Mathf.Clamp(progress-section,0,1);
-        float lift = Sections[section] == "Fly" ? Mathf.Sin(t*Mathf.Pi)*.68f : 0;
-        racer.Position = Track[section].Lerp(Track[section+1],t) +
-            direction.Cross(Vector3.Up)*lane + Vector3.Up*(.13f+lift);
-        racer.Rotation = new(0,Mathf.Atan2(direction.X,direction.Z),0);
-    }
-
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (paused || teamUi.Choosing || transition >= 0) return;
+        if (paused || teamUi.Choosing || transition >= 0 || StadiumBlocking) return;
         if (@event is InputEventMouseMotion motion && Input.IsMouseButtonPressed(MouseButton.Right))
             cameraRig.Orbit(motion.Relative);
         if (@event is InputEventMouseButton button && button.Pressed)
@@ -2342,7 +2264,7 @@ public partial class GardenGame : Node3D
 
     private void CheckPortals()
     {
-        if(teamUi.Choosing)return;
+        if(teamUi.Choosing || StadiumBlocking)return;
         if (portalCooldown > 0 || transition >= 0 ||
             pickingItem || releasePose>0 || offerTime>0 || eatTime>0 || thinkTime>0 || machineOpening || machineOpen) return;
         if (travel.Detect(zone,player.Position,pet.Expedition) is not { } route) return;
@@ -2382,6 +2304,7 @@ public partial class GardenGame : Node3D
         moriPillar.Cancel();
         moriInterests.Cancel(friend,friendArt); moriLeisure.Cancel(friendArt);
         FinishOffer();
+        stadium?.Dispose();stadium=null;
         RemoveChild(world); world.QueueFree();
         expeditionTeam=null;
         heldAnimal = null;
@@ -2412,7 +2335,7 @@ public partial class GardenGame : Node3D
                 if (fruitGrowth.TryGetValue(tree.Position,out var growth))
                     foreach (var (slot,state) in tree.Slots.Zip(growth))
                         slot.RestoreGrowth(state.Growth,state.GroundPosition,state.Bites);
-        if (zone == GardenZone.Stadium) BuildRaceCourse();
+        ConfigureStadium();
         PopulateEggs();
         player.Position = zone == GardenZone.Garden
             ? ZoneArt.GardenLobbyGate + new Vector3(0,0,3)
@@ -2435,21 +2358,6 @@ public partial class GardenGame : Node3D
         travel.Detect(zone,player.Position,pet.Expedition);
         Notify(travel.Title(zone) + (zone==GardenZone.Expedition ? " · Explore freely" : friend.Visible ? " · Mori is here" : " · Mori is in another area"), 5);
         UpdateUi();
-    }
-
-    private void FinishRace(int reward, bool cancelled = false)
-    {
-        if (!racing) return;
-        racing = false;
-        rival?.QueueFree();
-        rival = null;
-        wanderTarget = friend.Position;
-        wanderTime = 3;
-        if (cancelled) return;
-        pet.CompleteRace(reward);
-        Save();
-        Notify(reward == 8 ? "Mori won! Stars +8." :
-            reward == 5 ? "Kite won. Mori earned 5 stars." : "Mori did not earn stars this race.",8);
     }
 
     private void Save()
@@ -2485,9 +2393,9 @@ public partial class GardenGame : Node3D
         Panel(ui, new(24, 20, 340, 76), new("f9f3e5"));
         Text(ui, "Mori · Garden Adventure", 23, new(40, 29, 320, 32), GardenArt.Ink);
         zoneLabel = Text(ui, "", 13, new(40, 65, 320, 25), new("50685c"));
-        Text(ui, "Right mouse drag / IJKL: Camera   ·   C: Recenter", 14, new(800, 28, 465, 28), GardenArt.Ink);
+        cameraHint=Text(ui, "Right mouse drag / IJKL: Camera   ·   C: Recenter", 14, new(800, 28, 465, 28), GardenArt.Ink);
         details = new Control { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore }; ui.AddChild(details);
-        Panel(details, new(24,112,254,425),new("f9f3e5"));
+        Panel(details, new(24,112,254,465),new("f9f3e5"));
         formLabel=Text(details,"Mori",23,new(43,130,210,34),GardenArt.Ink);
         stats=Text(details,"",15,new(43,176,205,124),new("50685c"));
         favoritesLabel=Text(details,"",12,new(43,367,217,77),new("50685c"));
@@ -2496,6 +2404,7 @@ public partial class GardenGame : Node3D
         details.AddChild(relationshipsButton);
         BuildRelationships(ui);
         BuildMemoriesUi(ui);
+        BuildSportsCard(ui);
         raceLabel = Text(ui, "", 22, new(400, 110, 700, 38), GardenArt.Ink);
         hintPanel = Panel(ui, new(170,665,940,50),new Color(.98f,.96f,.89f,.96f));
         machinePanel=new Control { Visible=false };
@@ -2549,7 +2458,7 @@ public partial class GardenGame : Node3D
         hint = Text(ui, "", 16, new(190, 680, 910, 28), GardenArt.Ink);
         toast = Text(ui, "", 16, new(170, 617, 940, 42), GardenArt.Ink); toast.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         Panel(ui, new(24, 741, 1232, 40), new("304e49"));
-        Text(ui, "WASD Move   Shift Run   Space Jump   Ctrl Dash   B Inventory   Tab Mori   M Music   Esc Pause", 14,
+        controlsHint=Text(ui, "WASD Move   Shift Run   Space Jump   Ctrl Dash   B Inventory   Tab Mori   M Music   Esc Pause", 14,
             new(40, 752, 1205, 28), new("f3ecd8"));
         pauseMenu=Panel(ui,new(407,240,466,230),new("fff5df"));
         pauseMenu.MouseFilter=Control.MouseFilterEnum.Stop;
@@ -2767,6 +2676,7 @@ public partial class GardenGame : Node3D
         moriDistress.Reset();
         upsetTime=pettingTime=petCooldown=0;
         pet=loaded;
+        pet.Stadium.Cancel();
         travel.ExpeditionArea=travel.RestoreArea(location.AreaId,pet.Expedition);
         petZone=(GardenZone)location.MoriZone;
         petZonePosition=petZone==GardenZone.Garden ? GardenArt.RelocateFromRear(new(location.MoriX,location.MoriY,location.MoriZ)) : new(location.MoriX,location.MoriY,location.MoriZ);
@@ -2812,12 +2722,14 @@ public partial class GardenGame : Node3D
         if (formLabel == null) return;
         mainName.Text=pet.Name;
         PetState inspected=carrying ? pet : heldEgg?.Chao ?? (recentCardTime>0 ? recentHatch?.Chao : null) ?? pet;
-        details.Visible=carrying || showStats || heldEgg?.Chao!=null || recentCardTime>0;
+        details.Visible=!StadiumBlocking && (carrying || showStats || heldEgg?.Chao!=null || recentCardTime>0);
+        cameraHint.Visible=!StadiumBlocking;
+        controlsHint.Text=StadiumBlocking ? racing ? "Q Cheer   ·   Esc Leave competition   ·   Between bouts: Enter to continue" : "Choose a Chao and competition   ·   Tab / arrows Navigate   ·   Enter Choose   ·   Esc Back" : "WASD Move   Shift Run   Space Jump   Ctrl Dash   B Inventory   Tab Mori   M Music   Esc Pause";
         formLabel.Text=$"{inspected.Name} · {inspected.LifeStage}";
         stats.Text=$"{SkillLine("Fly",inspected.Fly)}\n{SkillLine("Power",inspected.Power)}\n{SkillLine("Run",inspected.Run)}\n{SkillLine("Stamina",inspected.Stamina)}\n{SkillLine("Swim",inspected.Swim)}";
         if (relationshipSubject!=null) RefreshRelationshipDetail();
         favoritesLabel.Text=$"Favorite toy   {inspected.PreferredToy}\nFavorite fruit   {inspected.FavoriteFruit.Replace(" Fruit","")}\nFavorite instrument   {inspected.FavoriteInstrument}\nSociability   {inspected.Sociability}/100";
-        raceLabel.Text = racing ? $"{Sections[Math.Min((int)moriProgress,Sections.Length-1)].ToUpperInvariant()}  ·  Mori {Mathf.RoundToInt(moriProgress/Sections.Length*100)}%  /  Kite {Mathf.RoundToInt(rivalProgress/Sections.Length*100)}%" : "";
+        raceLabel.Text="";
         var gardenTime=TimeSpan.FromSeconds(pet.GardenSeconds);
         zoneLabel.Text = $"{travel.Title(zone)}   ·   Garden {(int)gardenTime.TotalHours:00}:{gardenTime:mm\\:ss}";
         shopPanel.Visible=shopOpen;
@@ -2830,7 +2742,7 @@ public partial class GardenGame : Node3D
         bagText.Text = $"Garden fruit   {pet.BagFruit}/12\nHeart Fruit   {pet.BagHeartFruit}/12  (V)\nRace stars   {pet.Stars}";
         hint.Text = ContextActions();
         hint.Visible = hintPanel.Visible = !paused && hint.Text.Length>0;
-        toast.Visible = messageTime > 0; pauseMenu.Visible=paused && !pausedByFocus && slotMode==SlotMode.Closed;
+        toast.Visible = messageTime > 0 && !StadiumBlocking; pauseMenu.Visible=paused && !pausedByFocus && slotMode==SlotMode.Closed;
         slotMenu.Visible=paused && !pausedByFocus && slotMode!=SlotMode.Closed;
     }
 
@@ -2839,7 +2751,8 @@ public partial class GardenGame : Node3D
         if (shopOpen || machineOpen || machineOpening || machineLoad>0) return "";
         if (!paused && transition<0 && CanTakeMeal()) return "E: Take fruit";
         if (paused || transition>=0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return "";
-        if (racing) return CanCheer() ? "Q: Cheer     E: Cancel race" : "E: Cancel race";
+        if(StadiumBlocking)return "";
+        if(zone==GardenZone.Stadium && FlatDistance(player.Position,new(0,0,5))<3)return "E: Chao Race / Chao Karate";
         if(Wildlife is {} wildlife && wildlife.Hint(player) is { Length:>0 } wildlifeHint)return wildlifeHint;
         if(SiteMission is {} mission)return mission.Hint(player,expeditionTeam);
         string action = "";
@@ -3300,18 +3213,7 @@ public partial class GardenGame : Node3D
         AdvanceTransition(.36f); AdvanceTransition(.36f);
         if (zone != GardenZone.Stadium) throw new Exception("Stadium entrance failed");
         carrying = false;
-        StartRace();
-        pet.Swim = pet.Fly = pet.Run = pet.Power = 160;
-        pet.Stamina = 160;
-        for (int i=0;i<3000 && racing;i++) UpdateRace(1f/60);
-        if (pet.Stars != 8 || pet.Agility != 3 || racing) throw new Exception("Race failed");
-        StartRace();
-        rivalProgress=.2f;
-        Cheer();
-        if (cheerTime<=0) throw new Exception("A trailing racer did not get the cheer boost");
-        raceTime = .01f;
-        _Process(.02);
-        if (racing || pet.Stars != 8) throw new Exception("Race timeout failed");
+        CheckStadium();
         carrying = true; SwitchZone(GardenZone.Garden); carrying = false;
         cameraRig.Yaw = 0;
         player.Position = bed;
@@ -3351,7 +3253,7 @@ public partial class GardenGame : Node3D
         for (int i=0;i<20;i++) MovePlayer(.1f);
         if (Mathf.Abs(player.Position.Y) > .025f) throw new Exception("Jump did not land");
         Save(); var loaded = SaveStore.Load(savePath, out _);
-        if (loaded.Stars != 8) throw new Exception("Save failed");
+        if (loaded.Stars != pet.Stars || loaded.Name!=pet.Name) throw new Exception("Save failed");
         pet = new PetState { Care = 10 };
         if (!pet.Evolve() || pet.Form != "bloom") throw new Exception("Evolution failed");
         var tree = world.GetChildren().OfType<FruitTree>().First(t=>!t.IsFeeder);

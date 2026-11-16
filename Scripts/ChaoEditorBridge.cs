@@ -16,7 +16,8 @@ internal sealed class ChaoEditorBridge
     private string status="Ready";
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
         .Where(p=>p.CanWrite && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
-            && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.Expedition) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)).ToArray();
+            && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.Expedition) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)
+            && p.Name!=nameof(PetState.Stadium) && p.Name!=nameof(PetState.Athletics)).ToArray();
 
     public ChaoEditorBridge(string directory) => this.directory=directory;
 

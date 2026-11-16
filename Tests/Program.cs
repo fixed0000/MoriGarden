@@ -126,4 +126,5 @@ DiscoveryChecks.Run(Check);
 GreenhouseChecks.Run(Check);
 WildlifeChecks.Run(Check);
 MemoryChecks.Run(Check);
+SportsChecks.Run(Check);
 Console.WriteLine($"{checks} checks passed.");

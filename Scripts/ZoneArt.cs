@@ -17,7 +17,7 @@ public static class ZoneArt
         GardenZone.Garden => "MORI GARDEN",
         GardenZone.Lobby => "GARDEN PLAZA",
         GardenZone.CoastalCove => "COASTAL COVE",
-        _ => "STAR STADIUM"
+        _ => "CHAO STADIUM"
     };
 
     public static void Portal(Node3D root, Vector3 position, string title, Color color,float scale=1)
@@ -53,6 +53,7 @@ public static class ZoneArt
 
     public static void Build(Node3D root, GardenZone zone,System.Collections.Generic.IReadOnlyList<GardenTreeState>? trees=null)
     {
+        if(zone==GardenZone.Stadium){StadiumArt.Build(root);return;}
         if (zone==GardenZone.CoastalCove) { GardenLandscape.BuildCoastal(root); return; }
         if (zone != GardenZone.Garden) Solid(root,new(0,-.25f,0),new(76,.5f,76));
         if (zone == GardenZone.Garden)
@@ -127,16 +128,6 @@ public static class ZoneArt
             GardenArt.Sign(root,"MORI WORLD",new(0,5,-4),GardenArt.Cream);
             for (int i=0;i<8;i++)
                 GardenArt.Cylinder(root,new(0,.11f,7-i*2),.75f,.07f,new("eee5cb"));
-        }
-        else
-        {
-            GardenArt.Cylinder(root,new(0,.13f,5),1.7f,.12f,new("f2d58c"));
-            GardenArt.Sign(root,"E · START RACE",new(0,2.8f,5),GardenArt.Cream);
-            for (int i=0;i<8;i++)
-            {
-                GardenArt.Shape(root,new BoxMesh(),new(-10,.2f,i*2-7),new(1,.3f,1),new("f0dcab"));
-                GardenArt.Shape(root,new BoxMesh(),new(10,.2f,i*2-7),new(1,.3f,1),new("f0dcab"));
-            }
         }
     }
 }
