@@ -41,6 +41,7 @@ public sealed class PetState
     public int Care { get; set; }
     public int Agility { get; set; }
     public int Stars { get; set; }
+    public WildlifeProgress Wildlife { get; set; }=new();
     public int BagFruit { get; set; }
     public System.Collections.Generic.Dictionary<string,int> SpecialFruitBag { get; set; } = new();
     public System.Collections.Generic.Dictionary<string,int> SeedBag { get; set; } = new();
@@ -260,6 +261,7 @@ public sealed class PetState
         FavoriteInstrument=FavoriteInstrument is "None" or "Drums" or "Electric Guitar" or "Synthesizer" ? FavoriteInstrument : "Flute";
         ActivityPreference=Math.Clamp(ActivityPreference,1,5);
         if (!float.IsFinite(AdultSeconds) || AdultSeconds<0 || !float.IsFinite(EvolutionFoodSeconds) || EvolutionFoodSeconds<0) throw new ArgumentException("Invalid evolution time");
+        Wildlife ??=new();Wildlife.Validate();
         SpecialFruitBag ??= new();
         SeedBag ??= new();
         foreach (var key in new System.Collections.Generic.List<string>(SpecialFruitBag.Keys))

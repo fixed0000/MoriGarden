@@ -29,7 +29,7 @@ public partial class GardenGame
         Enter(new(-8,0,6));
         if(zone!=GardenZone.Expedition || travel.ExpeditionArea!=WorldCatalog.Meadow ||
             player.Position.DistanceTo(new(0,0,23))>.01f || friend.Visible ||
-            world.GetChildren().Any(n=>n is GardenEgg or ToyCar or TrainingAnimal) ||
+            world.GetChildren().Any(n=>n is GardenEgg or ToyCar || n is TrainingAnimal and not WildAnimal) ||
             !pet.Expedition.VisitedAreas.Contains(WorldCatalog.Meadow))
             throw new Exception("Expedition arrival, population isolation, or discovery failed");
         CheckExpeditionTeam();

@@ -124,4 +124,5 @@ try {
 Check(ExpeditionRoster.Resolve(new PetState(),null).Count==0,"Old saves require no new party fields");
 DiscoveryChecks.Run(Check);
 GreenhouseChecks.Run(Check);
+WildlifeChecks.Run(Check);
 Console.WriteLine($"{checks} checks passed.");

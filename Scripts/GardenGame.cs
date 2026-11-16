@@ -170,8 +170,9 @@ public partial class GardenGame : Node3D
             AddChild(music);
         }
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
-        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
-        savePath = ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
+        string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
+        testMode = wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        savePath = ProjectSettings.GlobalizePath(wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
@@ -240,6 +241,12 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--wildlife-inspect"))InspectWildlife();
+        if(OS.GetCmdlineUserArgs().Contains("--wildlife-review"))
+        {
+            try{ReviewWildlife((float)delta);}catch(Exception ex){GD.PushError("WILDLIFE_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;
+        }
+        if(OS.GetCmdlineUserArgs().Contains("--wildlife-check")){RunWildlifeCheckMode();return;}
         if(OS.GetCmdlineUserArgs().Contains("--greenhouse-check")){RunGreenhouseCheckMode();return;}
         if(OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect"))InspectGreenhouse();
         if(OS.GetCmdlineUserArgs().Contains("--greenhouse-review")) { ReviewGreenhouse((float)delta);return; }
@@ -513,6 +520,7 @@ public partial class GardenGame : Node3D
         expeditionTeam?.Step((float)delta,player.Position,camera);
         expeditionTeam?.PushPlayer(player);
         AdvanceSiteMission((float)delta);
+        AdvanceWildlife((float)delta);
         if (zone==GardenZone.Garden)
         {
             introductions.Advance((float)delta,pet,SocialCandidates,Save);
@@ -1202,7 +1210,8 @@ public partial class GardenGame : Node3D
         if (code == Key.E) Interact();
         if (code == Key.F)
         {
-            if(SiteMission is {} mission && expeditionTeam!=null)mission.Ask(player,expeditionTeam);
+            if(Wildlife is {} wildlife && expeditionTeam!=null && wildlife.Ask(player,expeditionTeam)) { }
+            else if(SiteMission is {} mission && expeditionTeam!=null)mission.Ask(player,expeditionTeam);
             else PetFriend();
         }
         if (code == Key.Q)
@@ -1292,6 +1301,7 @@ public partial class GardenGame : Node3D
 
     private void Interact()
     {
+        if(Wildlife?.Interact(player)==true)return;
         if(SiteMission?.Interact(player)==true)return;
         if (CanTakeMeal())
         {
@@ -1698,6 +1708,7 @@ public partial class GardenGame : Node3D
                 }
                 if (heldAnimal!=null)
                 {
+                    ConsumeBagAnimal(heldAnimal);
                     recipient.TrainWithAnimal(heldAnimal.Skill.ToString());
                     GardenEgg.ShellBurst(subject,Colors.White,sparkles:true);
                     heldAnimal.ReturnToHabitat(); heldAnimal=null;
@@ -2523,6 +2534,7 @@ public partial class GardenGame : Node3D
         plantSeedButton=new Button { Text="Plant / Replant Selected Seed",Position=new(904,404),Size=new(330,34) };
         plantSeedButton.Pressed+=PlantSelectedSeed;
         bagPanel.AddChild(plantSeedButton);
+        BuildAnimalBag();
         Text(bagPanel,"Stand beside a tree to replace it.\nTrees per garden   7 maximum",12,new(904,454,330,50),GardenArt.Ink);
         hint = Text(ui, "", 16, new(190, 680, 910, 28), GardenArt.Ink);
         toast = Text(ui, "", 16, new(170, 617, 940, 42), GardenArt.Ink); toast.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -2802,6 +2814,7 @@ public partial class GardenGame : Node3D
         shopText.Text=$"{ShopItemLabel}\nBalance: {pet.Stars} stars\n\nLeft / Right: Item    Enter: Buy    Esc: Close";
         bagPanel.Visible = showBag;
         RefreshBagCatalog();
+        RefreshAnimalBag();
         takeFruitButton.Disabled=!HandsAvailable;
         plantSeedButton.Disabled=zone!=GardenZone.Garden || !HandsAvailable;
         bagText.Text = $"Garden fruit   {pet.BagFruit}/12\nHeart Fruit   {pet.BagHeartFruit}/12  (V)\nRace stars   {pet.Stars}";
@@ -2817,6 +2830,7 @@ public partial class GardenGame : Node3D
         if (!paused && transition<0 && CanTakeMeal()) return "E: Take fruit";
         if (paused || transition>=0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return "";
         if (racing) return CanCheer() ? "Q: Cheer     E: Cancel race" : "E: Cancel race";
+        if(Wildlife is {} wildlife && wildlife.Hint(player) is { Length:>0 } wildlifeHint)return wildlifeHint;
         if(SiteMission is {} mission)return mission.Hint(player,expeditionTeam);
         string action = "";
         var pickup=NearestPickup();
@@ -3586,6 +3600,7 @@ public partial class GardenGame : Node3D
         CheckNaturalWaterAndCoast();
         CheckExpeditionFoundation();
         CheckGreenhouse();
+        CheckWildlife();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }

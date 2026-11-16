@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Mori;
 
-public enum DiscoveryKind { Plant, Stone, Shelter, Unknown, Vista, Water, Sound, Hidden }
+public enum DiscoveryKind { Plant, Stone, Shelter, Unknown, Vista, Water, Sound, Hidden, Animal }
 [Flags] public enum DiscoveryReaction { Watch=1, Inspect=2, Touch=4, Listen=8, Share=16 }
 public enum DiscoveryKnowledge { Unknown, Noticed, Studied, Familiar, Recent }
 public sealed record DiscoveryDefinition(string Id,DiscoveryKind Kind,WorldPoint Position,float Radius,float Appeal,

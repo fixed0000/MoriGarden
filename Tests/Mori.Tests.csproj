@@ -8,5 +8,7 @@
     <Compile Include="../Scripts/DiscoveryMemory.cs" Link="DiscoveryMemory.cs" />
     <Compile Include="../Scripts/DiscoveryDecisions.cs" Link="DiscoveryDecisions.cs" />
     <Compile Include="../Scripts/CompactMissionState.cs" Link="CompactMissionState.cs" />
+    <Compile Include="../Scripts/AnimalCatalog.cs" Link="AnimalCatalog.cs" />
+    <Compile Include="../Scripts/AnimalInventory.cs" Link="AnimalInventory.cs" />
   </ItemGroup>
 </Project>

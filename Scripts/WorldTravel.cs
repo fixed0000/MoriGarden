@@ -40,6 +40,7 @@ internal sealed class WorldTravel
                 ZoneArt.Portal(world,Point(route.Entrance),WorldCatalog.Default.Areas[route.To].Title,new("849282"));
         if(zone==GardenZone.Expedition && ExpeditionArea==WorldCatalog.Greenhouse)
             world.GetNode<GreenhouseMission>("GreenhouseMission").Bind(save);
+        if(zone==GardenZone.Expedition)WildlifeHabitats.Build(world,save,ExpeditionArea);
     }
     public string Title(GardenZone zone) => WorldCatalog.Default.Areas[AreaId(zone)].Title;
 }

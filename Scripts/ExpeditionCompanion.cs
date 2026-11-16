@@ -63,7 +63,7 @@ internal sealed class ExpeditionCompanion
         SocialContact=SocialApproach=0;WalkedTogether=false;
         path=Array.Empty<Vector3>(); waypoint=0;
     }
-    internal void UpdateGoal(Vector3 goal) { if(Goal.DistanceTo(goal)>.65f) {Goal=goal; repath=0;} }
+    internal void UpdateGoal(Vector3 goal) { if(Goal.DistanceTo(goal)>(TargetTolerance<.3f ? .05f : .65f)) {Goal=goal; repath=0;} }
     internal void HoldSocial() => Remaining=Mathf.Max(Remaining,8);
     internal void Step(float dt,ExpeditionNavigation nav,Camera3D camera,Vector3 player)
     {

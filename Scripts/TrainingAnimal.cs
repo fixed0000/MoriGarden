@@ -9,6 +9,7 @@ public partial class TrainingAnimal : CharacterBody3D
     public AnimalSkill Skill { get; init; }
     public bool IsParrot { get; init; }
     public bool IsGorilla { get; init; }
+    public string? InventorySpecies { get; init; }
     public Vector3 Home { get; init; }
     private float respawn;
     private Vector3 habitat;
@@ -68,7 +69,9 @@ public partial class TrainingAnimal : CharacterBody3D
             var detail = Skill == AnimalSkill.Run || Skill == AnimalSkill.Power
                 ? new Vector3(side*.14f,.77f,0) : new Vector3(side*.26f,.30f,0);
             var size = Skill == AnimalSkill.Run ? new Vector3(.10f,.32f,.11f) : new Vector3(.18f,.16f,.16f);
-            var ear = GardenArt.Ball(art,detail,size,coat);
+            var wingRoot=Skill==AnimalSkill.Fly ? new Node3D { Position=detail } : null;
+            if(wingRoot!=null){art.AddChild(wingRoot);wings[(side+1)/2]=wingRoot;}
+            var ear = GardenArt.Ball(wingRoot ?? art,wingRoot==null ? detail : Vector3.Zero,size,coat);
             ear.Rotation = new(0,0,side*.22f);
             if (Skill is AnimalSkill.Run or AnimalSkill.Power)
                 GardenArt.Ball(art,detail+new Vector3(0,0,.058f),size*.64f,new("c5a295"));
@@ -200,8 +203,24 @@ public partial class TrainingAnimal : CharacterBody3D
 
     public void ReturnToHabitat()
     {
+        if(InventorySpecies!=null){QueueFree();return;}
         respawn = 35;
         ReleaseHere(0);
         Hide();
+    }
+
+    // Reuse the garden models and limb animation, while the expedition owns movement and terrain.
+    internal void AnimateWild(float dt,float speed,float clock,bool flight)
+    {
+        float stride=clock*(Skill==AnimalSkill.Power ? 8 : 13),wave=Mathf.Sin(stride),blend=Mathf.Clamp(speed,0,1);
+        float hop=Skill==AnimalSkill.Run ? Mathf.Abs(wave)*.065f*blend : 0;
+        art.Position=new(0,flight ? .22f+Mathf.Sin(clock*4)*.12f : hop,0);
+        art.Rotation=new(0,0,Mathf.Sin(clock*2)*.025f);
+        for(int i=0;i<2;i++)
+        {
+            if(feet[i]!=null)feet[i].Rotation=new((i==0 ? wave : -wave)*.65f*blend,0,0);
+            if(arms[i]!=null)arms[i].Rotation=new((i==0 ? wave : -wave)*.25f*blend,0,0);
+            if(wings[i]!=null)wings[i].Rotation=new(0,0,(i==0 ? -1 : 1)*(flight ? .5f+Mathf.Sin(clock*30)*.35f : .08f));
+        }
     }
 }

@@ -13,6 +13,7 @@ internal sealed class ExpeditionTeam
     internal string Message { get; private set; }="Following · Free to explore";
     private PetState owner;
     private readonly ExpeditionNavigation nav;
+    internal ExpeditionNavigation Navigation=>nav;
     private Vector3 anchor,lastPlayer;
     private float playerSpeed;
     internal ExpeditionTeam(Node3D world,PetState owner,Vector3 player)
