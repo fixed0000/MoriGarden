@@ -79,7 +79,7 @@ internal partial class StadiumUi : CanvasLayer
         {
             s.Athletics.Results.TryGetValue(e.Id,out var record);
             string suggestion=new[]{("Run",s.Run),("Swim",s.Swim),("Fly",s.Fly),("Power",s.Power)}.OrderByDescending(p=>p.Item2).First().Item1;
-            eventInfo.Text=e.Title+"\n\n"+(e.Mode==SportMode.Race ? string.Join(" → ",e.Sections)+"\nFour participants · Q: Cheer" : "Five automatic bouts\nHealth, Zeal, defence and evasion\nQ: Cheer · Leave between bouts")+
+            eventInfo.Text=e.Title+"\n\n"+(e.Mode==SportMode.Race ? string.Join(" → ",e.Sections)+"\nEight participants · Q: Cheer" : "Five automatic bouts\nHealth, Zeal, defence and evasion\nQ: Cheer · Leave between bouts")+
                 $"\n\nWins: {record?.Wins ?? 0}"+(record?.BestSeconds>0 ? $"\nBest time: {record.BestSeconds:0.00}s" : "")+$"\nSuggested specialty: {suggestion}"+(s.Energy<15 ? "\nRest before entering." : "");
         }
     }

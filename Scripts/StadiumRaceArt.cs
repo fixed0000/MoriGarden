@@ -21,7 +21,7 @@ internal static class StadiumRaceArt
         var closest=course.Samples.MinBy(s=>Mathf.Abs(s.Point.Position.Z-z)).Point.Position;
         float y=closest.Y-.035f;
         if(course.Key=="crab-pool" && z>6 && z<50 && Mathf.Abs(x-closest.X)<7.0f)y=-.48f;
-        if(course.Key=="stump-valley" && z>18.1f && z<31)y=-.15f;
+        if(course.Key=="stump-valley" && z>18.1f && z<31)y=-.55f;
         float edge=Mathf.SmoothStep(3.5f,15,Mathf.Abs(x-closest.X));
         return y+edge*(1.2f+Mathf.Sin(z*.24f+x*.4f)*.5f);
     }

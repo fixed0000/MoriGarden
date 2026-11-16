@@ -26,21 +26,25 @@ public partial class ImportedChao
         }
         var actor=(Node3D)art.GetParent();var at=actor.GlobalPosition;var forward=actor.GlobalBasis.Z;
         Vector3 left=at+forward*.13f-actor.GlobalBasis.X*.085f+Vector3.Up*.23f,right=at+forward*.13f+actor.GlobalBasis.X*.085f+Vector3.Up*.23f;
-        if(fighter.Action==KarateAction.Meditate && art is ImportedChao sitting){MeditationPose(sitting,fighter.ActionTime);return;}
-        if(fighter.Action==KarateAction.Knockdown){LieDown(art,Mathf.Min(fighter.ActionTime/.35f,1));CloseEyes(art,false);Express(art,ChaoExpression.Sad);return;}
-        if(fighter.Action==KarateAction.Rise){StandUpPose(art,Quaternion.FromEuler(new(-Mathf.Pi/2,0,0)),Vector3.Up*.1f,fighter.ActionTime/1.2f);return;}
-        if(fighter.Action==KarateAction.Attack)
+        bool contactFrame=fighter.StrikeAge<.12f;
+        if(!contactFrame && fighter.Action==KarateAction.Meditate && art is ImportedChao sitting){MeditationPose(sitting,fighter.ActionTime);return;}
+        if(!contactFrame && fighter.Action==KarateAction.Knockdown){LieDown(art,Mathf.Min(fighter.ActionTime/.35f,1));CloseEyes(art,false);Express(art,ChaoExpression.Sad);return;}
+        if(!contactFrame && fighter.Action==KarateAction.Rise){StandUpPose(art,Quaternion.FromEuler(new(-Mathf.Pi/2,0,0)),Vector3.Up*.1f,fighter.ActionTime/1.2f);return;}
+        if(fighter.Action==KarateAction.Attack || contactFrame)
         {
-            float swing=fighter.Swing;float reach=Mathf.SmoothStep(.16f,.46f,swing)*(1-Mathf.SmoothStep(.55f,.85f,swing));
-            bool kick=fighter.AttackKind is 2 or 4;var towards=target-at;towards.Y=0;var contact=target-towards.Normalized()*.10f+Vector3.Up*(kick ? .13f : .2f);
-            float turn=fighter.AttackKind==4 ? Mathf.Tau*Mathf.SmoothStep(0,.44f,swing) : fighter.AttackKind==3 ? Mathf.Sin(swing*Mathf.Pi)*.35f : 0;
-            art.Rotation=new(.08f*reach,turn,(fighter.AttackKind==0 ? 1 : -1)*.06f*reach);
+            float swing=contactFrame ? KarateContact.ImpactSwing : fighter.Swing;int kind=contactFrame ? fighter.StrikeKind : fighter.AttackKind;float reach=Mathf.SmoothStep(.16f,.46f,swing)*(1-Mathf.SmoothStep(.55f,.85f,swing));
+            bool kick=kind is 2 or 4;
+            var origin=contactFrame ? fighter.StrikeOrigin : fighter.Position;var facing=contactFrame ? fighter.StrikeFacing : fighter.Facing;
+            var tip=KarateContact.Tip(origin,facing,kind);var stage=(Node3D)actor.GetParent();
+            var contact=stage.ToGlobal(StadiumArt.Ring+new Vector3(tip.X,.03f+(kick ? .13f : .20f),tip.Y));
+            float turn=kind==4 ? Mathf.Tau*Mathf.SmoothStep(0,.44f,swing) : kind==3 ? Mathf.Sin(swing*Mathf.Pi)*.35f : 0;
+            art.Rotation=new(.08f*reach,turn,(kind==0 ? 1 : -1)*.06f*reach);
             if(kick && art.FindChild("FootR",true,false) is Node3D foot){foot.Rotation=new(-reach*1.2f,0,0);foot.GlobalPosition=foot.GlobalPosition.Lerp(contact,reach);}
-            else if(fighter.AttackKind==0)left=left.Lerp(contact,reach);else right=right.Lerp(contact,reach);
-            Express(art,fighter.Struck && fighter.Misses>0 && fighter.Hits==0 ? ChaoExpression.Surprised : ChaoExpression.Focused);
+            else if(kind==0)left=left.Lerp(contact,reach);else right=right.Lerp(contact,reach);
+            Express(art,fighter.Struck && fighter.StrikeMissed ? ChaoExpression.Surprised : ChaoExpression.Focused);
         }
         else if(fighter.Action==KarateAction.Guard){left.Y+=.04f;right.Y+=.04f;Express(art,ChaoExpression.Focused);}
-        else if(fighter.Action==KarateAction.Dodge){art.Rotation=new(0,0,Mathf.Sin(fighter.ActionTime/.7f*Mathf.Pi)*.32f);Express(art,ChaoExpression.Curious);}
+        else if(fighter.Action==KarateAction.Dodge){float lean=Mathf.Sin(fighter.ActionTime/.7f*Mathf.Pi);art.Rotation=new(0,0,lean*.32f);art.Position+=actor.GlobalBasis.X*lean*.035f;Express(art,ChaoExpression.Curious);}
         else if(fighter.Action==KarateAction.Hit){art.Rotation=new(-.24f*Mathf.Sin(fighter.ActionTime/.28f*Mathf.Pi),0,0);Express(art,ChaoExpression.Surprised);}
         InstrumentHands(art,left,right);
     }

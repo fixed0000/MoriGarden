@@ -11,12 +11,13 @@ public partial class GardenGame
     private float stadiumReviewClock,stadiumPhaseClock;
     private int stadiumReviewPhase,stadiumReviewTicks;
     private readonly HashSet<string> stadiumShots=new();
+    private readonly Dictionary<string,float> stadiumShotSeconds=new();
     private int observedHits,observedBlocks,observedDodges,observedDowns;
     private float stadiumResultWait;
     private int reviewCourse,reviewOutcome;
     private readonly string[] reviewCourses={"crab-pool","mushroom-forest","stump-valley","block-canyon"};
     private float reviewLastCheer,reviewBoutWait;
-    private bool reviewMeditated,reviewRecovered;
+    private bool reviewMeditated,reviewRecovered,reviewTripped;
     private void InspectStadium()
     {
         if(stadiumInspectReady)return;stadiumInspectReady=true;SetupStadiumDemo();
@@ -26,7 +27,7 @@ public partial class GardenGame
     }
     private void StadiumShot(string name)
     {
-        if(!stadiumShots.Add(name))return;
+        if(!stadiumShots.Add(name))return;stadiumShotSeconds[name]=(float)Engine.GetProcessFrames()/24f;
         GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath("res://artifacts/stadium-"+name+".png"));GD.Print("STADIUM_SHOT: "+name);
     }
     private void ReviewStadium(float delta)
@@ -39,7 +40,7 @@ public partial class GardenGame
             if(stadiumPhaseClock>.8f)StadiumShot("selection");if(stadiumPhaseClock<1.5f)return;
             if(OS.GetCmdlineUserArgs().Contains("--outcomes-only")){BeginOutcomeReview();stadiumReviewPhase=10;return;}
             if(OS.GetCmdlineUserArgs().Contains("--karate-only")){session.Start("stadium-fern","karate-beginner");session.Fight!.A.Zeal=1;stadiumReviewPhase=2;stadiumPhaseClock=0;}
-            else {BeginReviewRace();stadiumReviewPhase=1;stadiumPhaseClock=0;}
+            else {if(OS.GetCmdlineUserArgs().Contains("--climb-review"))reviewCourse=2;BeginReviewRace();stadiumReviewPhase=1;stadiumPhaseClock=0;}
         }
         session.Step(dt,camera);
         if(stadiumReviewPhase==10)
@@ -57,6 +58,21 @@ public partial class GardenGame
             if(race.Countdown<=0 && segment.Fraction>.35f && segment.Fraction<.70f)StadiumShot(key+"-"+race.Course.TravelSurface(entrant.Distance,entrant.Pet).ToString().ToLowerInvariant());
             if(key=="stump-valley" && stadiumShots.Contains(key+"-fly") && race.Course.Sample(race.Entrants[1].Distance).Surface==RaceSurface.Fly)
             {session.Watch(1);if(race.Course.TravelSurface(race.Entrants[1].Distance,race.Entrants[1].Pet)==RaceSurface.Power)StadiumShot(key+"-fallback-climb");}
+            if(OS.GetCmdlineUserArgs().Contains("--audit-review"))
+            {
+                if(key=="mushroom-forest" && !reviewTripped && entrant.Distance>12 && !entrant.Traversal.OwnsMovement){race.Trip(entrant);reviewTripped=true;}
+                if(entrant.Action is RaceAction.Fall or RaceAction.Prone or RaceAction.Rise)StadiumShot(key+"-"+entrant.Action.ToString().ToLowerInvariant());
+                if(entrant.Traversal.OwnsMovement && entrant.Traversal.Progress>.35f && entrant.Traversal.Progress<.8f)StadiumShot(key+"-"+entrant.Traversal.Phase.ToString().ToLowerInvariant());
+                var low=race.Entrants[1];
+                if(entrant.Traversal.Phase==RaceObstaclePhase.Climb && (segment.Fraction>.4f && segment.Fraction<.65f))StadiumShot(key+"-climb-middle");
+                var lowSection=race.Course.Sample(low.Distance);
+                if(low.Traversal.Phase==RaceObstaclePhase.Climb && (lowSection.Surface==RaceSurface.Fly ? lowSection.Fraction>.85f && lowSection.Fraction<.90f : lowSection.Fraction>.4f && lowSection.Fraction<.65f))StadiumShot(key+"-low-climb-middle");
+                if(key=="stump-valley" && stadiumShots.Contains(key+"-fly") || key=="crab-pool" && stadiumShots.Contains(key+"-swim") || key=="block-canyon" && stadiumShots.Contains(key+"-power"))
+                {
+                    session.Watch(1);string phase=low.Traversal.Phase.ToString().ToLowerInvariant();
+                    if(low.Traversal.Phase is RaceObstaclePhase.FailedFlight or RaceObstaclePhase.Climb or RaceObstaclePhase.Swim || low.Traversal.OwnsMovement && low.Traversal.Progress>.4f)StadiumShot(key+"-low-"+phase);
+                }
+            }
             if(session.CanCheer && stadiumReviewClock-reviewLastCheer>5){session.Cheer();reviewLastCheer=stadiumReviewClock;}
             if(session.ResultsReady)
             {
@@ -73,6 +89,12 @@ public partial class GardenGame
             if(fight.Countdown<1.5f && fight.Countdown>.2f)StadiumShot("karate-start");
             if(fight.A.Action==KarateAction.Guard || fight.B.Action==KarateAction.Guard)StadiumShot("karate-guard");
             if(fight.A.Action==KarateAction.Attack && fight.A.Swing>.46f && fight.A.Swing<.54f || fight.B.Action==KarateAction.Attack && fight.B.Swing>.46f && fight.B.Swing<.54f)StadiumShot("karate-contact");
+            foreach(var f in new[]{fight.A,fight.B})
+            {
+                if(f.Action==KarateAction.Dodge && f.ActionTime>.12f)StadiumShot("karate-dodge");
+                if(f.Action==KarateAction.Attack && f.Swing>.46f && f.Swing<.55f)StadiumShot("karate-"+(f.AttackKind>=3 ? "strong" : f.AttackKind==2 ? "kick" : "punch"));
+                if(f.StrikeAge<.10f && f.Misses>0)StadiumShot("karate-miss");
+            }
             if(fight.A.Action==KarateAction.Knockdown || fight.B.Action==KarateAction.Knockdown)StadiumShot("karate-knockdown");
             if(fight.A.Action==KarateAction.Meditate && fight.A.ActionTime>.7f){StadiumShot("karate-meditation");reviewMeditated=true;}
             if(reviewMeditated && !reviewRecovered && session.CanCheer && stadiumReviewClock-reviewLastCheer>.2f){session.Cheer();reviewLastCheer=stadiumReviewClock;}
@@ -105,8 +127,13 @@ public partial class GardenGame
         pet.GardenEggs[0].Chao!.Energy=100;stadium!.Start("stadium-fern","race-"+reviewCourses[reviewCourse]+"-1");
         foreach(var rival in stadium.Race!.Entrants.Skip(1)){rival.Pet.Run=rival.Pet.Swim=rival.Pet.Power=rival.Pet.Stamina=450;rival.Pet.Fly=600;}
         if(reviewCourses[reviewCourse]=="stump-valley")stadium.Race.Entrants[1].Pet.Fly=30;
+        if(OS.GetCmdlineUserArgs().Contains("--audit-review"))
+        {
+            if(reviewCourses[reviewCourse]=="crab-pool")stadium.Race.Entrants[1].Pet.Swim=50;
+            if(reviewCourses[reviewCourse]=="block-canyon")stadium.Race.Entrants[1].Pet.Power=80;
+        }
         stadiumPhaseClock=0;
     }
-    private void WriteStadiumReview()=>System.IO.File.WriteAllText(ProjectSettings.GlobalizePath("res://artifacts/stadium-review.json"),System.Text.Json.JsonSerializer.Serialize(new { frames=stadiumReviewTicks,seconds=stadiumReviewClock,hits=observedHits,blocks=observedBlocks,dodges=observedDodges,knockdowns=observedDowns,shots=stadiumShots,boutWins=stadium?.BoutWins ?? 0,meditation=reviewMeditated,zealRecovery=reviewRecovered },new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+    private void WriteStadiumReview()=>System.IO.File.WriteAllText(ProjectSettings.GlobalizePath("res://artifacts/stadium-review.json"),System.Text.Json.JsonSerializer.Serialize(new { frames=stadiumReviewTicks,seconds=stadiumReviewClock,hits=observedHits,blocks=observedBlocks,dodges=observedDodges,knockdowns=observedDowns,shots=stadiumShots,shotSeconds=stadiumShotSeconds,boutWins=stadium?.BoutWins ?? 0,meditation=reviewMeditated,zealRecovery=reviewRecovered },new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
 
 }

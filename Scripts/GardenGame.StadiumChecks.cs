@@ -28,13 +28,23 @@ public partial class GardenGame
             athlete.Energy=5;session.Start("stadium-fern","race-crab-pool-1");if(session.InCompetition)throw new Exception("Exhausted Chao entered the competition");athlete.Energy=100;
             Interact();if(!session.Ui.MenuVisible)throw new Exception("Stadium desk did not open its selector");session.Ui.Select("stadium-fern",SportMode.Race);session.Start("stadium-fern","race-crab-pool-1");
             if(session.Race?.Entrants.Count!=8 || !ReferenceEquals(session.Entrant!.State,athlete) || session.View!.Bodies.Count!=8 || friend.Visible)throw new Exception("Stadium did not load the selected real Chao and seven rivals");
+            for(int i=0;i<70;i++)session.Step(.1f,camera);
+            var swimmer=session.View!.Bodies[0];var swimArt=swimmer.GetChildren().OfType<ImportedChao>().Single();
+            if(swimArt.FindChild("Body_1",true,false) is MeshInstance3D torso)
+            {
+                var box=torso.GetAabb();float low=float.MaxValue,high=float.MinValue;
+                for(int corner=0;corner<8;corner++){float y=(torso.GlobalTransform*box.GetEndpoint(corner)).Y;low=Mathf.Min(low,y);high=Mathf.Max(high,y);}
+                GD.Print($"STADIUM_WATER: root={swimmer.Position.Y:0.000}, art={swimArt.Position.Y:0.000}, torso={low:0.000}..{high:0.000}, water=0.035");
+                if(low>.035f || high>.115f || low<-.22f)throw new Exception("The racing swimmer's torso is above or too far below the water surface");
+            }
             for(int i=0;i<2000 && !session.ResultsReady;i++)session.Step(.1f,camera);
             if(!session.ResultsReady || session.Prize==null || athlete.Athletics.Results["race-crab-pool-1"].Entries!=1 || pet.Athletics.Results.Count!=0)throw new Exception("Selected athlete race result was not awarded individually");
             int stars=pet.Stars;session.Step(.1f,camera);if(pet.Stars!=stars)throw new Exception("Results granted a repeated reward");
             session.Leave();athlete.Energy=100;session.Start("stadium-fern","karate-beginner");
             int bouts=0,contacts=0;float contactGap=0;
             for(int i=0;i<4000 && !session.ResultsReady;i++){session.Step(.1f,camera);contacts+=session.View!.ContactSamples;contactGap=Mathf.Max(contactGap,session.View.MaxHitGap);if(session.BetweenBouts){bouts++;session.Next();}}
-            if(contacts==0 || contactGap>.22f)throw new Exception("Karate strikes missed their visual contact: "+contactGap);
+            GD.Print($"STADIUM_CONTACT: maximum tip error {contactGap:0.0000} m");
+            if(contacts==0 || contactGap>.045f)throw new Exception("Karate strikes missed their visual contact: "+contactGap);
             if(!session.ResultsReady || session.Prize==null || session.Fight==null || session.BoutWins!=5 || bouts!=4 || !athlete.Athletics.Cups.Contains("karate-beginner"))throw new Exception("Karate tournament failed: "+session.BoutWins+" wins / "+session.Fight?.Method);
             session.Leave();Save();var loaded=SaveStore.Load(savePath,out var warning);
             if(warning.Length>0 || loaded.GardenEggs[0].Chao!.Athletics.Cups.Count!=athlete.Athletics.Cups.Count || loaded.GardenEggs.Count!=residentCount)throw new Exception("Stadium save lost records or duplicated pets");

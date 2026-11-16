@@ -82,7 +82,7 @@ internal sealed class StadiumSession
         }
         else if(Fight is {} fight)
         {
-            if(!ResultsReady && !BetweenBouts)fight.Step(dt);View!.Karate(fight,Entrant!.Id,camera,dt);
+            if(fight.Finished || !ResultsReady && !BetweenBouts)fight.Step(dt);View!.Karate(fight,Entrant!.Id,camera,dt);
             Ui.KarateHud(fight,Bout+1,Event!.Bouts,BoutWins);
             if(fight.Finished && !ResultsReady && !BetweenBouts)
             {

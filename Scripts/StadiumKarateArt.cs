@@ -9,7 +9,7 @@ internal static class StadiumKarateArt
     {
         GardenArt.Shape(root,new PlaneMesh{Size=new(15,15)},new(0,-.09f,-1),Vector3.One,new("68855c"));ZoneArt.Solid(root,new(0,-.20f,-1),new(15,.2f,15));
         var water=GardenArt.Shape(root,new PlaneMesh{Size=new(7,4)},new(0,-.04f,-1.7f),Vector3.One,Colors.White);water.MaterialOverride=WaterArt.Material();
-        GardenArt.Shape(root,new BoxMesh(),new(0,.11f,0),new(2.75f,.28f,2.75f),new("756d58"));ZoneArt.Solid(root,new(0,.11f,0),new(2.75f,.28f,2.75f));
+        GardenArt.Shape(root,new BoxMesh(),new(0,.11f,0),new(2.5f,.28f,2.5f),new("756d58"));ZoneArt.Solid(root,new(0,.11f,0),new(2.5f,.28f,2.5f));
         var tatami=new ShaderMaterial{Shader=new Shader{Code="""
             shader_type spatial;
             void fragment(){float weave=sin(UV.x*500.0)*.012+sin(UV.y*650.0)*.012;ALBEDO=vec3(.70,.74,.56)+weave;ROUGHNESS=.9;}
