@@ -47,12 +47,14 @@ public sealed class WorldCatalog
 
 public sealed class ExpeditionProgress
 {
+    public List<string> LastTeamIds { get; set; }=new();
     public HashSet<string> UnlockedAreas { get; set; }=new(StringComparer.Ordinal);
     public HashSet<string> VisitedAreas { get; set; }=new(StringComparer.Ordinal);
     // Future missions can record unlock facts here without introducing a mission runner now.
     public Dictionary<string,HashSet<string>> AreaFlags { get; set; }=new(StringComparer.Ordinal);
     public void Validate()
     {
+        LastTeamIds=(LastTeamIds ?? new()).Where(id=>!string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).Take(3).ToList();
         UnlockedAreas??=new(); VisitedAreas??=new(); AreaFlags??=new();
         UnlockedAreas.RemoveWhere(string.IsNullOrWhiteSpace); VisitedAreas.RemoveWhere(string.IsNullOrWhiteSpace);
         foreach(var id in AreaFlags.Keys.ToArray())

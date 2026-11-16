@@ -425,27 +425,33 @@ public partial class GardenEgg : CharacterBody3D
             Glutton=GD.Randf()<.25f,Crybaby=GD.Randf()<.25f,
             Sociability=(int)GD.RandRange(15,90),ActivityPreference=(int)GD.RandRange(1,5),
             Clumsy=GD.Randf()<.2f,Dexterous=GD.Randf()<.2f };
-        visual=Data.Chao.CanAct ? ImportedChao.Build(this,Data.Chao.Form) :
-            GardenArt.LifeShell(this,Data.Chao.IsEgg);
+        visual=BuildChaoArt(this,Data.Chao,Data.Color);
         nameLabel=GardenArt.Sign(this,Data.Chao.Name,new(0,.63f,0),GardenArt.Cream);
-        var bodyPaint=GardenArt.Material(Pigment(Data.Color));
-        if (Data.Color=="Black")
+    }
+
+    internal static Node3D BuildChaoArt(Node3D parent,PetState state,string color)
+    {
+        var art=state.CanAct ? ImportedChao.Build(parent,state.Form) : GardenArt.LifeShell(parent,state.IsEgg);
+        if(color=="Default") return art;
+        var bodyPaint=GardenArt.Material(Pigment(color));
+        if (color=="Black")
         {
             bodyPaint.EmissionEnabled=true;
             bodyPaint.Emission=new Color("343743");
             bodyPaint.EmissionEnergyMultiplier=.19f;
         }
-        foreach (var mesh in visual.FindChildren("*","MeshInstance3D",true,false))
+        foreach (var mesh in art.FindChildren("*","MeshInstance3D",true,false))
         {
             if (mesh is not MeshInstance3D part || part.GetParent() is EmotionOrb) continue;
             string name=part.Name;
             if (name.Contains("Eye"))
             {
-                if (Data.Color=="Black") AddEyeRim(part);
+                if (color=="Black") AddEyeRim(part);
                 continue;
             }
             if (name!="Wings") part.MaterialOverride=bodyPaint;
         }
+        return art;
     }
 
     private static void AddEyeRim(MeshInstance3D eye)

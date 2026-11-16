@@ -97,4 +97,29 @@ var invalid=false;
 try { _=new WorldCatalog(new[]{new WorldArea("bad","Bad",WorldAreaKind.ExpeditionSite,"missing")},Array.Empty<WorldRoute>()); }
 catch(ArgumentException) { invalid=true; }
 Check(invalid,"Catalog rejects orphan expedition sites");
+var rosterOwner=new PetState();
+rosterOwner.GardenEggs.Add(new() { Id="black",Hatched=true,Color="Black",Chao=new PetState { Name="Mori" } });
+rosterOwner.GardenEggs.Add(new() { Id="shell",Hatched=false,Chao=new PetState() });
+rosterOwner.GardenEggs.Add(new() { Id="cocoon",Hatched=true,Chao=new PetState { CocoonSeconds=10 } });
+Check(ExpeditionRoster.Available(rosterOwner).Count==2,"Only active hatched Chao enter a team, regardless of matching names");
+var chosen=ExpeditionRoster.Resolve(rosterOwner,new[]{"black","black","missing","main"});
+Check(chosen.Count==2 && chosen[0]=="black" && chosen[1]=="main","Team IDs exclude duplicates and missing pets");
+var real=ExpeditionRoster.Available(rosterOwner)[1].State;real.Energy=23;
+Check(ReferenceEquals(real,rosterOwner.GardenEggs.Find(e=>e.Id=="black")!.Chao) && rosterOwner.GardenEggs.Find(e=>e.Id=="black")!.Chao!.Energy==23,"Team modifies live pet state without copies");
+for(int i=0;i<3;i++)rosterOwner.GardenEggs.Add(new() { Id="extra-"+i,Hatched=true,Chao=new PetState() });
+Check(ExpeditionRoster.Resolve(rosterOwner,new[]{"main","black","extra-0","extra-1","extra-2"}).Count==3,"A party never exceeds three eligible identities");
+var outgoing=new PetState { Curiosity=100,Initiative=990,Sociability=100,Kindness=100,Aggressiveness=-100,Energy=90 };
+var cautious=new PetState { Curiosity=-100,Initiative=0,Sociability=0,Kindness=-100,Aggressiveness=100,Energy=90 };
+Check(ExpeditionDecisions.Weight(ExpeditionIntent.Explore,outgoing,false)>ExpeditionDecisions.Weight(ExpeditionIntent.Explore,cautious,false)*3 &&
+    ExpeditionDecisions.Weight(ExpeditionIntent.Social,outgoing,true)>ExpeditionDecisions.Weight(ExpeditionIntent.Social,cautious,true),"Continuous curiosity, initiative and social traits change decision weights");
+Check(ExpeditionDecisions.Weight(ExpeditionIntent.Sleep,new PetState { Energy=3 },false)>5 &&
+    ExpeditionDecisions.Weight(ExpeditionIntent.Sleep,outgoing,false)==0 && ExpeditionDecisions.Weight(ExpeditionIntent.Social,outgoing,false)==0,"Sleep requires fatigue and social actions require a suitable companion");
+rosterOwner.Expedition.LastTeamIds=new() { "black","main","black" };rosterOwner.Validate();
+var teamDir=Path.Combine(Path.GetTempPath(),"MoriTeamTests-"+Guid.NewGuid());
+try {
+    var file=Path.Combine(teamDir,"team.json");SaveStore.Save(file,rosterOwner);var read=SaveStore.Load(file,out var note);
+    Check(note=="" && read.Expedition.LastTeamIds.Count==2 && read.Expedition.LastTeamIds[0]=="black" &&
+        ReferenceEquals(ExpeditionRoster.Available(read)[1].State,read.GardenEggs.Find(e=>e.Id=="black")!.Chao),"Team survives save/load and rebinds existing identities");
+} finally { if(Directory.Exists(teamDir))Directory.Delete(teamDir,true); }
+Check(ExpeditionRoster.Resolve(new PetState(),null).Count==0,"Old saves require no new party fields");
 Console.WriteLine($"{checks} checks passed.");

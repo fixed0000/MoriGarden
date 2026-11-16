@@ -9,6 +9,8 @@ internal static class WindfallMeadow
     internal static readonly Vector2 Pond=new(13,3);
     internal static readonly Vector2 PondRadii=new(4.9f,3.7f);
     internal const float WaterLevel=.055f;
+    // Quiet landmarks only: no collectible or mission behavior is attached to these places.
+    internal static readonly Vector2[] ObservationSpots={new(-4,17),new(-8,6),new(6,9),new(20,9),new(-16,1),new(-21,-12),new(26,-12),new(1,-21)};
     internal static readonly NaturalWaterBody Water=new("MeadowWater",new Rect2(5,-4,16,14),WaterLevel,Height,Area:p=>PondDistance(p)<1.6f);
     private static readonly Vector2[][] Paths={
         NatureTerrain.SmoothPath(new(0,28),new(0,17),new(-5,8),new(-8,-2),new(-6,-12),new(2,-21),new(14,-22)),

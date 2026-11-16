@@ -170,7 +170,7 @@ public partial class GardenGame : Node3D
             AddChild(music);
         }
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
-        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test");
+        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review");
         savePath = ProjectSettings.GlobalizePath(testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
@@ -231,6 +231,7 @@ public partial class GardenGame : Node3D
         cameraRig = new ThirdPersonCamera(); AddChild(cameraRig);
         camera = cameraRig.View; cameraRig.Follow(player.Position, 0, true);
         BuildUi();
+        BuildTeamUi();
         GetTree().AutoAcceptQuit = false;
         Notify(pet.IsEgg ? "Pick up the egg with E. Hold X to rock it, then set it down." : "Welcome back to the garden.", 7);
         if (loadWarning.Length > 0) Notify(loadWarning, 12);
@@ -239,6 +240,7 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--team-review")) { ReviewExpeditionTeam((float)delta);return; }
         if(meadowReview)
         {
             if(OS.GetCmdlineUserArgs().Contains("--water-review")) { ReviewWaters(); return; }
@@ -335,13 +337,15 @@ public partial class GardenGame : Node3D
                             friendArt=BuildLifeArt();
                         }
                     }
+                    expeditionTeam?.RefreshStates(pet);
                     Save();
                     UpdateUi();
                 }
             }
             catch (System.IO.IOException ex) { GD.PushWarning(ex.Message); }
         }
-        if (paused) return;
+        teamUi.Update(expeditionTeam,!paused && transition<0);
+        if (paused || teamUi.Choosing) return;
         if (transition >= 0) { AdvanceTransition(dt); return; }
         if (zone is GardenZone.Garden or GardenZone.CoastalCove)
         {
@@ -487,7 +491,7 @@ public partial class GardenGame : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (paused || transition >= 0) return;
+        if (paused || teamUi.Choosing || transition >= 0) return;
         if (!racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null) MovePlayer((float)delta);
         foreach (var toy in world.GetChildren().OfType<ToyCar>()) toy.Advance((float)delta);
         if (zone==GardenZone.Garden)
@@ -500,6 +504,8 @@ public partial class GardenGame : Node3D
         UpdateEggs((float)delta);
         UpdateOffering((float)delta);
         MoveFriend((float)delta);
+        expeditionTeam?.Step((float)delta,player.Position,camera);
+        expeditionTeam?.PushPlayer(player);
         if (zone==GardenZone.Garden)
         {
             introductions.Advance((float)delta,pet,SocialCandidates,Save);
@@ -1119,6 +1125,11 @@ public partial class GardenGame : Node3D
     {
         if (@event is not InputEventKey key || !key.Pressed || key.Echo) return;
         Key code = key.PhysicalKeycode;
+        if(teamUi.Choosing)
+        {
+            if(code==Key.Escape)teamUi.Cancel();
+            return;
+        }
         if (relationshipSubject!=null)
         {
             if (code==Key.Escape) CloseRelationships();
@@ -1147,6 +1158,11 @@ public partial class GardenGame : Node3D
             return;
         }
         if (paused || transition >= 0 || thinkTime>0) return;
+        if(zone==GardenZone.Expedition && code is Key.Q or Key.T or Key.Y)
+        {
+            expeditionTeam?.Command(code==Key.Q ? "Call" : code==Key.T ? "Wait" : "Follow",player.Position);
+            GetViewport().SetInputAsHandled();return;
+        }
         if (code == Key.M && music != null) music.StreamPaused = !music.StreamPaused;
         if (code == Key.B) { showBag=!showBag; bagCatalogKey=""; UpdateUi(); }
         if (code == Key.G && CanStoreFruit())
@@ -2281,7 +2297,7 @@ public partial class GardenGame : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (paused || transition >= 0) return;
+        if (paused || teamUi.Choosing || transition >= 0) return;
         if (@event is InputEventMouseMotion motion && Input.IsMouseButtonPressed(MouseButton.Right))
             cameraRig.Orbit(motion.Relative);
         if (@event is InputEventMouseButton button && button.Pressed)
@@ -2293,11 +2309,14 @@ public partial class GardenGame : Node3D
 
     private void CheckPortals()
     {
+        if(teamUi.Choosing)return;
         if (portalCooldown > 0 || transition >= 0 ||
             pickingItem || releasePose>0 || offerTime>0 || eatTime>0 || thinkTime>0 || machineOpening || machineOpen) return;
         if (travel.Detect(zone,player.Position,pet.Expedition) is not { } route) return;
         if (WorldCatalog.Default.IsExpedition(route.To) && (carrying || heldEgg!=null || heldToy!=null || heldAnimal!=null || heldFruit!=null))
         { travel.Arrived(); Notify("Leave Chao and carried items in the garden before exploring."); return; }
+        if(zone==GardenZone.Lobby && WorldCatalog.Default.IsExpedition(route.To))
+        { ChooseExpeditionTeam();return; }
         BeginTransition(WorldTravel.Zone(route.To));
     }
 
@@ -2331,6 +2350,7 @@ public partial class GardenGame : Node3D
         moriInterests.Cancel(friend,friendArt); moriLeisure.Cancel(friendArt);
         FinishOffer();
         RemoveChild(world); world.QueueFree();
+        expeditionTeam=null;
         heldAnimal = null;
         if (!restoring && heldFruit is { SingleUse:true,Bites:0 } && eatTime<=0) pet.AddFruit(heldFruit.Kind,1);
         heldFruit = null;
@@ -2375,6 +2395,7 @@ public partial class GardenGame : Node3D
         if (friend.Visible) friend.Position = carrying ? player.Position + Vector3.Right : KeepInGarden(GardenArt.RelocateFromRear(petZonePosition));
         if(friend.Visible && zone==GardenZone.CoastalCove && !carrying)friend.Position=CoastalCove.LandPoint(petZonePosition);
         if (carrying) pickupTime = PickupDuration;
+        RestoreExpeditionTeam();
         portalCooldown = 1.3f;
         travel.Arrived();
         travel.Detect(zone,player.Position,pet.Expedition);
@@ -2713,12 +2734,14 @@ public partial class GardenGame : Node3D
         travel.ExpeditionArea=travel.RestoreArea(location.AreaId,pet.Expedition);
         petZone=(GardenZone)location.MoriZone;
         petZonePosition=petZone==GardenZone.Garden ? GardenArt.RelocateFromRear(new(location.MoriX,location.MoriY,location.MoriZ)) : new(location.MoriX,location.MoriY,location.MoriZ);
-        SwitchZone((GardenZone)location.Zone,restoring:true);
+        bool noExpeditionTeam=(GardenZone)location.Zone==GardenZone.Expedition && ExpeditionRoster.Available(pet).Count==0;
+        SwitchZone(noExpeditionTeam ? GardenZone.Lobby : (GardenZone)location.Zone,restoring:true);
         friendArt.QueueFree();
         friendArt=BuildLifeArt();
-        var at=new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
+        var at=noExpeditionTeam ? new Vector3(-8,0,9) : new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
         if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) :
             zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player) : zone==GardenZone.CoastalCove ? CoastalCove.Restore(at) : at;
+        expeditionTeam?.Reposition(player.Position);
         if (friend.Visible && petZonePosition.IsFinite()) friend.Position=zone==GardenZone.CoastalCove ? CoastalCove.LandPoint(petZonePosition) : petZonePosition;
         player.ResetPhysicsInterpolation();
         cameraRig.Follow(player.Position,0,true);

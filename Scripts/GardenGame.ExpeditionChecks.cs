@@ -15,19 +15,24 @@ public partial class GardenGame
         {
             portalCooldown=0; player.Position=Vector3.Zero; CheckPortals();
             player.Position=portal; CheckPortals();
+            if(teamUi.Choosing) { pet.Expedition.LastTeamIds=new() { "main" };teamUi.Cancel();
+                portalCooldown=0;player.Position=Vector3.Zero;CheckPortals();player.Position=portal;CheckPortals();
+                // Select through the same roster used by the picker.
+                teamUi.Confirm(); }
             if (transition<0) throw new Exception("Travel graph did not activate a portal");
             AdvanceTransition(.36f); AdvanceTransition(.36f);
         }
         carrying=true;
         portalCooldown=0; player.Position=Vector3.Zero; CheckPortals();
         player.Position=new(-8,0,6); CheckPortals(); carrying=false;
-        if(transition>=0) throw new Exception("A companion entered a stage-one expedition");
+        if(transition>=0 || teamUi.Choosing) throw new Exception("Carried items bypassed the expedition entry guard");
         Enter(new(-8,0,6));
         if(zone!=GardenZone.Expedition || travel.ExpeditionArea!=WorldCatalog.Meadow ||
             player.Position.DistanceTo(new(0,0,23))>.01f || friend.Visible ||
             world.GetChildren().Any(n=>n is GardenEgg or ToyCar or TrainingAnimal) ||
             !pet.Expedition.VisitedAreas.Contains(WorldCatalog.Meadow))
             throw new Exception("Expedition arrival, population isolation, or discovery failed");
+        CheckExpeditionTeam();
         portalCooldown=0; CheckPortals();
         if(transition>=0) throw new Exception("Expedition arrival immediately retriggered a portal");
         foreach(var point in new[]{new Vector3(0,0,18),new Vector3(-21,0,-10),new Vector3(15,0,12)})
