@@ -33,7 +33,7 @@ public partial class ChaoAnimationReview : Node3D
     {var button=new Button{Text=value,Position=area.Position,Size=area.Size};root.AddChild(button);button.Pressed+=action;return button;}
     public override void _Ready()
     {
-        DisplayServer.WindowSetTitle("Chao Animation Review — MoriGarden");
+        GetWindow().Title="Chao Animation Review — MoriGarden";
         capture=OS.GetCmdlineUserArgs().Contains("--animation-capture");checkRig=OS.GetCmdlineUserArgs().Contains("--animation-check");
         AddChild(new WorldEnvironment{Environment=new Godot.Environment{BackgroundMode=Godot.Environment.BGMode.Color,BackgroundColor=new("263a3c"),AmbientLightSource=Godot.Environment.AmbientSource.Color,AmbientLightColor=Colors.White,AmbientLightEnergy=.7f}});
         AddChild(new DirectionalLight3D{RotationDegrees=new(-35,-30,0),LightEnergy=.8f,ShadowEnabled=true});
