@@ -21,7 +21,7 @@ public partial class GardenGame
     }
     private void InspectWildlife()
     {
-        if(wildlifeInspectReady)return;wildlifeInspectReady=true;SetupWildlifeDemo();testMode=false;
+        if(wildlifeInspectReady)return;wildlifeInspectReady=true;SetupWildlifeDemo();expeditionTeam!.Reposition(player.Position);testMode=false;
         Notify("Wildlife demo · Explore Windfall Meadow · E: Greet · F: Ask a Chao · B: Animal bag",12);
     }
     private void ReviewWildlife(float delta)
