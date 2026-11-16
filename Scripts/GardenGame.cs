@@ -104,7 +104,7 @@ public partial class GardenGame : Node3D
     private readonly GardenCourtship courtship=new();
     private int shopColor;
     private const int HeartFruitPrice=2;
-    private static int ShopChoices=>GardenEgg.Colors.Length+1+FruitKinds.Special.Length+FruitKinds.Growable.Length;
+    private static int ShopChoices=>GardenEgg.Colors.Length+1+FruitKinds.Special.Length+FruitKinds.ShopSeeds.Length;
     private int ShopFruitIndex=>shopColor-GardenEgg.Colors.Length-1;
     private int ShopSeedIndex=>shopColor-GardenEgg.Colors.Length-1-FruitKinds.Special.Length;
     private const int TreeLimit=7;
@@ -170,8 +170,8 @@ public partial class GardenGame : Node3D
             AddChild(music);
         }
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
-        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review");
-        savePath = ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
+        testMode = meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        savePath = ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
@@ -240,6 +240,9 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--greenhouse-check")){RunGreenhouseCheckMode();return;}
+        if(OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect"))InspectGreenhouse();
+        if(OS.GetCmdlineUserArgs().Contains("--greenhouse-review")) { ReviewGreenhouse((float)delta);return; }
         if(OS.GetCmdlineUserArgs().Contains("--discovery-review")) { ReviewDiscoveries((float)delta);return; }
         if(OS.GetCmdlineUserArgs().Contains("--team-review")) { ReviewExpeditionTeam((float)delta);return; }
         if(meadowReview)
@@ -339,6 +342,7 @@ public partial class GardenGame : Node3D
                         }
                     }
                     expeditionTeam?.RefreshStates(pet);
+                    SiteMission?.RefreshOwner(pet);
                     Save();
                     UpdateUi();
                 }
@@ -481,6 +485,7 @@ public partial class GardenGame : Node3D
             camera.GlobalPosition=friend.Position+new Vector3(.50f,.40f,.67f);
             camera.LookAt(friend.Position+new Vector3(0,.18f,.15f));
         }
+        MissionPlayerPose();
         CheckPortals();
         UpdateTrainingAnimals(dt);
         if (racing) UpdateRace(dt);
@@ -507,6 +512,7 @@ public partial class GardenGame : Node3D
         MoveFriend((float)delta);
         expeditionTeam?.Step((float)delta,player.Position,camera);
         expeditionTeam?.PushPlayer(player);
+        AdvanceSiteMission((float)delta);
         if (zone==GardenZone.Garden)
         {
             introductions.Advance((float)delta,pet,SocialCandidates,Save);
@@ -632,6 +638,7 @@ public partial class GardenGame : Node3D
             target=safe;
         }
         Vector3 horizontal = new(target.X-player.Position.X,0,target.Z-player.Position.Z);
+        if(SiteMission?.Counterweight.Push(player,horizontal)==true){horizontal*=.8f;pushResistance=.15f;}
         var wall = horizontal.LengthSquared()>.000001f ? player.MoveAndCollide(horizontal) : null;
         if (wall!=null)
         {
@@ -1193,7 +1200,11 @@ public partial class GardenGame : Node3D
         }
         if (code == Key.Ctrl && dashCooldown <= 0 && !WaterArt.PlayerWet(zone,player.Position)) { dashTime = .3f; dashCooldown = 2; }
         if (code == Key.E) Interact();
-        if (code == Key.F) PetFriend();
+        if (code == Key.F)
+        {
+            if(SiteMission is {} mission && expeditionTeam!=null)mission.Ask(player,expeditionTeam);
+            else PetFriend();
+        }
         if (code == Key.Q)
         {
             if (racing) { Cheer(); return; }
@@ -1281,6 +1292,7 @@ public partial class GardenGame : Node3D
 
     private void Interact()
     {
+        if(SiteMission?.Interact(player)==true)return;
         if (CanTakeMeal())
         {
             TakeMeal();
@@ -2068,13 +2080,13 @@ public partial class GardenGame : Node3D
     private void RefreshBagCatalog()
     {
         if (!showBag) return;
-        string key=string.Join(",",FruitKinds.Special.Select(pet.FruitCount))+"|"+
+        string key=string.Join(",",FruitKinds.BagKinds.Select(pet.FruitCount))+"|"+
             string.Join(",",FruitKinds.Growable.Select(pet.SeedCount));
         if (key==bagCatalogKey) return;
         int fruit=Math.Max(0,bagFruits.Selected), seed=Math.Max(0,bagSeeds.Selected);
         bagFruits.Clear();
         bagSeeds.Clear();
-        foreach (string kind in FruitKinds.Special) bagFruits.AddItem($"{kind}   ×{pet.FruitCount(kind)}");
+        foreach (string kind in FruitKinds.BagKinds) bagFruits.AddItem($"{kind}   ×{pet.FruitCount(kind)}");
         foreach (string kind in FruitKinds.Growable) bagSeeds.AddItem($"{kind} Seed   ×{pet.SeedCount(kind)}");
         bagFruits.Select(fruit);
         bagSeeds.Select(seed);
@@ -2084,7 +2096,7 @@ public partial class GardenGame : Node3D
     private void TakeSelectedFruit()
     {
         if (bagFruits.Selected<0 || !HandsAvailable) { Notify("Free your hands first."); return; }
-        string kind=FruitKinds.Special[bagFruits.Selected];
+        string kind=FruitKinds.BagKinds[bagFruits.Selected];
         if (pet.FruitCount(kind)<=0) { Notify("Buy this fruit in the Garden Shop."); return; }
         var fruit=new FruitTree { IsFeeder=true,SingleUse=true,FruitKind=kind,Position=player.Position };
         world.AddChild(fruit);
@@ -2152,15 +2164,15 @@ public partial class GardenGame : Node3D
 
     private string ShopItemLabel => HeartFruitSelected ? $"Heart Fruit · {HeartFruitPrice} stars" :
         ShopFruitIndex>=0 && ShopFruitIndex<FruitKinds.Special.Length ? $"{FruitKinds.Special[ShopFruitIndex]} · 2 stars" :
-        ShopSeedIndex>=0 && ShopSeedIndex<FruitKinds.Growable.Length ? $"{FruitKinds.Growable[ShopSeedIndex]} Seed · 3 stars" :
+        ShopSeedIndex>=0 && ShopSeedIndex<FruitKinds.ShopSeeds.Length ? $"{FruitKinds.ShopSeeds[ShopSeedIndex]} Seed · 3 stars" :
         $"{GardenEgg.Colors[Math.Clamp(shopColor,0,GardenEgg.Colors.Length-1)]} egg · {EggPrice} stars";
 
     private const int EggPrice=3;
     private void BuyShopItem()
     {
-        if (ShopSeedIndex>=0 && ShopSeedIndex<FruitKinds.Growable.Length)
+        if (ShopSeedIndex>=0 && ShopSeedIndex<FruitKinds.ShopSeeds.Length)
         {
-            string kind=FruitKinds.Growable[ShopSeedIndex];
+            string kind=FruitKinds.ShopSeeds[ShopSeedIndex];
             if (pet.SeedCount(kind)>=12) { Notify("Your bag is full of this seed."); return; }
             if (pet.Stars<3) { Notify("You need 3 stars for this seed."); return; }
             pet.Stars-=3;
@@ -2397,6 +2409,7 @@ public partial class GardenGame : Node3D
         if(friend.Visible && zone==GardenZone.CoastalCove && !carrying)friend.Position=CoastalCove.LandPoint(petZonePosition);
         if (carrying) pickupTime = PickupDuration;
         RestoreExpeditionTeam();
+        ConfigureSiteMission();
         portalCooldown = 1.3f;
         travel.Arrived();
         travel.Detect(zone,player.Position,pet.Expedition);
@@ -2741,7 +2754,7 @@ public partial class GardenGame : Node3D
         friendArt=BuildLifeArt();
         var at=noExpeditionTeam ? new Vector3(-8,0,9) : new Vector3(location.PlayerX,location.PlayerY,location.PlayerZ);
         if (at.IsFinite()) player.Position=zone==GardenZone.Garden ? GardenArt.RelocateFromRear(at) :
-            zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player) : zone==GardenZone.CoastalCove ? CoastalCove.Restore(at) : at;
+            zone==GardenZone.Expedition ? ExpeditionArt.RestorePosition(at,player,travel.ExpeditionArea) : zone==GardenZone.CoastalCove ? CoastalCove.Restore(at) : at;
         expeditionTeam?.Reposition(player.Position);
         if (friend.Visible && petZonePosition.IsFinite()) friend.Position=zone==GardenZone.CoastalCove ? CoastalCove.LandPoint(petZonePosition) : petZonePosition;
         player.ResetPhysicsInterpolation();
@@ -2804,6 +2817,7 @@ public partial class GardenGame : Node3D
         if (!paused && transition<0 && CanTakeMeal()) return "E: Take fruit";
         if (paused || transition>=0 || releasePose>0 || moriInFlight || offerTime>0 || thinkTime>0 || eatTime>0) return "";
         if (racing) return CanCheer() ? "Q: Cheer     E: Cancel race" : "E: Cancel race";
+        if(SiteMission is {} mission)return mission.Hint(player,expeditionTeam);
         string action = "";
         var pickup=NearestPickup();
         if (heldEgg is { Data.Hatched:true }) return $"E: Set down or throw {heldEgg.Chao?.Name}";
@@ -3571,6 +3585,7 @@ public partial class GardenGame : Node3D
         CheckLandscapeRefinements();
         CheckNaturalWaterAndCoast();
         CheckExpeditionFoundation();
+        CheckGreenhouse();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }
@@ -4220,11 +4235,11 @@ public partial class GardenGame : Node3D
             BuyShopItem();
             if (pet.FruitCount(FruitKinds.Special[i])!=before+1) throw new Exception("New shop fruit was not added to the bag");
         }
-        for (int i=0;i<FruitKinds.Growable.Length;i++)
+        for (int i=0;i<FruitKinds.ShopSeeds.Length;i++)
         {
             shopColor=GardenEgg.Colors.Length+1+FruitKinds.Special.Length+i;
             BuyShopItem();
-            if (pet.SeedCount(FruitKinds.Growable[i])<=0) throw new Exception("Tree seed could not be bought");
+            if (pet.SeedCount(FruitKinds.ShopSeeds[i])<=0) throw new Exception("Tree seed could not be bought");
         }
         RefreshBagCatalog();
         player.Position=new(35,0,16);
@@ -4233,6 +4248,7 @@ public partial class GardenGame : Node3D
         PlantSelectedSeed();
         if (pet.GardenTrees!.Count!=7 || pet.SeedCount(FruitKinds.Blue)!=seeds)
             throw new Exception("Planting an eighth tree consumed a seed or exceeded the limit");
+        pet.SeedBag[FruitKinds.Moonblossom]=1; // Mission reward fixture also exercises the existing planting path.
         for (int i=0;i<FruitKinds.Growable.Length;i++)
         {
             var original=world.GetChildren().OfType<FruitTree>().First(tree=>!tree.IsFeeder);

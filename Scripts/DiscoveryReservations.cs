@@ -14,8 +14,10 @@ internal sealed class DiscoveryReservations
         float angle=Mathf.Atan2(delta.X,delta.Z);
         for(int attempt=0;attempt<16;attempt++)
         {
-            float a=angle+attempt*.85f,radius=.85f+attempt/8*.75f;
-            var point=nav.Nearest(item.GlobalPosition+new Vector3(Mathf.Sin(a),0,Mathf.Cos(a))*radius);
+            float a=angle+attempt*.85f,radius=(item.Interaction==null ? .85f : .62f)+attempt/8*.75f;
+            var raw=item.GlobalPosition+new Vector3(Mathf.Sin(a),0,Mathf.Cos(a))*radius;raw.Y=nav.Height(raw.X,raw.Z)+.02f;
+            var point=item.Interaction!=null && nav.Safe(raw) ? raw : nav.Nearest(raw);
+            if(attempt==0 && item.Interaction?.ApproachPoint is {} preferred && nav.Safe(preferred))point=preferred;
             if(point.DistanceTo(item.GlobalPosition)>3 || slots.Values.Any(s=>ExpeditionCompanion.Flat(s.Point,point)<.9f) ||
                 team.Any(m=>m!=pet && ExpeditionCompanion.Flat(m.Body.Position,point)<.65f) || nav.Path(pet.Body.Position,point).Length==0)continue;
             slots[pet.Pet.Id]=(item.Definition.Id,point);return point;

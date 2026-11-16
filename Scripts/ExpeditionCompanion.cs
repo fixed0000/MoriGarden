@@ -19,6 +19,7 @@ internal sealed class ExpeditionCompanion
     internal bool ReadyForDiscovery=>!rising.Active && !lying && think<=0 && !ImportedChao.Pausing(Art);
     internal bool Transitioning=>rising.Active || ImportedChao.Pausing(Art);
     internal float NavigationFailure=>failures;
+    internal float TargetTolerance { get; set; }=.45f;
     internal bool Sleeping=>Intent==ExpeditionIntent.Sleep && resting>2 && !rising.Active;
     internal int Recoveries { get; private set; }
     internal readonly Random Random;
@@ -56,6 +57,7 @@ internal sealed class ExpeditionCompanion
         if((lying || intent==ExpeditionIntent.Investigate && ImportedChao.IsCrawling(Art)) && !rising.Active) { rising.Begin(Art); lying=false; }
         ImportedChao.EndThink(Art); Orb?.SetIdea(null,false); Orb?.SetMealHappy(false);
         Intent=intent; Goal=goal; Remaining=duration; elapsed=0; resting=0; repath=0; think=idea ? 6.5f : 0;
+        TargetTolerance=.45f;
         if(intent==ExpeditionIntent.Investigate)stuck=failures=hiddenStuck=0;
         sitRest=intent==ExpeditionIntent.Rest && Random.NextDouble()<.6;
         SocialContact=SocialApproach=0;WalkedTogether=false;
@@ -80,7 +82,7 @@ internal sealed class ExpeditionCompanion
             return;
         }
         Vector3 delta=Goal-Body.Position;delta.Y=0;
-        bool arriving=delta.Length()<.45f;
+        bool arriving=delta.Length()<TargetTolerance;
         if(!arriving && Intent is not ExpeditionIntent.Observe)
         {
             if(repath<=0)
@@ -90,10 +92,19 @@ internal sealed class ExpeditionCompanion
             }
             while(waypoint<path.Length-1 && Flat(Body.Position,path[waypoint])<.42f)waypoint++;
             var target=waypoint<path.Length ? path[waypoint] : Body.Position;
+            if(TargetTolerance<.3f && waypoint==path.Length-1 && waypoint>=0 && Flat(Body.Position,target)<.65f)target=Goal;
             var toward=target-Body.Position; toward.Y=0;
             toward=ChaoMotion.AvoidNeighbors(Body,toward);
+            var toPlayer=player-Body.Position;toPlayer.Y=0;
+            if(toward.LengthSquared()>.03f && toPlayer.Length()<1.15f)
+            {
+                var aheadPlayer=toward.Normalized();var sidePlayer=aheadPlayer.Cross(Vector3.Up);
+                float aheadDistance=aheadPlayer.Dot(toPlayer),across=sidePlayer.Dot(toPlayer);
+                if(aheadDistance>0 && Mathf.Abs(across)<.65f)
+                    toward=(aheadPlayer+sidePlayer*(across>.03f ? -1.5f : 1.5f)).Normalized()*toward.Length();
+            }
             toward=steering.Steer(Body,toward,dt);
-            var ahead=Body.Position+toward.Normalized()*.35f;ahead.Y=ExpeditionArt.Height(ahead.X,ahead.Z)+.02f;
+            var ahead=Body.Position+toward.Normalized()*.35f;ahead.Y=nav.Height(ahead.X,ahead.Z)+.02f;
             if(!nav.Safe(ahead))toward=Vector3.Zero;
             bool moving=motion.Step(Body,toward,state,Intent==ExpeditionIntent.Follow && delta.Length()>7,false,dt,false,out _);
             phase+=motion.GroundSpeed*dt*5.4f;

@@ -30,7 +30,8 @@ internal static class DiscoveryPresentation
             case DiscoveryPhase.Notice: orb?.SetIdea(session.Novel ? "!" : null,false);break;
             case DiscoveryPhase.Think: ImportedChao.ThinkPose(pet.Art,session.Plan.ThoughtSeconds-session.PhaseTime);break;
             case DiscoveryPhase.Inspect:
-                if((item.Definition.Reactions & DiscoveryReaction.Touch)!=0)
+                if(item.Interaction!=null)item.Interaction.Pose(pet,session.PhaseTime);
+                else if((item.Definition.Reactions & DiscoveryReaction.Touch)!=0)
                     ImportedChao.ReceivePose(pet.Art,Mathf.Sin(Mathf.Min(session.PhaseTime/4,1)*Mathf.Pi)*.7f);
                 break;
             case DiscoveryPhase.React: orb?.SetIdea(session.Novel ? "!" : null,true);break;

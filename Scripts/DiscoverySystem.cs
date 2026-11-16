@@ -70,19 +70,28 @@ internal sealed class DiscoverySystem
         var target=candidates[0].Item;
         if(!Perception.Visible(pet,target)) { occluded[(pet.Pet.Id,target.Definition.Id)]=Now+6;return; }
         var plan=DiscoveryDecisions.Choose(target.Definition,pet.Pet.State,memory,Now,pet.Random);
+        plan=target.Interaction?.Prepare(plan,pet) ?? plan;
         bool novel=memory.Find(target.Definition.Id)==null;
-        if(plan.Choice==DiscoveryChoice.Ignore){memory.Notice(target.Definition.Id,Now);Log(pet,target,"ignored");deferred[pet.Pet.Id]=Now+8;return;}
+        if(plan.Choice==DiscoveryChoice.Ignore){memory.Notice(target.Definition.Id,Now,target.Definition.Revision);Log(pet,target,"ignored");deferred[pet.Pet.Id]=Now+8;return;}
         Start(pet,target,plan,novel);
     }
-    internal bool Start(ExpeditionCompanion pet,DiscoveryInterest item,DiscoveryPlan plan,bool novel,bool invited=false)
+    internal bool Start(ExpeditionCompanion pet,DiscoveryInterest item,DiscoveryPlan plan,bool novel,bool invited=false,bool requested=false)
     {
         bool firstStudyInvitation=invited && Memory(pet).Find(item.Definition.Id)?.Visits==0;
         if(sessions.ContainsKey(pet.Pet.Id) || pet.Busy || !pet.Pet.State.CanAct || !item.Usable(owner()) ||
-            !firstStudyInvitation && !Memory(pet).CanConsider(item.Definition,Now) || plan.Choice==DiscoveryChoice.Ignore)return false;
+            !requested && !firstStudyInvitation && !Memory(pet).CanConsider(item.Definition,Now) || plan.Choice==DiscoveryChoice.Ignore)return false;
         var point=plan.Choice==DiscoveryChoice.Approach ? Reservations.Reserve(item,pet,nav,team) : pet.Body.Position;
         if(point==null)return false;
-        Memory(pet).Notice(item.Definition.Id,Now);
-        sessions[pet.Pet.Id]=new(pet,item,plan,point.Value,novel);Log(pet,item,plan.Choice==DiscoveryChoice.Approach ? "approach" : "observe");return true;
+        Memory(pet).Notice(item.Definition.Id,Now,item.Definition.Revision);
+        sessions[pet.Pet.Id]=new(pet,item,plan,point.Value,novel,requested);Log(pet,item,plan.Choice==DiscoveryChoice.Approach ? "approach" : "observe");return true;
+    }
+    internal bool Request(ExpeditionCompanion pet,DiscoveryInterest item)
+    {
+        if(pet.Sleeping || pet.Pet.State.Energy<15 || pet.Pet.State.Joy<10 || pet.Pet.State.RelationshipWith()<-50 ||
+            item.Interaction==null || !Perception.Visible(pet,item,false))return false;
+        if(sessions.ContainsKey(pet.Pet.Id))Cancel(pet,"player request");
+        var plan=item.Interaction.Prepare(new(DiscoveryChoice.Approach,4,false,true),pet) with { Choice=DiscoveryChoice.Approach,SharePlayer=false };
+        return Start(pet,item,plan,false,requested:true);
     }
     internal void Present(ExpeditionCompanion pet,Vector3 player,float dt)
     { if(!pet.Transitioning && sessions.TryGetValue(pet.Pet.Id,out var session))DiscoveryPresentation.Pose(session,player,dt); }
@@ -90,7 +99,9 @@ internal sealed class DiscoverySystem
     {
         var pet=session.Pet;var item=session.Item.Definition;
         bool completed=Memory(pet).Complete(item,pet.Pet.State,Now);
-        if(!completed)return false;
+        bool acted=session.Item.Interaction?.Inspected(pet,session.Requested)==true;
+        if(acted)Log(pet,session.Item,"mechanism action");
+        if(!completed && !acted)return false;
         Log(pet,session.Item,"studied");
         foreach(var peer in team.Where(p=>p!=pet && ExpeditionCompanion.Flat(p.Body.Position,pet.Body.Position)<5))
         {
@@ -121,8 +132,9 @@ internal sealed class DiscoverySystem
                 Now-Memory(peer).LastInvitation<90 || !(Memory(peer).Find(source.Item.Definition.Id)?.Visits==0 || Memory(peer).CanConsider(source.Item.Definition,Now)) || !Perception.Visible(peer,source.Item,false))continue;
             Memory(peer).LastInvitation=Now;
             var plan=DiscoveryDecisions.Choose(source.Item.Definition,peer.Pet.State,Memory(peer),Now,peer.Random,true) with { SharePlayer=false,InvitePeer=false };
+            plan=source.Item.Interaction?.Prepare(plan,peer) ?? plan;
             bool novel=Memory(peer).Find(source.Item.Definition.Id)==null;
-            if(plan.Choice==DiscoveryChoice.Ignore){Memory(peer).Notice(source.Item.Definition.Id,Now);Log(peer,source.Item,"declined invitation");return true;}
+            if(plan.Choice==DiscoveryChoice.Ignore){Memory(peer).Notice(source.Item.Definition.Id,Now,source.Item.Definition.Revision);Log(peer,source.Item,"declined invitation");return true;}
             source.NoticePeer(peer.Body.Position+Vector3.Up*.3f);
             if(Watching(peer))
             {

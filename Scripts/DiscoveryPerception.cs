@@ -48,6 +48,7 @@ internal sealed class DiscoveryPerception
         if(fieldOfView && flat.Length()>1.3f && pet.Body.GlobalBasis.Z.Dot(flat.Normalized())<-.15f)return false;
         VisibilityQueries++;
         var hit=world.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(pet.Body.GlobalPosition+Vector3.Up*.3f,item.LookPoint,1));
-        return hit.Count==0 || hit["collider"].AsGodotObject() is Node node && item.IsAncestorOf(node);
+        var own=item.VisibilityRoot ?? item;
+        return hit.Count==0 || hit["collider"].AsGodotObject() is Node node && (own==node || own.IsAncestorOf(node));
     }
 }

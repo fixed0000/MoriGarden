@@ -7,5 +7,6 @@
     <Compile Include="../Scripts/ExpeditionRoster.cs" Link="ExpeditionRoster.cs" />
     <Compile Include="../Scripts/DiscoveryMemory.cs" Link="DiscoveryMemory.cs" />
     <Compile Include="../Scripts/DiscoveryDecisions.cs" Link="DiscoveryDecisions.cs" />
+    <Compile Include="../Scripts/CompactMissionState.cs" Link="CompactMissionState.cs" />
   </ItemGroup>
 </Project>

@@ -153,7 +153,7 @@ internal sealed class ExpeditionTeam
             float radius=Order==ExpeditionOrder.Wait ? 4 : 3+(m.Pet.State.Curiosity+100)*.035f;
             float angle=(float)m.Random.NextDouble()*Mathf.Tau;
             goal=nav.Nearest(center+new Vector3(Mathf.Sin(angle),0,Mathf.Cos(angle))*radius);
-            var landmarks=WindfallMeadow.ObservationSpots.Select(p=>nav.Nearest(new(p.X,0,p.Y)))
+            var landmarks=nav.Landmarks.Select(p=>nav.Nearest(new(p.X,0,p.Y)))
                 .Where(p=>ExpeditionCompanion.Flat(p,center)<radius && ExpeditionCompanion.Flat(p,m.Body.Position)>1).ToArray();
             if(landmarks.Length>0 && m.Random.NextDouble()<.35+(m.Pet.State.Curiosity+100)/400d)
                 goal=landmarks[m.Random.Next(landmarks.Length)];

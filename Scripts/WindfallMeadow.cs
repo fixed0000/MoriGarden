@@ -133,6 +133,7 @@ internal static class WindfallMeadow
         }
         models.Flush();
         MeadowDiscoveries.Build(root);
+        GreenhouseArt.MeadowEntrance(root);
         foreach(var (p,size) in new[]{(new Vector3(-38,12,0),new Vector3(2,30,66)),(new Vector3(38,12,0),new Vector3(2,30,66)),
             (new Vector3(0,12,-30),new Vector3(82,30,2)),(new Vector3(0,12,30),new Vector3(82,30,2))})
         {

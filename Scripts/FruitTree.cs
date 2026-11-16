@@ -164,7 +164,7 @@ public partial class FruitTree : Node3D
     internal static Color FruitColor(string kind) => new(kind switch
     {
         FruitKinds.Blue=>"4e8bdf",FruitKinds.Yellow=>"e8cb50",FruitKinds.Red=>"de5a55",
-        FruitKinds.Green=>"65b46a",FruitKinds.Heart=>"df486f",_=>"ad7540"
+        FruitKinds.Green=>"65b46a",FruitKinds.Heart=>"df486f",FruitKinds.Moonblossom=>"c1b1dd",_=>"ad7540"
     });
 
     private static MeshInstance3D DrawFruit(Node3D parent,string kind)

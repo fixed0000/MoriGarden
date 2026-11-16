@@ -5,8 +5,10 @@ namespace Mori;
 // Every zone uses the garden's water palette, moving ripples and transparency.
 internal static class WaterArt
 {
+    internal static string CurrentExpeditionArea { get; set; }=WorldCatalog.Meadow;
+    internal static NaturalWaterBody? SiteWater { get; set; }
     internal static NaturalWaterBody? Body(GardenZone zone)=>zone switch {
-        GardenZone.Expedition=>WindfallMeadow.Water, GardenZone.CoastalCove=>CoastalCove.Water,_=>null };
+        GardenZone.Expedition=>CurrentExpeditionArea==WorldCatalog.Greenhouse ? SiteWater : WindfallMeadow.Water, GardenZone.CoastalCove=>CoastalCove.Water,_=>null };
     internal static float Level(GardenZone zone)=>Body(zone)?.Level ?? .004f;
     internal static bool PlayerWet(GardenZone zone,Vector3 at)=>zone switch {
         GardenZone.Garden=>GardenArt.IsPondWater(at),

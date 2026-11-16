@@ -10,6 +10,7 @@ internal sealed class DiscoverySession
     internal DiscoveryPlan Plan { get; }
     internal Vector3 Spot { get; }
     internal bool Novel { get; }
+    internal bool Requested { get; }
     internal DiscoveryPhase Phase { get; private set; }
     internal float PhaseTime { get; private set; }
     internal float Age { get; private set; }
@@ -21,10 +22,11 @@ internal sealed class DiscoverySession
     internal void NoticePeer(Vector3 point) { PeerLook=point;PeerLookUntil=Age+1.5f; }
     private int inviteAttempts;
     private float nextInvitation;
-    internal DiscoverySession(ExpeditionCompanion pet,DiscoveryInterest item,DiscoveryPlan plan,Vector3 spot,bool novel)
+    internal DiscoverySession(ExpeditionCompanion pet,DiscoveryInterest item,DiscoveryPlan plan,Vector3 spot,bool novel,bool requested=false)
     {
-        Pet=pet;Item=item;Plan=plan;Spot=spot;Novel=novel;
+        Pet=pet;Item=item;Plan=plan;Spot=spot;Novel=novel;Requested=requested;
         pet.Partner=null;pet.SetIntent(ExpeditionIntent.Investigate,pet.Body.Position,150);
+        if(item.Interaction!=null)pet.TargetTolerance=.2f;
     }
     private void Enter(DiscoveryPhase phase)
     {
@@ -44,7 +46,7 @@ internal sealed class DiscoverySession
             case DiscoveryPhase.Think:
                 if(PhaseTime>=Plan.ThoughtSeconds)Enter(Plan.Choice==DiscoveryChoice.Approach ? DiscoveryPhase.Travel : DiscoveryPhase.Observe);break;
             case DiscoveryPhase.Travel:
-                if(ExpeditionCompanion.Flat(Pet.Body.Position,Spot)<.6f)
+                if(ExpeditionCompanion.Flat(Pet.Body.Position,Spot)<(Item.Interaction==null ? .6f : .3f))
                 {
                     if(!system.Perception.Visible(Pet,Item,false)){system.Cancel(Pet,"occluded");return false;}
                     Enter(DiscoveryPhase.Inspect);
@@ -52,7 +54,7 @@ internal sealed class DiscoverySession
                 else if(PhaseTime>60 || Pet.NavigationFailure>8)system.Cancel(Pet,"blocked");
                 break;
             case DiscoveryPhase.Inspect:
-                if(PhaseTime>=5)
+                if(PhaseTime>=(Item.Interaction?.InspectSeconds(Pet.Pet.State) ?? 5))
                 {
                     Completed=system.Complete(this);Enter(DiscoveryPhase.React);
                 }

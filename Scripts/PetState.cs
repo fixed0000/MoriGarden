@@ -235,7 +235,7 @@ public sealed class PetState
     {
         if (kind==FruitKinds.Garden) BagFruit=Math.Clamp(BagFruit+amount,0,12);
         else if (kind==FruitKinds.Heart) BagHeartFruit=Math.Clamp(BagHeartFruit+amount,0,12);
-        else if (FruitKinds.IsSpecial(kind)) SpecialFruitBag[kind]=Math.Clamp(FruitCount(kind)+amount,0,12);
+        else if (FruitKinds.CanBag(kind)) SpecialFruitBag[kind]=Math.Clamp(FruitCount(kind)+amount,0,12);
     }
 
     public int SeedCount(string kind) => SeedBag.TryGetValue(kind,out int count) ? count : 0;
@@ -264,7 +264,7 @@ public sealed class PetState
         SeedBag ??= new();
         foreach (var key in new System.Collections.Generic.List<string>(SpecialFruitBag.Keys))
         {
-            if (!FruitKinds.IsSpecial(key)) SpecialFruitBag.Remove(key);
+            if (!FruitKinds.CanBag(key)) SpecialFruitBag.Remove(key);
             else SpecialFruitBag[key]=Math.Clamp(SpecialFruitBag[key],0,12);
         }
         foreach (var key in new System.Collections.Generic.List<string>(SeedBag.Keys))
@@ -382,7 +382,11 @@ public static class FruitKinds
     public const string Red="Red Round Fruit";
     public const string Green="Green Diamond Fruit";
     public static readonly string[] Special={Blue,Yellow,Red,Green};
-    public static readonly string[] Growable={Garden,Blue,Yellow,Red,Green};
+    public const string Moonblossom="Moonblossom Fruit";
+    public static readonly string[] ShopSeeds={Garden,Blue,Yellow,Red,Green};
+    public static readonly string[] Growable={Garden,Blue,Yellow,Red,Green,Moonblossom};
+    public static readonly string[] BagKinds={Blue,Yellow,Red,Green,Moonblossom};
+    public static bool CanBag(string kind)=>IsSpecial(kind) || kind==Moonblossom;
     public static bool IsSpecial(string kind) => Array.IndexOf(Special,kind)>=0;
     public static bool CanGrow(string kind) => Array.IndexOf(Growable,kind)>=0;
     public static string NewFavorite() => Special[Random.Shared.Next(Special.Length)];

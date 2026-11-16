@@ -10,13 +10,16 @@ internal sealed class ExpeditionNavigation
     private readonly Dictionary<Vector2I,long> cells=new();
     private const float Grid=1.1f;
     private readonly Node3D world;
+    internal string Area { get; }
+    internal Vector2[] Landmarks=>ExpeditionArt.Landmarks(Area);
+    internal float Height(float x,float z)=>ExpeditionArt.Height(x,z,Area);
     private readonly PhysicsShapeQueryParameters3D probe=new() { Shape=new SphereShape3D { Radius=.25f },CollisionMask=1 };
     public ExpeditionNavigation(Node3D world)
     {
-        this.world=world;
+        this.world=world;Area=ExpeditionArt.Area(world);
         for(int x=-32;x<=32;x++) for(int z=-24;z<=24;z++)
         {
-            var p=new Vector3(x*Grid,0,z*Grid); p.Y=ExpeditionArt.Height(p.X,p.Z)+.02f;
+            var p=new Vector3(x*Grid,0,z*Grid); p.Y=Height(p.X,p.Z)+.02f;
             if(!Safe(p)) continue;
             long id=graph.GetAvailablePointId(); graph.AddPoint(id,p); cells[new(x,z)]=id;
         }
@@ -31,7 +34,7 @@ internal sealed class ExpeditionNavigation
     }
     public bool Safe(Vector3 point)
     {
-        if(!point.IsFinite() || Mathf.Abs(point.X)>35.5f || Mathf.Abs(point.Z)>26.5f || WindfallMeadow.Water.Depth(new(point.X,point.Z))>.015f)return false;
+        if(!point.IsFinite() || !ExpeditionArt.Bounds(Area).HasPoint(new(point.X,point.Z)) || ExpeditionArt.Water(Area).Depth(new(point.X,point.Z))>.015f)return false;
         probe.Transform=new Transform3D(Basis.Identity,point+Vector3.Up*.34f);
         return world.GetWorld3D().DirectSpaceState.IntersectShape(probe,1).Count==0;
     }

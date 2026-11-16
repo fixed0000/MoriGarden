@@ -123,4 +123,5 @@ try {
 } finally { if(Directory.Exists(teamDir))Directory.Delete(teamDir,true); }
 Check(ExpeditionRoster.Resolve(new PetState(),null).Count==0,"Old saves require no new party fields");
 DiscoveryChecks.Run(Check);
+GreenhouseChecks.Run(Check);
 Console.WriteLine($"{checks} checks passed.");

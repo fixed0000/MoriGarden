@@ -32,11 +32,14 @@ internal sealed class WorldTravel
         id!=null && WorldCatalog.Default.IsExpedition(id) && WorldCatalog.Default.IsOpen(id,progress) ? id : WorldCatalog.Meadow;
     public void Build(Node3D world,GardenZone zone,PetState save)
     {
+        WaterArt.CurrentExpeditionArea=ExpeditionArea;WaterArt.SiteWater=null;
         if (zone==GardenZone.Expedition) ExpeditionArt.Build(world,ExpeditionArea);
         else ZoneArt.Build(world,zone,save.GardenTrees);
         foreach(var route in WorldCatalog.Default.Exits(AreaId(zone),save.Expedition))
             if (WorldCatalog.Default.IsExpedition(route.To) || zone==GardenZone.Expedition)
                 ZoneArt.Portal(world,Point(route.Entrance),WorldCatalog.Default.Areas[route.To].Title,new("849282"));
+        if(zone==GardenZone.Expedition && ExpeditionArea==WorldCatalog.Greenhouse)
+            world.GetNode<GreenhouseMission>("GreenhouseMission").Bind(save);
     }
     public string Title(GardenZone zone) => WorldCatalog.Default.Areas[AreaId(zone)].Title;
 }

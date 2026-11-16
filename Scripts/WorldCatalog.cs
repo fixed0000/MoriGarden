@@ -13,6 +13,7 @@ public sealed record WorldRoute(string Id,string From,string To,WorldPoint Entra
 public sealed class WorldCatalog
 {
     public const string Meadow="windfall-meadow";
+    public const string Greenhouse="forgotten-greenhouse";
     public IReadOnlyDictionary<string,WorldArea> Areas { get; }
     public IReadOnlyList<WorldRoute> Routes { get; }
     public WorldCatalog(IEnumerable<WorldArea> areas,IEnumerable<WorldRoute> routes)
@@ -32,7 +33,8 @@ public sealed class WorldCatalog
         new WorldArea("plaza","GARDEN PLAZA",WorldAreaKind.Plaza,InitiallyOpen:true),
         new WorldArea("stadium","STAR STADIUM",WorldAreaKind.Stadium,InitiallyOpen:true),
         new WorldArea("coastal-cove","COASTAL COVE",WorldAreaKind.Garden,InitiallyOpen:true),
-        new WorldArea(Meadow,"WINDFALL MEADOW",WorldAreaKind.ExpeditionRegion,InitiallyOpen:true)
+        new WorldArea(Meadow,"WINDFALL MEADOW",WorldAreaKind.ExpeditionRegion,InitiallyOpen:true),
+        new WorldArea(Greenhouse,"FORGOTTEN GREENHOUSE",WorldAreaKind.ExpeditionSite,Meadow,InitiallyOpen:true)
     },new[]{
         new WorldRoute("garden-plaza","garden","plaza",new(-18.45f,.43f,-16.85f),new(0,0,-7)),
         new WorldRoute("plaza-garden","plaza","garden",new(0,0,-10),new(-18.45f,.43f,-13.85f)),
@@ -41,12 +43,17 @@ public sealed class WorldCatalog
         new WorldRoute("plaza-stadium","plaza","stadium",new(6,0,-4),new(0,0,-7),Radius:1.35f),
         new WorldRoute("stadium-plaza","stadium","plaza",new(0,0,-10),new(6,0,-1)),
         new WorldRoute("plaza-meadow","plaza",Meadow,new(-8,0,6),new(0,0,23),MathF.PI),
-        new WorldRoute("meadow-plaza",Meadow,"plaza",new(0,0,27),new(-8,0,9))
+        new WorldRoute("meadow-plaza",Meadow,"plaza",new(0,0,27),new(-8,0,9)),
+        new WorldRoute("meadow-greenhouse",Meadow,Greenhouse,new(3,0,-21),new(0,0,17),MathF.PI),
+        new WorldRoute("greenhouse-meadow",Greenhouse,Meadow,new(0,0,21),new(3,0,-17))
     });
 }
 
 public sealed class ExpeditionProgress
 {
+    public Dictionary<string,CompactMissionState> Missions { get; set; }=new(StringComparer.Ordinal);
+    public CompactMissionState Mission(string id)
+    { if(!Missions.TryGetValue(id,out var mission))Missions[id]=mission=new();return mission; }
     public double ExplorationSeconds { get; set; }
     public Dictionary<string,DiscoveryMemory> Discoveries { get; set; }=new(StringComparer.Ordinal);
     public DiscoveryMemory Memory(string petId)
@@ -61,6 +68,8 @@ public sealed class ExpeditionProgress
     public Dictionary<string,HashSet<string>> AreaFlags { get; set; }=new(StringComparer.Ordinal);
     public void Validate()
     {
+        Missions=(Missions ?? new()).Where(p=>DiscoveryMemory.ValidId(p.Key) && p.Value!=null).Take(32).ToDictionary(p=>p.Key,p=>p.Value,StringComparer.Ordinal);
+        foreach(var mission in Missions.Values)mission.Validate();
         ExplorationSeconds=double.IsFinite(ExplorationSeconds) ? Math.Clamp(ExplorationSeconds,0,1e12) : 0;
         Discoveries=(Discoveries ?? new()).Where(p=>DiscoveryMemory.ValidId(p.Key) && p.Value!=null).Take(13).ToDictionary(p=>p.Key,p=>p.Value,StringComparer.Ordinal);
         foreach(var memory in Discoveries.Values)memory.Validate();
