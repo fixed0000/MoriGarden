@@ -54,7 +54,8 @@ public partial class GardenGame
             seconds=discoveryReviewTime,frames=discoveryFrames,
             events=system.Events.Select(e=>new {time=e.Time,pet=e.Pet,item=e.Object,action=e.Action}),
             rays=system.Perception.VisibilityQueries, recoveries=expeditionTeam.Members.Sum(m=>m.Recoveries),
-            memory=pet.Expedition.Discoveries },new JsonSerializerOptions { WriteIndented=true }));
+            memory=pet.Expedition.Discoveries,history=expeditionTeam.Members.ToDictionary(m=>m.Pet.Id,m=>m.Pet.State.History) },new JsonSerializerOptions { WriteIndented=true }));
+        Save();
         GD.Print("DISCOVERY_REVIEW_OK: 190 seconds of ordinary perception and team AI; captures and individual discovery traces saved");
         GetTree().Quit();
     }

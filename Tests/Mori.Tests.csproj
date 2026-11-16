@@ -10,5 +10,8 @@
     <Compile Include="../Scripts/CompactMissionState.cs" Link="CompactMissionState.cs" />
     <Compile Include="../Scripts/AnimalCatalog.cs" Link="AnimalCatalog.cs" />
     <Compile Include="../Scripts/AnimalInventory.cs" Link="AnimalInventory.cs" />
+    <Compile Include="../Scripts/ChaoMemory.cs" Link="ChaoMemory.cs" />
+    <Compile Include="../Scripts/ChaoExpression.cs" Link="ChaoExpression.cs" />
+    <Compile Include="../Scripts/ChaoExperience.cs" Link="ChaoExperience.cs" />
   </ItemGroup>
 </Project>

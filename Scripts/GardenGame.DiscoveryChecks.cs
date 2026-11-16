@@ -58,6 +58,11 @@ public partial class GardenGame
                 if(!called || !acknowledged || team.Members.Any(m=>owner.Expedition.Memory(m.Pet.Id).Find(flower.Definition.Id)?.Visits!=1 || m.Recoveries!=0))
                     throw new Exception($"Discovery sequence / attention / identity failed for {count}: {string.Join(';',team.Discoveries.Events)}");
                 if(team.Discoveries.Reservations.Count!=0)throw new Exception("Finished discoveries retained interaction slots");
+                if(team.Members.Any(m=>!m.Pet.State.History.Events.Any(e=>e.Source==flower.Definition.Id && e.Kind==ChaoMemoryKind.IndependentStudy)) ||
+                    !team.Members[0].Pet.State.History.Events.Any(e=>e.Source==flower.Definition.Id && e.Kind==ChaoMemoryKind.PlayerDiscovery))
+                    throw new Exception("Actual research or player acknowledgement did not enter long-term memory");
+                var historyCopy=SaveStore.Snapshot(owner);
+                if(historyCopy.History.Events.Count!=owner.History.Events.Count || historyCopy.GardenEggs.Any(e=>e.Chao!.History.Events.Count==0))throw new Exception("Expedition memories did not survive a save snapshot");
                 if(count>1 && !owner.Expedition.Discoveries.Values.Any(m=>m.SharedRewards.Count>0))throw new Exception("Shared experience did not use existing directed relationships");
                 var subject=team.Members[0];
                 if(team.Discoveries.Start(subject,flower,new(DiscoveryChoice.Approach,4,false,false),false))throw new Exception("Recent study restarted immediately");

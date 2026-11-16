@@ -19,11 +19,11 @@ public partial class ImportedChao : Node3D
         model.afterAction=Mathf.Max(0,model.afterAction-dt);
         MovePose(art,0,false,false,false,false,false,false); return true;
     }
-    internal float LowestSole()
+    internal float LowestSole(Node3D? limb=null)
     {
         float bottom=float.MaxValue;
         foreach(var (mesh,vertices) in soleVertices)
-            foreach(var vertex in vertices) bottom=Mathf.Min(bottom,(mesh.GlobalTransform*vertex).Y);
+            if(limb==null || mesh==limb || limb.IsAncestorOf(mesh))foreach(var vertex in vertices) bottom=Mathf.Min(bottom,(mesh.GlobalTransform*vertex).Y);
         return bottom;
     }
     private readonly System.Collections.Generic.Dictionary<MeshInstance3D,Vector3[]> soleVertices=new();
@@ -69,6 +69,7 @@ public partial class ImportedChao : Node3D
             if (FindChild("PaddleR",true,false) is Node3D paw)
                 paw.Rotation=new(-2.9f+(.55f-discardTime)*6,0,.20f);
         }
+        UpdatePresentation(dt,actor);
         if (alignSoles && Mathf.Abs(Rotation.X)<.6f)
         {
             if (soleVertices.Count==0)
@@ -94,6 +95,7 @@ public partial class ImportedChao : Node3D
                     foreach(var vertex in vertices) bottom=Mathf.Min(bottom,(mesh.GlobalTransform*vertex).Y);
                 if (bottom<float.MaxValue)
                     GlobalPosition+=Vector3.Up*Mathf.Clamp(((Vector3)hit["position"]).Y+.003f-bottom,-.12f,.12f);
+                ConformStanceFeet();
             }
         }
     }
@@ -110,12 +112,16 @@ public partial class ImportedChao : Node3D
         uniform float midpoint;
         uniform float slant=0.0;
         uniform float eye_mid_x=0.0;
+        uniform float eye_height=0.1;
+        uniform float openness=1.0;
+        uniform float opacity=1.0;
         varying float eye_x;
         varying float eye_y;
         void vertex() { eye_y=VERTEX.y; eye_x=VERTEX.x; }
         void fragment() {
-            if (eye_y>midpoint+slant*(eye_x-eye_mid_x)) discard;
+            if (eye_y>midpoint+(openness-.5)*eye_height+slant*(eye_x-eye_mid_x)) discard;
             ALBEDO=(texture(eye_texture,UV)*eye_color).rgb;
+            ALPHA=opacity;
             ROUGHNESS=.82;
         }
         """ };
@@ -145,7 +151,7 @@ public partial class ImportedChao : Node3D
 
     private void RefreshEyes()
     {
-        if ((eyesClosed || eyesHappy || eyesHalf || eyesSquint) && eyeShapes.Count==0)
+        if (eyeShapes.Count==0)
         {
             foreach (var eye in FindChildren("*_Eye","MeshInstance3D",true,false))
             {
@@ -161,15 +167,7 @@ public partial class ImportedChao : Node3D
                     EyeLine(parent,center,true,center.X<0 ? -1 : 1));
             }
         }
-        bool half=!eyesClosed && eyesHalf && !eyesSquint;
-        foreach (var (mesh,lid) in lids) mesh.MaterialOverride=half ? lid.Half : lid.Original;
-        foreach (var (eye,shapes) in eyeShapes)
-        {
-            eye.Visible=!eyesClosed && (!eyesHappy || half) && !eyesSquint;
-            shapes.Sleep.Visible=eyesClosed;
-            shapes.Happy.Visible=!eyesClosed && eyesHappy && !half && !eyesSquint;
-            shapes.Squint.Visible=!eyesClosed && eyesSquint;
-        }
+        ApplyEyeSurfaces();
     }
 
     private void AddLid(MeshInstance3D eye,float midpoint)
@@ -182,6 +180,7 @@ public partial class ImportedChao : Node3D
         }
         lid.SetShaderParameter("midpoint",midpoint);
         lid.SetShaderParameter("eye_mid_x",eye.GetAabb().GetCenter().X);
+        lid.SetShaderParameter("eye_height",eye.GetAabb().Size.Y);
         lids.Add(eye,(eye.MaterialOverride,lid));
     }
 
@@ -257,6 +256,7 @@ public partial class ImportedChao : Node3D
 
     public static void SleepPose(Node3D art,float elapsed=0,int manners=50)
     {
+        Pose(art,ChaoPoseKind.Sleep);
         StandForAction(art);
         if (art is ImportedChao modelPose) modelPose.alignSoles=false;
         if (art.FindChild("HeadPivot",true,false) is Node3D head) head.Rotation=Vector3.Zero;
@@ -317,6 +317,7 @@ public partial class ImportedChao : Node3D
 
     public static void CloudPose(Node3D art,float elapsed,float weight=1)
     {
+        Pose(art,ChaoPoseKind.Rest);
         StandForAction(art);
         if (art is ImportedChao model) model.alignSoles=false;
         float blend=Mathf.SmoothStep(0,1,Mathf.Clamp(weight,0,1));
@@ -352,6 +353,7 @@ public partial class ImportedChao : Node3D
 
     public static void StandUpPose(Node3D art,Quaternion from,Vector3 fromHeight,float progress,bool fromCrawl=false)
     {
+        Pose(art,ChaoPoseKind.Rise);
         if (art is ImportedChao model) model.alignSoles=false;
         float t=Mathf.Clamp(progress,0,1);
         Gait(art,0,false,false); CloseEyes(art,false);
@@ -414,6 +416,7 @@ public partial class ImportedChao : Node3D
 
     public static void Gait(Node3D art,float phase,bool moving,bool swimming,bool sprinting=false,bool struggling=false)
     {
+        if(art is ImportedChao tempo && tempo.personality!=null && !swimming && !tempo.crawls)phase=phase*1.65f*tempo.individualPace+tempo.individualPhase;
         if (art is ImportedChao gripModel) foreach(var arm in gripModel.instrumentArms.Values) arm.Hide();
         float swing=moving ? Mathf.Sin(phase*(struggling ? 2.3f : 1)) : 0;
         for(int side=-1;side<=1;side+=2)
@@ -424,7 +427,7 @@ public partial class ImportedChao : Node3D
                 if (!model.feet.TryGetValue(foot,out var rest)) model.feet[foot]=rest=foot.Position;
                 float stride=side*swing;
                 float angle=stride*(swimming ? (struggling ? 1.05f : .55f) : sprinting ? .92f : .70f);
-                float heelClearance=swimming ? 0 : Mathf.Abs(Mathf.Sin(angle))*.077f;
+                float heelClearance=swimming || stride<=0 ? 0 : Mathf.Abs(Mathf.Sin(angle))*.077f;
                 foot.Rotation=new(angle,0,0);
                 foot.Position=rest+(swimming ? Vector3.Up*(struggling ? stride*.019f : 0) :
                     new Vector3(0,heelClearance+Mathf.Max(0,stride)*.025f,stride*(sprinting ? .043f : .032f)));
@@ -447,6 +450,7 @@ public partial class ImportedChao : Node3D
 
     public static void MovePose(Node3D art,float phase,bool moving,bool water,bool swims,bool sprinting,bool airborne,bool flying)
     {
+        Pose(art,water ? ChaoPoseKind.Water : airborne ? ChaoPoseKind.Air : moving ? ChaoPoseKind.Walk : ChaoPoseKind.Idle);
         bool turning=false;
         if (art is ImportedChao turningModel && art.GetParent() is Node3D actor)
         {
@@ -480,6 +484,7 @@ public partial class ImportedChao : Node3D
             crawler.wasCrawling=crawl;
             if (crawl)
             {
+                Pose(art,ChaoPoseKind.Crawl);
                 crawler.alignSoles=false;
                 float stroke=moving ? Mathf.Sin(phase) : 0;
                 art.RotationDegrees=new(84,stroke*3.5f,stroke*4);
@@ -505,6 +510,7 @@ public partial class ImportedChao : Node3D
 
     public static void ClimbPose(Node3D art,float elapsed)
     {
+        Pose(art,ChaoPoseKind.Air);
         CloseEyes(art,false);
         Gait(art,elapsed*11,true,false);
         art.Position=Vector3.Up*.014f;
@@ -516,6 +522,7 @@ public partial class ImportedChao : Node3D
 
     public static void CourtshipPose(Node3D art,float rub,float jump)
     {
+        Pose(art,ChaoPoseKind.Interaction);
         CloseEyes(art,false);
         Gait(art,0,false,false);
         art.Position=Vector3.Up*(jump*.28f-.034f);
@@ -532,6 +539,7 @@ public partial class ImportedChao : Node3D
 
     public static void EatPose(Node3D art,float remaining)
     {
+        Pose(art,ChaoPoseKind.Grip);
         art.Rotation=new(.09f*Mathf.Sin(remaining*23),0,0);
         for(int side=-1;side<=1;side+=2)
         {
@@ -544,6 +552,7 @@ public partial class ImportedChao : Node3D
     public static void HandshakePose(Node3D art,Vector3 grip,float weight=1)
     {
         MovePose(art,0,false,false,false,false,false,false);
+        Pose(art,ChaoPoseKind.Grip);
         if (art.FindChild("PaddleR",true,false) is not Node3D paw || paw.GetParent() is not Node3D shoulder)
             return;
         var direction=shoulder.ToLocal(grip)-paw.Position;
@@ -558,6 +567,7 @@ public partial class ImportedChao : Node3D
 
     public static void IdeaPose(Node3D art,float weight=1)
     {
+        Pose(art,ChaoPoseKind.Thought);
         Gait(art,0,false,false);
         CloseEyes(art,false);
         art.Rotation=Vector3.Zero;
@@ -570,11 +580,12 @@ public partial class ImportedChao : Node3D
 
     public static void ThinkPose(Node3D art,float remaining)
     {
+        Pose(art,ChaoPoseKind.Thought);
         Gait(art,0,false,false);
         art.Rotation=Vector3.Zero;
         art.Position=Vector3.Zero;
         if (art.FindChild("HeadPivot",true,false) is Node3D head)
-            head.Rotation=new(-.28f,.18f*Mathf.Sin(remaining*2.4f),.08f);
+            head.Rotation=new(-.28f,-.35f,.08f);
         if (art.FindChild("PaddleR",true,false) is Node3D hand)
             hand.Rotation=new(-1.42f,-.44f,.47f);
         if (art.FindChild("MoodOrb",true,false) is EmotionOrb orb) orb.SetThinking(true);
@@ -582,6 +593,7 @@ public partial class ImportedChao : Node3D
 
     public static void ReceivePose(Node3D art,float reach)
     {
+        Pose(art,ChaoPoseKind.Interaction);
         art.Rotation=new(.14f*reach,0,0);
         for (int side=-1;side<=1;side+=2)
             if (art.FindChild(side<0 ? "PaddleL" : "PaddleR",true,false) is Node3D paw)
@@ -590,6 +602,7 @@ public partial class ImportedChao : Node3D
 
     public static void InstrumentHands(Node3D art,Vector3 leftGrip,Vector3 rightGrip)
     {
+        Pose(art,ChaoPoseKind.Grip);Attend(art,(leftGrip+rightGrip)*.5f,65);
         foreach(var (suffix,grip) in new[]{("L",leftGrip),("R",rightGrip)})
         {
             if (art.FindChild("Paddle"+suffix,true,false) is not Node3D paw || paw.GetParent() is not Node3D shoulder) continue;
@@ -630,6 +643,7 @@ public partial class ImportedChao : Node3D
     public static void BallReaction(Node3D art,float time,bool scold,bool polite,bool crying)
     {
         MovePose(art,0,false,false,false,false,false,false);
+        Pose(art,ChaoPoseKind.Distress);
         if (scold)
         {
             bool crossed=time>1;
@@ -684,6 +698,7 @@ public partial class ImportedChao : Node3D
     public static void CryPose(Node3D art,float remaining)
     {
         ReceivePose(art,.88f);
+        Pose(art,ChaoPoseKind.Distress);Express(art,ChaoExpression.Sad,.3f);
         art.Rotation=new(.22f,0,.07f*Mathf.Sin(remaining*23));
         var tears=art.GetNodeOrNull<Node3D>("Tears");
         if (tears==null)

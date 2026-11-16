@@ -10,6 +10,7 @@ public partial class TrainingAnimal : CharacterBody3D
     public bool IsParrot { get; init; }
     public bool IsGorilla { get; init; }
     public string? InventorySpecies { get; init; }
+    public string SpeciesId=>InventorySpecies ?? (IsGorilla ? "gorilla" : IsParrot ? "parrot" : Skill switch { AnimalSkill.Swim=>"penguin",AnimalSkill.Fly=>"songbird",AnimalSkill.Run=>"rabbit",_=>"bear-cub" });
     public Vector3 Home { get; init; }
     private float respawn;
     private Vector3 habitat;

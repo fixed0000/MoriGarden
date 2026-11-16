@@ -112,7 +112,7 @@ internal partial class WildAnimal : TrainingAnimal,IDiscoveryInteraction
         AnimateWild(dt,Mathf.Min(actual,2),clock,Species.Skill=="Fly" && actual>.2f);
     }
     public Vector3? ApproachPoint=>Position+GlobalBasis.Z*.95f;
-    public DiscoveryPlan Prepare(DiscoveryPlan plan,ExpeditionCompanion pet)=>plan with { ThoughtSeconds=Mathf.Max(4,plan.ThoughtSeconds-1.5f*pet.Pet.State.Intelligence/990f) };
+    public DiscoveryPlan Prepare(DiscoveryPlan plan,ExpeditionCompanion pet)=>plan with { ThoughtSeconds=Mathf.Max(4,plan.ThoughtSeconds-(pet.Pet.State.History.KnowsAnimal(Species.Id) ? 1 : 0)-1.5f*pet.Pet.State.Intelligence/990f) };
     public float InspectSeconds(PetState state)=>AnimalEncounterRules.Thought(state);
     public bool Inspected(ExpeditionCompanion pet,bool requested)
     {
@@ -120,6 +120,7 @@ internal partial class WildAnimal : TrainingAnimal,IDiscoveryInteraction
         var hit=GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(pet.Body.Position+Vector3.Up*.25f,Position+Vector3.Up*.2f,1));
         if(hit.Count>0)return false;
         Trust=Mathf.Min(1,Trust+AnimalEncounterRules.ChaoHelp(pet.Pet.State));Helped=true;helpCooldown=25;
+        pet.Pet.State.History.Record(ChaoMemoryKind.AnimalSeen,"animal-"+Species.Id,Habitat.Area,$"Made friends with a {Species.Name.ToLowerInvariant()}.",.7f,.75f);
         Change(WildAnimalIntent.Interact,5);goal=Position;ChaoSounds.Play(pet.Art,"voice");
         pet.Art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.Celebrate();return true;
     }

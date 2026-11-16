@@ -107,6 +107,9 @@ internal sealed class ExpeditionTeam
         }
         ChaoContacts.Resolve(Members.Select(m=>new ChaoContacts.Member(m.Body,false,m.Sleeping || m.Intent==ExpeditionIntent.Rest ? .28f : .17f)).ToList());
         foreach(var m in Members)
+            if(m.Partner is {} peer && string.CompareOrdinal(m.Pet.Id,peer.Pet.Id)<0 && m.RestingHere && peer.RestingHere && ExpeditionCompanion.Flat(m.Body.Position,peer.Body.Position)<2)
+                ChaoExperience.Together(owner,m.Pet.Id,m.Pet.State,peer.Pet.Id,peer.Pet.State,ChaoMemoryKind.SharedRest,"rest-"+nav.Area,nav.Area);
+        foreach(var m in Members)
         {
             if(m.Partner is not {} other || string.CompareOrdinal(m.Pet.Id,other.Pet.Id)>=0 ||
                 m.Intent!=ExpeditionIntent.Social || other.Intent!=ExpeditionIntent.Social || m.WalkedTogether)continue;
@@ -132,7 +135,7 @@ internal sealed class ExpeditionTeam
         if(Order==ExpeditionOrder.Follow && playerSpeed>1.2f)intent=ExpeditionIntent.Follow;
         if(intent==ExpeditionIntent.Social && friends.Length>0)
         {
-            var other=friends[m.Random.Next(friends.Length)];
+            var other=friends.OrderByDescending(f=>m.Random.NextDouble()*(1+m.Pet.State.History.PartnerBias(f.Pet.Id))).First();
             bool resting=m.Pet.State.Energy<50 && other.Pet.State.Energy<65;
             var point=nav.Nearest((m.Body.Position+other.Body.Position)*.5f);
             var occupied=Members.Where(n=>n!=m && n!=other).Select(n=>n.Body.Position).ToArray();
@@ -157,7 +160,12 @@ internal sealed class ExpeditionTeam
             var landmarks=nav.Landmarks.Select(p=>nav.Nearest(new(p.X,0,p.Y)))
                 .Where(p=>ExpeditionCompanion.Flat(p,center)<radius && ExpeditionCompanion.Flat(p,m.Body.Position)>1).ToArray();
             if(landmarks.Length>0 && m.Random.NextDouble()<.35+(m.Pet.State.Curiosity+100)/400d)
-                goal=landmarks[m.Random.Next(landmarks.Length)];
+                goal=landmarks.OrderByDescending(p=>m.Random.NextDouble()*(1+m.Pet.State.History.PlaceBias(nav.Area,new(p.X,p.Y,p.Z)))).First();
+            if(m.Pet.State.History.FavoritePlace(nav.Area)?.Place is {} favorite && m.Random.NextDouble()<.28)
+            {
+                var remembered=nav.Nearest(new(favorite.X,favorite.Y,favorite.Z));
+                if(ExpeditionCompanion.Flat(remembered,center)<radius && nav.Safe(remembered) && nav.Path(m.Body.Position,remembered).Length>0)goal=remembered;
+            }
         }
         else if(intent==ExpeditionIntent.Follow)goal=Formation(m,player);
         float seconds=intent==ExpeditionIntent.Sleep ? 30 : intent==ExpeditionIntent.Rest ? 22 : 9+(float)m.Random.NextDouble()*13;

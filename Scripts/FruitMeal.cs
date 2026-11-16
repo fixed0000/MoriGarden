@@ -59,6 +59,7 @@ internal sealed class FruitMeal
 
     public void Advance(float dt,FruitTree fruit,PetState chao,Node3D art,Vector3 mouth)
     {
+        ImportedChao.Attend(art,fruit.FruitPosition,75);
         elapsed=Mathf.Min(Duration,elapsed+dt);
         var forward=((Node3D)art.GetParent()).GlobalBasis.Z.Normalized();
         int next=Mathf.Min(fruit.Bites,bitesAt.Length-1);
@@ -80,6 +81,8 @@ internal sealed class FruitMeal
                 chao.Joy=Mathf.Min(100,chao.Joy+4);
             }
             if (!fullAtStart) chao.FeedBite(fruit.Bites==FruitTree.BiteCount);
+            if(fruit.Bites==FruitTree.BiteCount)chao.History.Record(ChaoMemoryKind.Pleasant,"food-"+fruit.Kind.ToLowerInvariant().Replace(' ','-'),chao.History.LastArea,
+                $"Enjoyed eating {fruit.Kind.ToLowerInvariant()}.",.5f,.35f,giver==null ? null : new[]{giver});
             ChaoSounds.Play(art,"bite");
             if (fruit.IsHeartFruit && fruit.Bites==FruitTree.BiteCount)
                 chao.CourtshipReadiness=100;

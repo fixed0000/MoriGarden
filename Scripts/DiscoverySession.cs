@@ -11,6 +11,7 @@ internal sealed class DiscoverySession
     internal Vector3 Spot { get; }
     internal bool Novel { get; }
     internal bool Requested { get; }
+    internal ExpeditionCompanion? Guide { get; set; }
     internal DiscoveryPhase Phase { get; private set; }
     internal float PhaseTime { get; private set; }
     internal float Age { get; private set; }
@@ -72,7 +73,7 @@ internal sealed class DiscoverySession
             case DiscoveryPhase.CallPlayer:
                 if(PhaseTime>=2)Enter(DiscoveryPhase.AwaitPlayer);break;
             case DiscoveryPhase.AwaitPlayer:
-                if(ExpeditionCompanion.Flat(player,Item.GlobalPosition)<3.5f && ExpeditionCompanion.Flat(player,Pet.Body.Position)<4)Enter(DiscoveryPhase.Acknowledge);
+                if(ExpeditionCompanion.Flat(player,Item.GlobalPosition)<3.5f && ExpeditionCompanion.Flat(player,Pet.Body.Position)<4){system.Acknowledge(this);Enter(DiscoveryPhase.Acknowledge);}
                 else if(PhaseTime>=10)Enter(DiscoveryPhase.Settle);
                 break;
             case DiscoveryPhase.Acknowledge:

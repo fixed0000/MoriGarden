@@ -125,4 +125,5 @@ Check(ExpeditionRoster.Resolve(new PetState(),null).Count==0,"Old saves require 
 DiscoveryChecks.Run(Check);
 GreenhouseChecks.Run(Check);
 WildlifeChecks.Run(Check);
+MemoryChecks.Run(Check);
 Console.WriteLine($"{checks} checks passed.");

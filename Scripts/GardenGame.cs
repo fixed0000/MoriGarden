@@ -171,8 +171,9 @@ public partial class GardenGame : Node3D
         }
         meadowReview=OS.GetCmdlineUserArgs().Contains("--meadow-review") || OS.GetCmdlineUserArgs().Contains("--water-review");
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
-        testMode = wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
-        savePath = ProjectSettings.GlobalizePath(wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
+        string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
+        testMode = personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
@@ -241,6 +242,10 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--personality-inspect"))InspectPersonality();
+        if(OS.GetCmdlineUserArgs().Contains("--personality-review"))
+        {try{ReviewPersonality((float)delta);}catch(Exception ex){GD.PushError("PERSONALITY_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;}
+        if(OS.GetCmdlineUserArgs().Contains("--personality-check")){RunPersonalityCheckMode();return;}
         if(OS.GetCmdlineUserArgs().Contains("--wildlife-inspect"))InspectWildlife();
         if(OS.GetCmdlineUserArgs().Contains("--wildlife-review"))
         {
@@ -504,8 +509,9 @@ public partial class GardenGame : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--personality-review")){ReviewPersonalityPhysics((float)delta);return;}
         if (paused || teamUi.Choosing || transition >= 0) return;
-        if (!racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null) MovePlayer((float)delta);
+        if (!racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null && !memoriesOpen) MovePlayer((float)delta);
         foreach (var toy in world.GetChildren().OfType<ToyCar>()) toy.Advance((float)delta);
         if (zone==GardenZone.Garden)
             musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
@@ -530,6 +536,7 @@ public partial class GardenGame : Node3D
         foreach (var tree in world.GetChildren().OfType<FruitTree>())
             foreach(var slot in tree.Slots) slot.UpdateFruit((float)delta);
         ResolveChaoContacts();
+        AdvanceChaoMemories((float)delta);
     }
 
     private void ResolveChaoContacts()
@@ -1141,6 +1148,7 @@ public partial class GardenGame : Node3D
     {
         if (@event is not InputEventKey key || !key.Pressed || key.Echo) return;
         Key code = key.PhysicalKeycode;
+        if(memoriesOpen){if(code==Key.Escape){memoriesOpen=false;memoriesPanel.Hide();}return;}
         if(teamUi.Choosing)
         {
             if(code==Key.Escape)teamUi.Cancel();
@@ -1710,6 +1718,7 @@ public partial class GardenGame : Node3D
                 {
                     ConsumeBagAnimal(heldAnimal);
                     recipient.TrainWithAnimal(heldAnimal.Skill.ToString());
+                    recipient.History.Record(ChaoMemoryKind.AnimalSeen,"animal-"+heldAnimal.SpeciesId,recipient.History.LastArea,$"Became acquainted with a {heldAnimal.AnimalName.ToLowerInvariant()}.",.7f,.75f);
                     GardenEgg.ShellBurst(subject,Colors.White,sparkles:true);
                     heldAnimal.ReturnToHabitat(); heldAnimal=null;
                     Notify($"{recipient.Name} learned from the animal.");
@@ -2478,7 +2487,7 @@ public partial class GardenGame : Node3D
         zoneLabel = Text(ui, "", 13, new(40, 65, 320, 25), new("50685c"));
         Text(ui, "Right mouse drag / IJKL: Camera   ·   C: Recenter", 14, new(800, 28, 465, 28), GardenArt.Ink);
         details = new Control { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore }; ui.AddChild(details);
-        Panel(details, new(24,112,254,390),new("f9f3e5"));
+        Panel(details, new(24,112,254,425),new("f9f3e5"));
         formLabel=Text(details,"Mori",23,new(43,130,210,34),GardenArt.Ink);
         stats=Text(details,"",15,new(43,176,205,124),new("50685c"));
         favoritesLabel=Text(details,"",12,new(43,367,217,77),new("50685c"));
@@ -2486,6 +2495,7 @@ public partial class GardenGame : Node3D
         relationshipsButton.Pressed+=OpenRelationships;
         details.AddChild(relationshipsButton);
         BuildRelationships(ui);
+        BuildMemoriesUi(ui);
         raceLabel = Text(ui, "", 22, new(400, 110, 700, 38), GardenArt.Ink);
         hintPanel = Panel(ui, new(170,665,940,50),new Color(.98f,.96f,.89f,.96f));
         machinePanel=new Control { Visible=false };
@@ -3477,6 +3487,8 @@ public partial class GardenGame : Node3D
         friend.Position=new(-8.7f,0,-10.39f);
         for (int i=0;i<5500 && !islandNap.IsNapping;i++)
             islandNap.Step(friend,friendArt,swimmer,islandMotion,1f/60);
+        // Sleeping eyes now crossfade; let the visual transition complete after the nap starts.
+        for(int i=0;i<45 && islandNap.IsNapping;i++){ImportedChao.SleepPose(friendArt,i/60f);friendArt._PhysicsProcess(1f/60);}
         if (!islandNap.IsNapping || friendArt.FindChild("Left_Eye",true,false) is not MeshInstance3D { Visible:false })
             throw new Exception($"Chao did not reach the island and close its eyes: {friend.Position}");
         islandNap.Cancel(friendArt);
@@ -3601,6 +3613,7 @@ public partial class GardenGame : Node3D
         CheckExpeditionFoundation();
         CheckGreenhouse();
         CheckWildlife();
+        CheckPersonality();
         SetPreviewPosition();
         Notify("Explore the garden. Carry Mori through an arch to visit another area.", 30);
     }
@@ -4007,7 +4020,7 @@ public partial class GardenGame : Node3D
         leisure.BeginSky(friend.Position);
         if (!leisure.Step(friend,friendArt,visitor,walk,.02f,true) || !leisure.WatchingSky)
             throw new Exception("The unmarked sky-watching destination was not used");
-        for(int i=0;i<100;i++) leisure.Step(friend,friendArt,visitor,walk,1f/60,true);
+        for(int i=0;i<100;i++){leisure.Step(friend,friendArt,visitor,walk,1f/60,true);friendArt._PhysicsProcess(1f/60);}
         if (Mathf.Abs(friendArt.GlobalBasis.Y.Normalized().Dot(Vector3.Up))>.55f)
             throw new Exception("Sky watcher did not recline supported by its paws");
         var eye=(MeshInstance3D)friendArt.FindChild("Left_Eye",true,false);
@@ -4310,9 +4323,10 @@ public partial class GardenGame : Node3D
         for (int i=0;i<1050;i++)
         {
             test.Advance(1f/60,pet,Eligible,()=>saves++);
+            friendArt._PhysicsProcess(1f/60);other.Art._PhysicsProcess(1f/60);
             thought|=mainOrb.CurrentGlyph=="?";
             idea|=mainOrb.CurrentGlyph=="!";
-            smiled|=saves==1 && !eye.Visible;
+            smiled|=saves==1 && other.Art is ImportedChao { Expression:ChaoExpression.Happy };
             touched|=test.Active && saves==0 &&
                 firstPaw.ToGlobal(Vector3.Down*.054f).DistanceTo(secondPaw.ToGlobal(Vector3.Down*.054f))<.045f;
         }
@@ -4329,6 +4343,7 @@ public partial class GardenGame : Node3D
         if (!relationshipDetail.Text.StartsWith("✓") || relationshipMeter.Value!=link.Score)
             throw new Exception("Relationship details did not show the saved introduction");
         CloseRelationships();
+        memoriesOpen=false;if(memoriesPanel!=null)memoriesPanel.Hide();
 
         string folder=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(savePath)!,"social-editor");
         var bridge=new ChaoEditorBridge(folder);
@@ -4509,8 +4524,11 @@ public partial class GardenGame : Node3D
         orb._PhysicsProcess(2);
         var eye=(MeshInstance3D)friendArt.FindChild("Left_Eye",true,false);
         bool HasGlyph(string glyph) => orb.CurrentGlyph==glyph;
-        void Advance(float dt) => choices.Step(friend,friendArt,curious,walker,dt,true,
-            System.Array.Empty<FruitTree>(),new[]{car,rattle},out _);
+        void Advance(float dt)
+        {
+            choices.Step(friend,friendArt,curious,walker,dt,true,System.Array.Empty<FruitTree>(),new[]{car,rattle},out _);
+            AdvanceVisualCheck(friendArt,Mathf.Min(dt,.8f));
+        }
         Advance(5);
         if (!HasGlyph("?") || rattle.PlayedBy(friend)) throw new Exception("A favorite should prompt thought before play");
         Advance(3.99f);
@@ -4519,7 +4537,7 @@ public partial class GardenGame : Node3D
         if (HasGlyph("?") || HasGlyph("!") || !eye.Visible)
             throw new Exception("The orb did not return to normal between thought and discovery");
         Advance(.50f);
-        if (!HasGlyph("!") || eye.Visible || rattle.PlayedBy(friend))
+        if (!HasGlyph("!") || friendArt is not ImportedChao { Expression:ChaoExpression.Happy } || rattle.PlayedBy(friend))
             throw new Exception("The idea did not produce a happy exclamation before play");
         Advance(1.98f);
         if (rattle.PlayedBy(friend)) throw new Exception("Chao started playing before the two-second reaction");
@@ -4530,6 +4548,7 @@ public partial class GardenGame : Node3D
         if (!rattle.PlayedBy(friend) || car.PlayedBy(friend) || eye.Visible || HasGlyph("!"))
             throw new Exception("Chao did not choose the favorite rattle and keep happy eyes while playing");
         rattle.Advance(5);
+        AdvanceVisualCheck(friendArt,.8f);
         if (!eye.Visible) throw new Exception("Happy eyes remained after the interaction ended");
         choices.Cancel(friend,friendArt);
         car.QueueFree();

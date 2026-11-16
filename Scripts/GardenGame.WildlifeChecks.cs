@@ -78,11 +78,12 @@ public partial class GardenGame
                     expeditionTeam.Discoveries.Scan(explorer);Step(2200,true);
                 }
                 if(!rabbit.Helped || !expeditionTeam.Discoveries.Events.Any(e=>e.Object==rabbit.Interest.Definition.Id && e.Action=="mechanism action"))throw new Exception("Independent perception and greeting failed");
-                SwitchZone(GardenZone.Garden);bagAnimals.Select(Array.FindIndex(AnimalCatalog.All,a=>a.Id=="rabbit"));TakeSelectedAnimal();
+                SwitchZone(GardenZone.Garden);AdvanceChaoMemories(.02f);bagAnimals.Select(Array.FindIndex(AnimalCatalog.All,a=>a.Id=="rabbit"));TakeSelectedAnimal();
                 if(heldAnimal?.InventorySpecies!="rabbit" || AvailableAnimal("rabbit")!=0)throw new Exception("Garden inventory did not reserve animal ownership");
                 UpdatePickupPose(PickupDuration);friend.Position=new(1,0,3);player.Position=new(1,0,4);petZone=GardenZone.Garden;friend.Visible=true;sleeping=false;
                 Face(friend.Position);int run=pet.Run;RunOfferCheck();
                 if(pet.Run!=run+12 || pet.Wildlife.Count("rabbit")!=0 || heldAnimal!=null || pet.RecentAnimalSkill!="Run")throw new Exception("Captured animal did not train through the original gift animation");
+                if(!pet.History.KnowsAnimal("rabbit"))throw new Exception("Meeting an animal during garden training was not remembered");
                 bagAnimals.Select(Array.FindIndex(AnimalCatalog.All,a=>a.Id=="songbird"));TakeSelectedAnimal();
                 SwitchZone(GardenZone.Lobby);
                 if(pet.Wildlife.Count("songbird")!=1)throw new Exception("Unused animal was lost during travel");

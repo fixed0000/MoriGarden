@@ -45,9 +45,23 @@ public static class SaveStore
 
     private static PetState Read(string path)
     {
-        var pet = JsonSerializer.Deserialize<PetState>(File.ReadAllText(path))
+        string json=File.ReadAllText(path);
+        var pet = JsonSerializer.Deserialize<PetState>(json)
                   ?? throw new ArgumentException("Empty save");
         pet.Validate();
+        using(var document=JsonDocument.Parse(json))
+        {
+            if(!document.RootElement.TryGetProperty("History",out var history) || history.ValueKind!=JsonValueKind.Object)pet.History.PastUnknown=true;
+            if(document.RootElement.TryGetProperty("GardenEggs",out var eggs) && eggs.ValueKind==JsonValueKind.Array)
+            {
+                int index=0;foreach(var egg in eggs.EnumerateArray())
+                {
+                    if(index<pet.GardenEggs.Count && pet.GardenEggs[index].Chao is {} chao && egg.TryGetProperty("Chao",out var child) && child.ValueKind==JsonValueKind.Object &&
+                        (!child.TryGetProperty("History",out var childHistory) || childHistory.ValueKind!=JsonValueKind.Object))chao.History.PastUnknown=true;
+                    index++;
+                }
+            }
+        }
         return pet;
     }
 

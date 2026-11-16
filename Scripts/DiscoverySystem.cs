@@ -72,6 +72,11 @@ internal sealed class DiscoverySystem
         var plan=DiscoveryDecisions.Choose(target.Definition,pet.Pet.State,memory,Now,pet.Random);
         plan=target.Interaction?.Prepare(plan,pet) ?? plan;
         bool novel=memory.Find(target.Definition.Id)==null;
+        if(target.Interaction is WildAnimal animal)
+        {
+            novel=!pet.Pet.State.History.KnowsAnimal(animal.Species.Id);
+            pet.Pet.State.History.Record(ChaoMemoryKind.AnimalSeen,"animal-"+animal.Species.Id,target.Definition.AreaId,$"Met a {animal.Species.Name.ToLowerInvariant()}.",.45f,.75f);
+        }
         if(plan.Choice==DiscoveryChoice.Ignore){memory.Notice(target.Definition.Id,Now,target.Definition.Revision);Log(pet,target,"ignored");deferred[pet.Pet.Id]=Now+8;return;}
         Start(pet,target,plan,novel);
     }
@@ -99,6 +104,13 @@ internal sealed class DiscoverySystem
     {
         var pet=session.Pet;var item=session.Item.Definition;
         bool completed=Memory(pet).Complete(item,pet.Pet.State,Now);
+        if(completed)ChaoExperience.Study(pet.Pet.State,item,session.Requested,session.Guide?.Pet.State.Name);
+        if(completed && session.Guide is {} guide)
+        {
+            pet.Pet.State.History.Record(ChaoMemoryKind.HelpReceived,item.Id,item.AreaId,$"{guide.Pet.State.Name} showed the way to a discovery.",.7f,.65f,new[]{guide.Pet.Id});
+            if(guide.Pet.State.History.Record(ChaoMemoryKind.HelpGiven,item.Id,item.AreaId,$"Helped {pet.Pet.State.Name} explore a discovery.",.7f,.65f,new[]{pet.Pet.Id}))
+                guide.Pet.State.History.Grow(guide.Pet.State,item.Id,"Kindness",.18f);
+        }
         bool acted=session.Item.Interaction?.Inspected(pet,session.Requested)==true;
         if(acted)Log(pet,session.Item,"mechanism action");
         if(!completed && !acted)return false;
@@ -108,6 +120,7 @@ internal sealed class DiscoverySystem
             var record=Memory(peer).Find(item.Id);var relation=owner().SocialLink(pet.Pet.Id,peer.Pet.Id);
             if(record?.Visits>0 && Now-record.StudiedAt<90 && relation?.Met==true && relation.ScoreFrom(pet.Pet.Id)>=0 && relation.ScoreFrom(peer.Pet.Id)>=0)
             {
+                ChaoExperience.Together(owner(),pet.Pet.Id,pet.Pet.State,peer.Pet.Id,peer.Pet.State,ChaoMemoryKind.SharedStudy,item.Id,item.AreaId,false);
                 relation.SetScoreFrom(pet.Pet.Id,relation.ScoreFrom(pet.Pet.Id)+Memory(pet).ShareSuccess(item.Id,peer.Pet.Id));
                 relation.SetScoreFrom(peer.Pet.Id,relation.ScoreFrom(peer.Pet.Id)+Memory(peer).ShareSuccess(item.Id,pet.Pet.Id));
             }
@@ -119,6 +132,12 @@ internal sealed class DiscoverySystem
         var memory=Memory(session.Pet);
         if(!session.Completed || Now-lastAttention<60 || Now-memory.LastAttention<120)return false;
         lastAttention=memory.LastAttention=Now;Log(session.Pet,session.Item,"called player");return true;
+    }
+    internal void Acknowledge(DiscoverySession session)
+    {
+        var state=session.Pet.Pet.State;var item=session.Item.Definition;
+        if(state.History.Record(ChaoMemoryKind.PlayerDiscovery,item.Id,item.AreaId,$"Showed you a discovery in {ChaoExperience.AreaTitle(item.AreaId)}.",.8f,.7f,new[]{PetState.CurrentHero},item.Position))
+            state.History.Grow(state,item.Id,"Bond",.16f);
     }
     internal bool Invite(DiscoverySession source)
     {
@@ -145,13 +164,18 @@ internal sealed class DiscoverySystem
                 }
                 Cancel(peer,"joining peer");
             }
-            if(Start(peer,source.Item,plan,novel,true)) { Log(source.Pet,source.Item,"invited peer");ChaoSounds.Play(source.Pet.Art,"voice");return true; }
+            if(Start(peer,source.Item,plan,novel,true)) { sessions[peer.Pet.Id].Guide=source.Pet;Log(source.Pet,source.Item,"invited peer");ChaoSounds.Play(source.Pet.Art,"voice");return true; }
         }
         return false;
     }
     internal void Cancel(ExpeditionCompanion pet,string reason,bool restore=true)
     {
         if(!sessions.Remove(pet.Pet.Id,out var session))return;
+        if(reason is "blocked" or "occluded" && session.Age>6)
+        {
+            pet.Pet.State.History.Record(ChaoMemoryKind.FailedAttempt,session.Item.Definition.Id,session.Item.Definition.AreaId,"Could not reach something interesting.",-.55f,.45f);
+            ImportedChao.Express(pet.Art,ChaoExpression.Sad,2);
+        }
         Reservations.Release(pet.Pet.Id);DiscoveryPresentation.Clear(pet);Log(pet,session.Item,"cancelled: "+reason);deferred[pet.Pet.Id]=Now+12;
         if(restore)resume(pet);
     }

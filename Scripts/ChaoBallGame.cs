@@ -109,6 +109,8 @@ internal sealed class ChaoBallGame
                 if (time>=3)
                 {
                     a.Pet.Joy=Mathf.Max(0,a.Pet.Joy-(scold ? 12 : polite ? 3 : 5));
+                    a.Pet.History.Record(ChaoMemoryKind.Unpleasant,"ball-invitation",a.Pet.History.LastArea,
+                        polite ? $"{b.Pet.Name} politely declined an invitation to play." : $"{b.Pet.Name} declined an invitation to play.",polite ? -.08f : scold ? -.65f : -.25f,scold ? .55f : .25f,new[]{b.Id});
                     ImportedChao.ClearBallReaction(b.Art); Orb(b)?.SetIdea(null,false);
                     b=null; Place(); Next(Phase.Sad);
                 }

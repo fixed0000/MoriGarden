@@ -11,17 +11,16 @@ internal static class DiscoveryPresentation
     internal static void Look(ExpeditionCompanion pet,Vector3 target,float dt)
     {
         pet.Face(target,dt);
-        if(pet.Art.FindChild("HeadPivot",true,false) is Node3D head)
-        {
-            var local=pet.Body.ToLocal(target)-Vector3.Up*.28f;
-            head.Rotation=new(Mathf.Clamp(-Mathf.Atan2(local.Y,new Vector2(local.X,local.Z).Length()),-.4f,.3f),Mathf.Clamp(Mathf.Atan2(local.X,local.Z),-.45f,.45f),0);
-        }
+        ImportedChao.Attend(pet.Art,target,80);
     }
     internal static void Pose(DiscoverySession session,Vector3 player,float dt)
     {
         var pet=session.Pet;var item=session.Item;
         if(!GodotObject.IsInstanceValid(item))return;
         var orb=pet.Art.GetNodeOrNull<EmotionOrb>("MoodOrb");
+        ImportedChao.Express(pet.Art,session.Phase switch { DiscoveryPhase.Notice=>session.Novel ? ChaoExpression.Surprised : ChaoExpression.Curious,
+            DiscoveryPhase.Think=>ChaoExpression.Curious,DiscoveryPhase.Inspect=>ChaoExpression.Focused,DiscoveryPhase.React or DiscoveryPhase.Acknowledge=>ChaoExpression.Delighted,
+            _=>ChaoExpression.Neutral },.3f);
         if(session.Phase==DiscoveryPhase.Travel)return;
         var target=session.Phase==DiscoveryPhase.CallPlayer ? player+Vector3.Up : session.PeerLook is {} peer && session.Age<session.PeerLookUntil ? peer : item.LookPoint;
         Look(pet,target,dt);

@@ -21,6 +21,7 @@ internal sealed class ExpeditionCompanion
     internal float NavigationFailure=>failures;
     internal float TargetTolerance { get; set; }=.45f;
     internal bool Sleeping=>Intent==ExpeditionIntent.Sleep && resting>2 && !rising.Active;
+    internal bool RestingHere=>lying && resting>5 && Intent is ExpeditionIntent.Rest or ExpeditionIntent.Sleep;
     internal int Recoveries { get; private set; }
     internal readonly Random Random;
     private readonly ChaoMotion motion=new() { GardenPond=false };

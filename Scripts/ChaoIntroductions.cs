@@ -65,6 +65,8 @@ internal sealed class ChaoIntroductions
         var toward=distance>.001f ? between/distance : Vector3.Back;
         Face(aBody,toward,dt);
         Face(bBody,-toward,dt);
+        ImportedChao.Attend(pair.A.Art,bBody.Position+Vector3.Up*.27f,70);
+        ImportedChao.Attend(pair.B.Art,aBody.Position+Vector3.Up*.27f,70);
         pair.Time+=dt;
         switch (pair.Stage)
         {
@@ -135,6 +137,7 @@ internal sealed class ChaoIntroductions
                     {
                         link.Met=link.Introduced=true;
                         link.Score=Math.Clamp(link.Score+4+(pair.A.Pet.Sociability+pair.B.Pet.Sociability)/38,-100,100);
+                        ChaoExperience.Together(owner,pair.A.Id,pair.A.Pet,pair.B.Id,pair.B.Pet,ChaoMemoryKind.Introduction,"introduction","garden",false);
                         save();
                     }
                     Mood(pair.A,"",true);

@@ -19,8 +19,13 @@ public sealed class PetState
     public float RelationshipWith(string character = CurrentHero) =>
         CharacterRelationships.TryGetValue(character,out float value) ? value : 0;
 
-    public void ChangeRelationship(float amount,string character = CurrentHero) =>
-        CharacterRelationships[character] = Math.Clamp(RelationshipWith(character)+amount,-100,100);
+    public void ChangeRelationship(float amount,string character = CurrentHero)
+    {
+        CharacterRelationships[character]=Math.Clamp(RelationshipWith(character)+amount,-100,100);
+        if(Math.Abs(amount)<.2f || History.LastArea.Length==0)return;
+        History.Record(amount>0 ? ChaoMemoryKind.Pleasant : ChaoMemoryKind.Unpleasant,"player-care",History.LastArea,
+            amount>0 ? "Enjoyed spending time with you." : "Had an upsetting moment with you.",amount>0 ? .6f : -.6f,.45f,new[]{character});
+    }
 
     public const int CallBondThreshold = 6;
     public bool RespondsToCall => Bond >= CallBondThreshold;
@@ -41,6 +46,7 @@ public sealed class PetState
     public int Care { get; set; }
     public int Agility { get; set; }
     public int Stars { get; set; }
+    public ChaoMemory History { get; set; }=new();
     public WildlifeProgress Wildlife { get; set; }=new();
     public int BagFruit { get; set; }
     public System.Collections.Generic.Dictionary<string,int> SpecialFruitBag { get; set; } = new();
@@ -146,6 +152,7 @@ public sealed class PetState
 
     public void Tick(float seconds, bool sleeping)
     {
+        History.Advance(seconds);
         Fullness = Math.Clamp(Fullness - seconds * .035f, 0, 100);
         Joy = Math.Clamp(Joy - seconds * .018f, 0, 100);
         Energy = Math.Clamp(Energy + seconds * (sleeping ? 5 : -.045f/(1+Stamina*.002f)), 0, 100);
@@ -261,6 +268,7 @@ public sealed class PetState
         FavoriteInstrument=FavoriteInstrument is "None" or "Drums" or "Electric Guitar" or "Synthesizer" ? FavoriteInstrument : "Flute";
         ActivityPreference=Math.Clamp(ActivityPreference,1,5);
         if (!float.IsFinite(AdultSeconds) || AdultSeconds<0 || !float.IsFinite(EvolutionFoodSeconds) || EvolutionFoodSeconds<0) throw new ArgumentException("Invalid evolution time");
+        History ??=new();History.Validate();
         Wildlife ??=new();Wildlife.Validate();
         SpecialFruitBag ??= new();
         SeedBag ??= new();
@@ -309,7 +317,8 @@ public sealed class PetState
         GardenEggs ??= new();
         if (GardenEggs.Count>12 || GardenEggs.Exists(egg=>egg==null || !float.IsFinite(egg.X) || !float.IsFinite(egg.Y) || !float.IsFinite(egg.Z)))
             throw new ArgumentException("Unsupported garden egg data");
-        foreach (var egg in GardenEggs) egg.Chao?.EnsureFavoriteFruit();
+        foreach (var egg in GardenEggs)
+            if(egg.Chao is {} resident){resident.EnsureFavoriteFruit();resident.History ??=new();resident.History.Validate();}
         Swim = Math.Clamp(Swim, 0, 990);
         Fly = Math.Clamp(Fly, 0, 990);
         Run = Math.Clamp(Run, 0, 990);

@@ -46,7 +46,16 @@ internal sealed class ChaoLeisure
         {
             delay-=dt;
             if (delay>0 || actor.Position.Y>.15f || motion.IsSwimmingAt(actor.Position)) return false;
-            if (GD.Randf()<.32f) BeginSky(SkySpots[(int)(GD.Randi()%(uint)SkySpots.Length)]);
+            if (GD.Randf()<.32f)
+            {
+                Vector3 favorite=SkySpots[0];float score=-1;
+                foreach(var spot in SkySpots)
+                {
+                    float weight=GD.Randf()*(1+state.History.PlaceBias(state.History.LastArea,new(spot.X,spot.Y,spot.Z)));
+                    if(weight>score){favorite=spot;score=weight;}
+                }
+                BeginSky(favorite);
+            }
             else BeginRoute((int)(GD.Randi()%(uint)Routes.Length));
             previousDistance=float.MaxValue;
         }
