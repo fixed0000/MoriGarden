@@ -52,8 +52,8 @@ internal partial class ExpeditionTeamUi : CanvasLayer
         foreach(var pet in available)
         {
             var s=pet.State;
-            var button=new Button { Alignment=HorizontalAlignment.Left,CustomMinimumSize=new(590,65),ToggleMode=true,
-                ButtonPressed=selected.Contains(pet.Id),Text=$"{s.Name} · {pet.Color} · {s.LifeStage}\nSwim {s.Swim/10}   Fly {s.Fly/10}   Run {s.Run/10}   Power {s.Power/10}   Stamina {s.Stamina/10}" };
+            var button=new Button { Alignment=HorizontalAlignment.Left,CustomMinimumSize=new(590,95),ToggleMode=true,
+                ButtonPressed=selected.Contains(pet.Id),Text=$"{s.Name} · {pet.Color} · {s.LifeStage}\nSwim {s.Stat("Swim").Level} ({s.Stat("Swim").Points} pts)   Fly {s.Stat("Fly").Level} ({s.Stat("Fly").Points} pts)\nRun {s.Stat("Run").Level} ({s.Stat("Run").Points} pts)   Power {s.Stat("Power").Level} ({s.Stat("Power").Points} pts)   Stamina {s.Stat("Stamina").Level} ({s.Stat("Stamina").Points} pts)" };
             rows.AddChild(button);cards.Add((button,pet));
             button.Pressed+=()=>{if(selected.Contains(pet.Id))selected.Remove(pet.Id);else if(selected.Count<3)selected.Add(pet.Id);Refresh();};
         }
@@ -68,7 +68,7 @@ internal partial class ExpeditionTeamUi : CanvasLayer
         {
             button.SetPressedNoSignal(selected.Contains(pet.Id));
             var s=pet.State;
-            button.Text=$"{(selected.Contains(pet.Id) ? "[x]" : "[ ]")} {s.Name} · {pet.Color} · {s.LifeStage}\nSwim {s.Swim/10}   Fly {s.Fly/10}   Run {s.Run/10}   Power {s.Power/10}   Stamina {s.Stamina/10}";
+            button.Text=$"{(selected.Contains(pet.Id) ? "[x]" : "[ ]")} {s.Name} · {pet.Color} · {s.LifeStage}\nSwim {s.Stat("Swim").Level} ({s.Stat("Swim").Points} pts)   Fly {s.Stat("Fly").Level} ({s.Stat("Fly").Points} pts)\nRun {s.Stat("Run").Level} ({s.Stat("Run").Points} pts)   Power {s.Stat("Power").Level} ({s.Stat("Power").Points} pts)   Stamina {s.Stat("Stamina").Level} ({s.Stat("Stamina").Points} pts)";
         }
         count.Text=cards.Count==0 ? "No active, hatched Chao are available." : $"Selected: {selected.Count}/3";
         depart.Disabled=selected.Count==0;

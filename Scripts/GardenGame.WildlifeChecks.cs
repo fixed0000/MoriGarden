@@ -81,8 +81,8 @@ public partial class GardenGame
                 SwitchZone(GardenZone.Garden);AdvanceChaoMemories(.02f);bagAnimals.Select(Array.FindIndex(AnimalCatalog.All,a=>a.Id=="rabbit"));TakeSelectedAnimal();
                 if(heldAnimal?.InventorySpecies!="rabbit" || AvailableAnimal("rabbit")!=0)throw new Exception("Garden inventory did not reserve animal ownership");
                 UpdatePickupPose(PickupDuration);friend.Position=new(1,0,3);player.Position=new(1,0,4);petZone=GardenZone.Garden;friend.Visible=true;sleeping=false;
-                Face(friend.Position);int run=pet.Run;RunOfferCheck();
-                if(pet.Run!=run+12 || pet.Wildlife.Count("rabbit")!=0 || heldAnimal!=null || pet.RecentAnimalSkill!="Run")throw new Exception("Captured animal did not train through the original gift animation");
+                Face(friend.Position);int run=pet.Stat("Run").Level*100+pet.Stat("Run").Progress;RunOfferCheck();
+                if(pet.Stat("Run").Level*100+pet.Stat("Run").Progress!=run+40 || pet.Wildlife.Count("rabbit")!=0 || heldAnimal!=null || pet.RecentAnimalSkill!="Run")throw new Exception("Captured animal did not train through the original gift animation");
                 if(!pet.History.KnowsAnimal("rabbit"))throw new Exception("Meeting an animal during garden training was not remembered");
                 bagAnimals.Select(Array.FindIndex(AnimalCatalog.All,a=>a.Id=="songbird"));TakeSelectedAnimal();
                 SwitchZone(GardenZone.Lobby);

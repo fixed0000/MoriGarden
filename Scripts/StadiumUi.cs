@@ -72,7 +72,7 @@ internal partial class StadiumUi : CanvasLayer
     {
         var pet=pets.Selected>=0 && pets.Selected<petIds.Length ? ExpeditionRoster.Available(owner()).FirstOrDefault(p=>p.Id==petIds[pets.Selected]) : null;
         if(pet==null){details.Text="No eligible, hatched Chao.";enter.Disabled=true;return;}
-        var s=pet.State;details.Text=$"{s.Name}\n{pet.Color} · {s.LifeStage}\nEnergy {s.Energy:0}/100\n\nRun {s.Run/10}   Swim {s.Swim/10}\nFly {s.Fly/10}   Power {s.Power/10}\nStamina {s.Stamina/10}\n\nMedals {s.Athletics.Medals.Count}\nCups {s.Athletics.Cups.Count}\n{s.Athletics.KarateRank}";
+        var s=pet.State;details.Text=$"{s.Name}\n{pet.Color} · {s.LifeStage}\nEnergy {s.Energy:0}/100\n\nRun {s.Stat("Run").Level} ({s.Stat("Run").Points} pts)\nSwim {s.Stat("Swim").Level} ({s.Stat("Swim").Points} pts)\nFly {s.Stat("Fly").Level} ({s.Stat("Fly").Points} pts)\nPower {s.Stat("Power").Level} ({s.Stat("Power").Points} pts)\nStamina {s.Stat("Stamina").Level} ({s.Stat("Stamina").Points} pts)\n\nMedals {s.Athletics.Medals.Count}\nCups {s.Athletics.Cups.Count}\n{s.Athletics.KarateRank}";
         var e=events.Selected>=0 && events.Selected<eventIds.Length ? SportsCatalog.Find(eventIds[events.Selected]) : null;
         enter.Disabled=s.Energy<15 || e==null || !SportsCatalog.Open(e,s);
         if(e!=null)

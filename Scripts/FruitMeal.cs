@@ -80,7 +80,7 @@ internal sealed class FruitMeal
                 chao.ChangeRelationship(1,giver!);
                 chao.Joy=Mathf.Min(100,chao.Joy+4);
             }
-            if (!fullAtStart) chao.FeedBite(fruit.Bites==FruitTree.BiteCount);
+            if (!fullAtStart) chao.FeedBite(fruit.Bites==FruitTree.BiteCount,fruit.Kind);
             if(fruit.Bites==FruitTree.BiteCount)chao.History.Record(ChaoMemoryKind.Pleasant,"food-"+fruit.Kind.ToLowerInvariant().Replace(' ','-'),chao.History.LastArea,
                 $"Enjoyed eating {fruit.Kind.ToLowerInvariant()}.",.5f,.35f,giver==null ? null : new[]{giver});
             ChaoSounds.Play(art,"bite");

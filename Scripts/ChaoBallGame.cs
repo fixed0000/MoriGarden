@@ -227,7 +227,7 @@ internal sealed class ChaoBallGame
         var delta=target-c.Actor.Position; delta.Y=0;
         if (delta.Length()<=reach+.002f) { Normal(c); return true; }
         Face(c,target,dt);
-        c.Actor.MoveAndCollide(delta.Normalized()*Mathf.Min(delta.Length()-reach,dt*(.36f+Mathf.Sqrt(c.Pet.Run)*.039f)));
+        c.Actor.MoveAndCollide(delta.Normalized()*Mathf.Min(delta.Length()-reach,dt*(.36f+Mathf.Sqrt(c.Pet.RunAbility)*.039f)));
         ImportedChao.MovePose(c.Art,(float)Time.GetTicksMsec()*.008f,true,false,false,false,false,false);
         return false;
     }

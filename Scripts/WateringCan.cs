@@ -63,7 +63,7 @@ public partial class WateringCan : Node3D
         GlobalPosition+=travel*fraction[0];
     }
 
-    internal static bool Qualified(PetState pet) => pet.Intelligence>=140 && pet.Kindness>=50;
+    internal static bool Qualified(PetState pet) => pet.IntelligenceAbility>=140 && pet.Kindness>=50;
 
     public void Advance(float dt)
     {

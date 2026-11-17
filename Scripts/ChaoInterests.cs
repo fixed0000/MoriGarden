@@ -177,7 +177,7 @@ internal sealed class ChaoInterests
         {
             bool preferred=IsFavorite(food,chao);
             bool loose=FoodAvailable(food,actor,chao);
-            bool canShake=(!food.IsSpecial || preferred) && !loose && chao.Power>=100 && chao.Fullness<72 && food.CanShake &&
+            bool canShake=(!food.IsSpecial || preferred) && !loose && chao.PowerAbility>=100 && chao.Fullness<72 && food.CanShake &&
                 actor.Position.DistanceTo(food.Position)<7;
             if (!loose && !canShake) continue;
             float distance=actor.Position.DistanceTo(loose ? food.FruitPosition : food.Position);

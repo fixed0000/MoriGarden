@@ -80,7 +80,7 @@ public static class SportsRewards
         owner.Stars+=stars;
         if(e.Mode==SportMode.Race && outcome.Cleared)
         {int wallet=pet.Stars;pet.CompleteRace(Math.Max(0,5-outcome.Place));pet.Stars=wallet;}
-        else {pet.Energy=Math.Max(0,pet.Energy-(outcome.Withdrawn ? 2 : 8));if(outcome.BoutWins>0)pet.Power=Math.Min(990,pet.Power+Math.Min(3,outcome.BoutWins));}
+        else {pet.Energy=Math.Max(0,pet.Energy-(outcome.Withdrawn ? 2 : 8));if(outcome.BoutWins>0)pet.TrainProgress("Power",Math.Min(3,outcome.BoutWins));}
         string area="stadium";
         if(record.Entries==1)pet.History.Record(ChaoMemoryKind.Pleasant,"sports-entry-"+e.Mode.ToString().ToLowerInvariant(),area,e.Mode==SportMode.Race ? "Took part in Chao Race." : "Took part in Chao Karate.",.35f,.55f);
         if(win && !pet.History.Events.Any(m=>m.Source=="sports-win-"+e.Mode.ToString().ToLowerInvariant()))pet.History.Record(ChaoMemoryKind.Pleasant,"sports-win-"+e.Mode.ToString().ToLowerInvariant(),area,e.Mode==SportMode.Race ? "Won a first Chao Race." : "Won a first Chao Karate tournament.",.85f,.9f);

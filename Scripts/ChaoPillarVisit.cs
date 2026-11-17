@@ -19,7 +19,7 @@ internal sealed class ChaoPillarVisit
         if (stage==Stage.Idle)
         {
             delay=Mathf.Max(0,delay-dt);
-            if (!available || delay>0 || pet.Power<150 || motion.Airborne) return false;
+            if (!available || delay>0 || pet.PowerAbility<150 || motion.Airborne) return false;
             top=GardenLandscape.SouthPillars.OrderBy(p=>actor.Position.DistanceSquaredTo(p)).First();
             if (actor.Position.DistanceTo(top)>38) return false;
             face=actor.Position-top; face.Y=0;
@@ -49,7 +49,7 @@ internal sealed class ChaoPillarVisit
                 Move(actor,art,pet,motion,offset,dt);
                 return true;
             case Stage.Climb:
-                float duration=top.Y/Mathf.Lerp(.72f,1.45f,Mathf.Clamp(pet.Power/990f,0,1));
+                float duration=top.Y/Mathf.Lerp(.72f,1.45f,Mathf.Clamp(pet.PowerAbility/990f,0,1));
                 if (elapsed<duration)
                     actor.Position=climbStart+Vector3.Up*(top.Y*elapsed/duration);
                 else

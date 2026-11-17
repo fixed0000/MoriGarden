@@ -40,8 +40,7 @@ public static class SaveStore
         return null;
     }
 
-    public static PetState Snapshot(PetState pet) =>
-        JsonSerializer.Deserialize<PetState>(JsonSerializer.SerializeToUtf8Bytes(pet))!;
+    public static PetState Snapshot(PetState pet) { pet.EnsureStatisticsTree();return JsonSerializer.Deserialize<PetState>(JsonSerializer.SerializeToUtf8Bytes(pet))!; }
 
     private static PetState Read(string path)
     {

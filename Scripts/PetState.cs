@@ -3,7 +3,7 @@ using System;
 namespace Mori;
 
 // Game rules independent of graphics and input.
-public sealed class PetState
+public sealed partial class PetState
 {
     public GardenSaveLocation? ManualLocation { get; set; }
     public ExpeditionProgress Expedition { get; set; }=new();
@@ -78,13 +78,6 @@ public sealed class PetState
     public float Fun { get; set; } = 65;
     public string Form { get; set; } = "seed";
 
-    public int Swim { get; set; }
-    public int Fly { get; set; }
-    public int Run { get; set; }
-    public int Power { get; set; }
-    public int Stamina { get; set; }
-    public int Luck { get; set; }
-    public int Intelligence { get; set; }
     public int Sociability { get; set; } = 50;
     public int ActivityPreference { get; set; } = 3;
     public bool Clumsy { get; set; }
@@ -95,7 +88,7 @@ public sealed class PetState
     public int Aggressiveness { get; set; }
     public int Curiosity { get; set; }
     public int Initiative { get; set; }
-    public bool FindsFood => Intelligence>=80 && Initiative>=65;
+    public bool FindsFood => IntelligenceAbility>=80 && Initiative>=65;
 
     public bool IsEgg { get; set; }
     public float EggSeconds { get; set; }
@@ -114,7 +107,7 @@ public sealed class PetState
     public bool CanAct => !IsEgg && !InCocoon;
     public string LifeStage => IsEgg ? "Egg" : InCocoon ? "Cocoon" : Form == "seed" ? "Child" : SecondEvolutionProgress>=1 ? "Second evolution" : "Adult";
 
-    public static PetState NewEgg() => new() { IsEgg = true, EggSeconds = 28 };
+    public static PetState NewEgg() { var pet=new PetState { IsEgg=true,EggSeconds=28 };pet.InitializeFreshStatistics();return pet; }
 
     public bool Hatch()
     {
@@ -157,7 +150,7 @@ public sealed class PetState
         History.Advance(seconds);
         Fullness = Math.Clamp(Fullness - seconds * .035f, 0, 100);
         Joy = Math.Clamp(Joy - seconds * .018f, 0, 100);
-        Energy = Math.Clamp(Energy + seconds * (sleeping ? 5 : -.045f/(1+Stamina*.002f)), 0, 100);
+        Energy = Math.Clamp(Energy + seconds * (sleeping ? 5 : -.045f/(1+StaminaAbility*.002f)), 0, 100);
         if (CanAct) CourtshipReadiness=Math.Min(100,CourtshipReadiness+seconds/72);
         if (!sleeping) Fun=Math.Max(0,Fun-seconds*.07f);
     }
@@ -168,18 +161,19 @@ public sealed class PetState
         Fullness = Math.Min(100, Fullness + 24);
         Care++;
         Bond++;
-        Stamina = Math.Min(990, Stamina + 2);
+        TrainProgress("Stamina",40);
         return true;
     }
 
-    public void FeedBite(bool last)
+    public void FeedBite(bool last,string kind="Garden Fruit")
     {
         EvolutionFoodSeconds+=Form=="seed" ? 52.5f : 54f;
         Fullness=Math.Min(100,Fullness+6);
+        TrainProgress("Stamina",FruitTraining.Progress(kind,last));
         if (!last) return;
         Care++;
         Bond++;
-        Stamina=Math.Min(990,Stamina+2);
+
     }
 
     public void Pet()
@@ -194,25 +188,14 @@ public sealed class PetState
     public void TrainWithAnimal(string skill)
     {
         if (!CanAct) return;
-        const int xp = 12;
-        switch (skill)
-        {
-            case "Swim": Swim = Math.Min(990, Swim+xp); break;
-            case "Fly": Fly = Math.Min(990, Fly+xp); break;
-            case "Run": Run = Math.Min(990, Run+xp); break;
-            case "Power": Power = Math.Min(990, Power+xp); break;
-            default: throw new ArgumentException("Unknown animal skill", nameof(skill));
-        }
-        ChangeRelationship(.45f);
-        RecentAnimalSkill = skill;
-        Joy = Math.Min(100,Joy+4);
+        TrainWithSpecies(skill switch { "Swim"=>"penguin","Fly"=>"songbird","Run"=>"rabbit","Power"=>"bear-cub",_=>throw new ArgumentException("Unknown animal skill") });
     }
 
     public void CompleteRace(int score)
     {
         score = Math.Clamp(score, 0, 8);
         Stars += score;
-        Run = Math.Min(990, Run + score);
+        TrainProgress("Run",score);
         BestScore = Math.Max(BestScore, score);
         Agility += score >= 6 ? 3 : score >= 3 ? 2 : score > 0 ? 1 : 0;
         Joy = Math.Min(100, Joy + score * 2);
@@ -222,14 +205,16 @@ public sealed class PetState
     public bool Evolve()
     {
         if (Form != "seed" || Growth<100 && ChildSeconds<FirstEvolutionSeconds) return false;
+        EnsureStatistics();
         Form = RecentAnimalSkill switch
         {
             "Swim" => "tide",
             "Fly" => "comet",
             "Run" => "swift",
             "Power" => "stone",
-            _ => Agility >= Care ? "comet" : "bloom"
+            _ => Agility > Care ? "comet" : "bloom"
         };
+        Statistics!.Promote(Form switch { "tide"=>"Swim","comet"=>"Fly","swift"=>"Run","stone"=>"Power",_=>"Stamina" });
         return true;
     }
 
@@ -322,13 +307,7 @@ public sealed class PetState
             throw new ArgumentException("Unsupported garden egg data");
         foreach (var egg in GardenEggs)
             if(egg.Chao is {} resident){resident.EnsureFavoriteFruit();resident.History ??=new();resident.History.Validate();resident.Athletics ??=new();resident.Athletics.Validate();}
-        Swim = Math.Clamp(Swim, 0, 990);
-        Fly = Math.Clamp(Fly, 0, 990);
-        Run = Math.Clamp(Run, 0, 990);
-        Power = Math.Clamp(Power, 0, 990);
-        Stamina = Math.Clamp(Stamina, 0, 990);
-        Luck = Math.Clamp(Luck, 0, 990);
-        Intelligence = Math.Clamp(Intelligence, 0, 990);
+        EnsureStatisticsTree();
         Sociability=Math.Clamp(Sociability,0,100);
         Manners = Math.Clamp(Manners,0,100);
         Kindness = Math.Clamp(Kindness,-100,100);

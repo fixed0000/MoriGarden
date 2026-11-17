@@ -171,9 +171,10 @@ public partial class GardenGame : Node3D
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
         string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
         string? stadiumMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--stadium-check" or "--stadium-review" or "--stadium-inspect");
-        testMode = stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        testMode = OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
+        if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))savePath=ProjectSettings.GlobalizePath("user://stats-preview/pet.json");
         if(stadiumMode!=null)savePath=ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--outcomes-only") ? "user://stadium-outcomes/pet.json" : $"user://{stadiumMode[2..]}/pet.json");
         pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
         pet.Stadium.Cancel(); // Interrupted competitions return safely to the stadium, never claim an unfinished result.
@@ -243,6 +244,7 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))InspectStatistics();
         if(OS.GetCmdlineUserArgs().Contains("--stadium-inspect"))InspectStadium();
         if(OS.GetCmdlineUserArgs().Contains("--stadium-review")){try{ReviewStadium((float)delta);}catch(Exception ex){GD.PushError("STADIUM_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;}
         if(OS.GetCmdlineUserArgs().Contains("--stadium-check")){RunStadiumCheckMode();return;}
@@ -1019,7 +1021,7 @@ public partial class GardenGame : Node3D
             return;
         }
         balconyDelay=Mathf.Max(0,balconyDelay-dt);
-        bool startCliff=balconyDelay<=0 && !chaoMotion.OnCliffRoute && pet.Power>=100 && callTime<=0 && !swimmingTrip && !chaoMotion.Airborne &&
+        bool startCliff=balconyDelay<=0 && !chaoMotion.OnCliffRoute && pet.PowerAbility>=100 && callTime<=0 && !swimmingTrip && !chaoMotion.Airborne &&
             !chaoMotion.IsSwimmingAt(friend.Position) && !chaoMotion.LeavingPond && !moriRest.Requested &&
             !moriIslandNap.IsVisiting && !moriLeisure.Active && !moriPillar.Active && pet.Energy>=58;
         Vector3? cliff=zone==GardenZone.Garden && callTime<=0 && !swimmingTrip
@@ -1081,7 +1083,7 @@ public partial class GardenGame : Node3D
             if (!leavingWater && (swimTime >= (pet.Swim<100 ? 1.1f : 5) || FlatDistance(friend.Position,shallows)<.45f))
             {
                 leavingWater = true;
-                if (swimTime > 1 && pet.Swim>=100) pet.Swim = Math.Min(990,pet.Swim+1);
+                if (swimTime > 1 && pet.Swim>=100) pet.TrainProgress("Swim",4);
             }
             target = leavingWater ? GardenArt.SwimExit : shallows;
             if (leavingWater && !inWater && FlatDistance(friend.Position,target)<.55f)
@@ -1723,7 +1725,7 @@ public partial class GardenGame : Node3D
                 if (heldAnimal!=null)
                 {
                     ConsumeBagAnimal(heldAnimal);
-                    recipient.TrainWithAnimal(heldAnimal.Skill.ToString());
+                    recipient.TrainWithSpecies(heldAnimal.SpeciesId);
                     recipient.History.Record(ChaoMemoryKind.AnimalSeen,"animal-"+heldAnimal.SpeciesId,recipient.History.LastArea,$"Became acquainted with a {heldAnimal.AnimalName.ToLowerInvariant()}.",.7f,.75f);
                     GardenEgg.ShellBurst(subject,Colors.White,sparkles:true);
                     heldAnimal.ReturnToHabitat(); heldAnimal=null;
@@ -1761,7 +1763,7 @@ public partial class GardenGame : Node3D
                     ImportedChao.SetHappy(art,false);
                     recipient.Joy=Math.Min(100,recipient.Joy+6);
                 }
-                Notify($"{recipient.Name} ate the fruit. Stamina +2 XP.");
+                Notify($"{recipient.Name} ate the fruit. Stamina progress increased.");
                 Save();
                 heldFruit.Regrow(); heldFruit=null;
                 FinishOffer(true);
@@ -2715,8 +2717,7 @@ public partial class GardenGame : Node3D
         parent.AddChild(label); return label;
     }
 
-    private static string SkillLine(string name, int progress) =>
-        $"{name}   Lv. {progress/10}    {progress%10}/10 XP";
+    private static string SkillLine(string name, PetState state) { state.EnsureStatistics();return state.Statistics!.Summary(name); }
 
     private void UpdateUi()
     {
@@ -2728,7 +2729,7 @@ public partial class GardenGame : Node3D
         cameraHint.Visible=!StadiumBlocking;
         controlsHint.Text=StadiumBlocking ? racing ? "Q Cheer   ·   Esc Leave competition   ·   Between bouts: Enter to continue" : "Choose a Chao and competition   ·   Tab / arrows Navigate   ·   Enter Choose   ·   Esc Back" : "WASD Move   Shift Run   Space Jump   Ctrl Dash   B Inventory   Tab Mori   M Music   Esc Pause";
         formLabel.Text=$"{inspected.Name} · {inspected.LifeStage}";
-        stats.Text=$"{SkillLine("Fly",inspected.Fly)}\n{SkillLine("Power",inspected.Power)}\n{SkillLine("Run",inspected.Run)}\n{SkillLine("Stamina",inspected.Stamina)}\n{SkillLine("Swim",inspected.Swim)}";
+        stats.Text=$"{SkillLine("Fly",inspected)}\n{SkillLine("Power",inspected)}\n{SkillLine("Run",inspected)}\n{SkillLine("Stamina",inspected)}\n{SkillLine("Swim",inspected)}";
         if (relationshipSubject!=null) RefreshRelationshipDetail();
         favoritesLabel.Text=$"Favorite toy   {inspected.PreferredToy}\nFavorite fruit   {inspected.FavoriteFruit.Replace(" Fruit","")}\nFavorite instrument   {inspected.FavoriteInstrument}\nSociability   {inspected.Sociability}/100";
         raceLabel.Text="";
@@ -3099,7 +3100,7 @@ public partial class GardenGame : Node3D
             if (json.RootElement.GetProperty("chao").GetArrayLength()!=2)
                 throw new Exception("Editor roster omitted the hatchling");
             System.IO.File.WriteAllText(System.IO.Path.Combine(editorDirectory,"chao-editor-request.json"),
-                System.Text.Json.JsonSerializer.Serialize(new { session,id="smoke",target=bonusEgg.Data.Id,patch=new { Swim=345,Joy=77.5f } }));
+                System.Text.Json.JsonSerializer.Serialize(new { session,id="smoke",target=bonusEgg.Data.Id,patch=new { Joy=77.5f },statistics=new { Swim=new { Grade=2,Level=12,Points=345,Progress=25 } } }));
             var edited=bridge.Poll(new Dictionary<string,PetState> { ["main"]=pet,[bonusEgg.Data.Id]=bonusEgg.Chao },true);
             if (edited==null || edited.Swim!=345 || edited.Joy!=77.5f || pet.Swim==345 || bridge.EditedTarget!=bonusEgg.Data.Id)
                 throw new Exception("Live editor patch failed");
@@ -3274,7 +3275,7 @@ public partial class GardenGame : Node3D
         Interact();
         RunOfferCheck();
         if (tree.HasFruitOnGround || pet.Fullness <= 50) throw new Exception("Tree fruit did not feed pet");
-        if (pet.Stamina < 2) throw new Exception("Fruit did not train Stamina");
+        if (pet.Stat("Stamina").Level*100+pet.Stat("Stamina").Progress < 40) throw new Exception("Fruit did not train Stamina");
         tree.Shake();
         for (int i=0;i<90;i++) tree.UpdateFruit(1f/60);
         if (tree.HasFruitOnGround) throw new Exception("Unripe fruit fell from tree");
@@ -3286,7 +3287,7 @@ public partial class GardenGame : Node3D
             throw new Exception("Three mature fruits did not fall");
         var smartChao=world.GetChildren().OfType<GardenEgg>().First(egg=>egg.Chao!=null);
         var smartStart=smartChao.Position;
-        smartChao.Chao!.Intelligence=80;
+        smartChao.Chao!.Stat("Intelligence").Points=324;
         smartChao.Chao.Initiative=65;
         smartChao.Chao.Fullness=50;
         smartChao.Park(tree.FruitPosition+Vector3.Right*.35f);
@@ -3310,7 +3311,7 @@ public partial class GardenGame : Node3D
         RunOfferCheck();
         if (pet.BagFruit!=0 || pet.Fullness<=50) throw new Exception("Inventory fruit did not feed Mori");
         var bird = world.GetChildren().OfType<TrainingAnimal>().First(a => a.Skill == AnimalSkill.Fly);
-        int oldFly = pet.Fly;
+        int oldFly = pet.Stat("Fly").Level*100+pet.Stat("Fly").Progress;
         player.Position = bird.Position + Vector3.Right;
         Interact();
         if (heldAnimal != bird) throw new Exception("Could not pick up a training animal");
@@ -3328,7 +3329,7 @@ public partial class GardenGame : Node3D
         friend.Position = player.Position + Vector3.Forward;
         Face(friend.Position);
         RunOfferCheck();
-        if (heldAnimal != null || bird.Available || pet.Fly != oldFly+12)
+        if (heldAnimal != null || bird.Available || pet.Stat("Fly").Level*100+pet.Stat("Fly").Progress != oldFly+40)
             throw new Exception("Training animal did not grant Fly XP");
         friend.Position = GardenArt.SwimExit;
         following = false;
@@ -3336,15 +3337,15 @@ public partial class GardenGame : Node3D
         swimmingTrip = true;
         leavingWater = false;
         swimTime = 0;
-        pet.Swim=Math.Max(100,pet.Swim);
-        int oldSwim = pet.Swim;
+        pet.Stat("Swim").Points=Math.Max(330,pet.Swim);
+        int oldSwim = pet.Stat("Swim").Level*100+pet.Stat("Swim").Progress;
         bool sawWake = false;
         for (int i=0; i<3000 && swimmingTrip; i++)
         {
             MoveFriend(1f/60);
             sawWake |= wake.Visible;
         }
-        if (!sawWake || swimmingTrip || pet.Swim <= oldSwim)
+        if (!sawWake || swimmingTrip || pet.Stat("Swim").Level*100+pet.Stat("Swim").Progress <= oldSwim)
             throw new Exception("Mori did not complete a swim and return to shore");
 
         var cameraWall = new Node3D();
@@ -3675,7 +3676,7 @@ public partial class GardenGame : Node3D
         pet=new PetState { Run=80,Fullness=50 }; friend.Position=new(20,0,15); friend.Rotation=Vector3.Zero;
         player.Position=friend.Position+Vector3.Back; Face(friend.Position); heldAnimal=gorilla;
         RunOfferCheck();
-        if (pet.Power!=12 || heldAnimal!=null || gorilla.Available) throw new Exception("Giving a gorilla does not train Power");
+        if (pet.Stat("Power").Progress!=40 || heldAnimal!=null || gorilla.Available) throw new Exception("Giving a gorilla does not train Power");
         var drums=world.GetNode<ToyCar>("Drums");
         var musician=new PetState { FavoriteInstrument="Drums",Fun=20 }; musician.Validate();
         if (musician.FavoriteInstrument!="Drums" || !drums.IsFavorite(musician) || !drums.BeginPlay(friend,musician))
@@ -3787,8 +3788,8 @@ public partial class GardenGame : Node3D
         var parrot=world.GetNode<TrainingAnimal>("Parrot");
         if (parrot.AnimalName!="Parrot" || parrot.Skill!=AnimalSkill.Fly) throw new Exception("The parrot is missing or trains the wrong skill");
         player.Position=friend.Position+Vector3.Back; Face(friend.Position);
-        heldAnimal=parrot; int flight=pet.Fly; RunOfferCheck();
-        if (heldAnimal!=null || pet.Fly!=flight+12 || parrot.Available) throw new Exception("The parrot gift did not train flight");
+        heldAnimal=parrot; int flight=pet.Stat("Fly").Level*100+pet.Stat("Fly").Progress; RunOfferCheck();
+        if (heldAnimal!=null || pet.Stat("Fly").Level*100+pet.Stat("Fly").Progress!=flight+48 || parrot.Available) throw new Exception("The parrot gift did not train flight");
         ImportedChao.ClearActionPause(friendArt);
     }
 

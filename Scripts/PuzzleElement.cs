@@ -64,12 +64,12 @@ internal partial class PuzzleElement : Node3D,IDiscoveryInteraction
             state.Value=1-state.Value;
         }
         else if(Kind==PuzzleElementKind.Rotary)
-            state.Value=chao!=null && (requested || chao.Random.NextDouble()<chao.Pet.State.Intelligence/990f) ? 2 : (state.Value+1)%3;
+            state.Value=chao!=null && (requested || chao.Random.NextDouble()<chao.Pet.State.IntelligenceAbility/990f) ? 2 : (state.Value+1)%3;
         else if(Kind==PuzzleElementKind.Plate)return Pressed;
         Changed(this,chao);ChaoSounds.Play(this,"mood");return true;
     }
     public DiscoveryPlan Prepare(DiscoveryPlan plan,ExpeditionCompanion pet)=>plan with { ThoughtSeconds=PuzzleReasoning.ThoughtSeconds(pet.Pet.State) };
-    public float InspectSeconds(PetState state)=>Kind==PuzzleElementKind.Plate ? 20 : 4+(1-state.Intelligence/990f)*3;
+    public float InspectSeconds(PetState state)=>Kind==PuzzleElementKind.Plate ? 20 : 4+(1-state.IntelligenceAbility/990f)*3;
     public Vector3? ApproachPoint=>Kind==PuzzleElementKind.Plate ? null : GlobalPosition+GlobalBasis.Z*.92f+Vector3.Up*.02f;
     public bool Inspected(ExpeditionCompanion pet,bool requested)
     {

@@ -64,7 +64,7 @@ public static class GreenhouseRules
 }
 public static class PuzzleReasoning
 {
-    public static float ThoughtSeconds(PetState state)=>4+(1-state.Intelligence/990f)*3+(1-state.Initiative/990f);
-    public static float ActionChance(PetState state)=>Math.Clamp((.12f+.35f*state.Initiative/990f+.32f*state.Intelligence/990f+
+    public static float ThoughtSeconds(PetState state)=>4+(1-state.IntelligenceAbility/990f)*3+(1-state.Initiative/990f);
+    public static float ActionChance(PetState state)=>Math.Clamp((.12f+.35f*state.Initiative/990f+.32f*state.IntelligenceAbility/990f+
         .13f*DiscoveryDecisions.Curiosity(state))*(.5f+.5f*state.Energy/100),.05f,.94f);
 }

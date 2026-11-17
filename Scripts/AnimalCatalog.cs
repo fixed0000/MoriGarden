@@ -21,6 +21,6 @@ public static class AnimalCatalog
 public static class AnimalEncounterRules
 {
     public static float CalmRate(AnimalSpecies species,float speed)=>speed>4.3f ? -(.24f+species.Caution*.3f) : .065f+species.Curiosity*.045f;
-    public static float ChaoHelp(PetState pet)=>.22f+.12f*pet.Intelligence/990f+.1f*(pet.Kindness+100)/200f+.08f*pet.Sociability/100f;
-    public static float Thought(PetState pet)=>4+(1-pet.Intelligence/990f)*2;
+    public static float ChaoHelp(PetState pet)=>.22f+.12f*pet.IntelligenceAbility/990f+.1f*(pet.Kindness+100)/200f+.08f*pet.Sociability/100f;
+    public static float Thought(PetState pet)=>4+(1-pet.IntelligenceAbility/990f)*2;
 }

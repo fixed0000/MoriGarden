@@ -8,7 +8,7 @@ internal static class ChaoThought
     public const float IdeaEnd=Minimum+2.7f;
     public static string Glyph(float elapsed) => elapsed<Minimum ? "?" : elapsed<Minimum+.5f ? "" : "!";
     public static bool Inspired(float elapsed) => elapsed>=Minimum+.5f;
-    public static float WithIntelligence(PetState chao) => Minimum+Mathf.Clamp((240-chao.Intelligence)/55f,0,3);
+    public static float WithIntelligence(PetState chao) => Minimum+Mathf.Clamp((240-chao.IntelligenceAbility)/55f,0,3);
 }
 
 internal sealed class ChaoSettling

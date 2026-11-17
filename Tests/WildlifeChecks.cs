@@ -24,9 +24,9 @@ internal static class WildlifeChecks
         var pet=new PetState { Wildlife=data,Run=100,Fly=100,Swim=100,Power=100 };
         foreach(var kind in AnimalCatalog.All)
         {
-            int before=kind.Skill switch{"Swim"=>pet.Swim,"Fly"=>pet.Fly,"Run"=>pet.Run,_=>pet.Power};
-            pet.TrainWithAnimal(kind.Skill);int after=kind.Skill switch{"Swim"=>pet.Swim,"Fly"=>pet.Fly,"Run"=>pet.Run,_=>pet.Power};
-            check(after==before+12 && pet.RecentAnimalSkill==kind.Skill,$"{kind.Name} uses the original training and development path");
+            var before=pet.Stat(kind.Skill).Progress;
+            pet.TrainWithSpecies(kind.Id,new Random(3));
+            check(pet.Stat(kind.Skill).Progress!=before && pet.RecentAnimalSkill==kind.Skill,$"{kind.Name} uses the shared species progression path");
         }
         check(AnimalEncounterRules.CalmRate(AnimalCatalog.All[0],3.7f)>0 && AnimalEncounterRules.CalmRate(AnimalCatalog.All[0],5.5f)<0,"Ordinary walking is calm and sprinting is startling");
         var kindPet=new PetState { Intelligence=990,Kindness=100,Sociability=100 };

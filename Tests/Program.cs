@@ -8,6 +8,7 @@ void Check(bool condition, string label)
     if (!condition) throw new Exception(label);
     Console.WriteLine("PASS " + label); checks++;
 }
+StatDevelopmentChecks.Run(Check);
 var pet = new PetState { Fullness = 90, Energy = 90 };
 Check(pet.Feed() && pet.Fullness == 100, "Food clamps at 100");
 Check(!pet.Feed() && pet.Care == 1, "Full pet cannot farm care by feeding");

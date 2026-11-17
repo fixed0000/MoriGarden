@@ -15,9 +15,11 @@ internal sealed class ChaoEditorBridge
     private string lastRequest="";
     private string status="Ready";
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
-        .Where(p=>p.CanWrite && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
+        .Where(p=>p.CanWrite && (p.PropertyType.IsPrimitive || p.PropertyType==typeof(string)) && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
             && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.Expedition) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)
-            && p.Name!=nameof(PetState.Stadium) && p.Name!=nameof(PetState.Athletics)).ToArray();
+            && p.Name!=nameof(PetState.Stadium) && p.Name!=nameof(PetState.Athletics)
+            && p.Name!=nameof(PetState.Statistics) && p.Name!=nameof(PetState.StatSchemaVersion) && p.Name!=nameof(PetState.StatReincarnations)
+            && !ChaoStatistics.Names.Contains(p.Name)).ToArray();
 
     public ChaoEditorBridge(string directory) => this.directory=directory;
 
@@ -25,6 +27,7 @@ internal sealed class ChaoEditorBridge
 
     public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit)
     {
+        foreach(var pet in roster.Values)pet.EnsureStatistics();
         Directory.CreateDirectory(directory);
         string command=Path.Combine(directory,"chao-editor-request.json");
         PetState? updated=null;
@@ -51,6 +54,20 @@ internal sealed class ChaoEditorBridge
                             values[key]=value?.DeepClone();
                         }
                         var next=values.Deserialize<PetState>() ?? throw new ArgumentException("Empty editor update");
+                        if(request["statistics"] is JsonObject statPatch)
+                            foreach(var (name,record) in statPatch)
+                            {
+                                var old=JsonSerializer.SerializeToNode(next.Stat(name))!.AsObject();
+                                if(record is not JsonObject changes)throw new ArgumentException("Invalid stat update");
+                                foreach(var (field,value) in changes)
+                                {
+                                    if(field is not ("Grade" or "Level" or "Points" or "Progress"))throw new ArgumentException("Unknown stat field");
+                                    old[field]=value?.DeepClone();
+                                }
+                                var updatedStat=old.Deserialize<ChaoStat>() ?? throw new ArgumentException("Empty stat update");
+                                ChaoStatistics.ValidateEditor(name,updatedStat,next.Stat(name));
+                                var destination=next.Stat(name);destination.Grade=updatedStat.Grade;destination.Level=updatedStat.Level;destination.Points=updatedStat.Points;destination.Progress=updatedStat.Progress;
+                            }
                         next.Validate();
                         if (request["relationship"] is JsonObject relationship)
                         {
@@ -79,6 +96,7 @@ internal sealed class ChaoEditorBridge
         var ownerState=roster["main"];
         var chao=roster.Select(entry=>new { id=entry.Key,
             parameters=fields.ToDictionary(field=>field.Name,field=>field.GetValue(entry.Value)),
+            statistics=entry.Value.Statistics,
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
             {
                 var link=ownerState.SocialLink(entry.Key,peer.Key);

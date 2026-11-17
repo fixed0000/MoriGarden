@@ -60,7 +60,7 @@ public sealed class RaceCourse
         var delta=Sample(Math.Min(Length,distance+.08f)).Position-Sample(Math.Max(0,distance-.08f)).Position;
         if(delta.LengthSquared()<.00001f)delta=Vector3.UnitZ;return Vector3.Normalize(delta);
     }
-    public float FlightLanding(PetState pet)=>.25f+Math.Clamp(pet.Fly/450f,0,1)*.53f;
+    public float FlightLanding(PetState pet)=>.25f+Math.Clamp(pet.FlyAbility/450f,0,1)*.53f;
     public float MovementScale(float distance,PetState pet)
     {
         float a=Math.Max(0,distance-.015f),b=Math.Min(Length,distance+.015f);return Math.Clamp(Vector3.Distance(Position(a,0,pet),Position(b,0,pet))/Math.Max(.001f,b-a),.3f,8);
@@ -68,7 +68,7 @@ public sealed class RaceCourse
     public RaceSurface TravelSurface(float distance,PetState pet)
     {
         var point=Sample(distance);if(point.Surface!=RaceSurface.Fly)return point.Surface;
-        if(pet.Fly>=450 || point.Fraction<.25f+Math.Clamp(pet.Fly/450f,0,1)*.53f)return RaceSurface.Fly;
+        if(pet.FlyAbility>=450 || point.Fraction<.25f+Math.Clamp(pet.FlyAbility/450f,0,1)*.53f)return RaceSurface.Fly;
         return point.Fraction is >=.78f and <.95f ? RaceSurface.Power : point.Fraction>=.95f ? RaceSurface.Run : RaceSurface.Swim;
     }
     private Vector3 FallbackWall(int section,float lane)
@@ -81,10 +81,10 @@ public sealed class RaceCourse
         if(flat.LengthSquared()<.001f)flat=Vector3.UnitZ;flat=Vector3.Normalize(flat);at+=new Vector3(flat.Z,0,-flat.X)*lane;
         if(p.Surface==RaceSurface.Fly && pet!=null)
         {
-            if(pet.Fly>=450)at.Y=float.Lerp(Anchors[p.Section].Y,Anchors[p.Section+1].Y,p.Fraction)+MathF.Sin(p.Fraction*MathF.PI)*.25f;
+            if(pet.FlyAbility>=450)at.Y=float.Lerp(Anchors[p.Section].Y,Anchors[p.Section+1].Y,p.Fraction)+MathF.Sin(p.Fraction*MathF.PI)*.25f;
             else
             {
-                float strength=Math.Clamp(pet.Fly/450f,0,1);float landing=FlightLanding(pet);float landingHeight=-.30f;
+                float strength=Math.Clamp(pet.FlyAbility/450f,0,1);float landing=FlightLanding(pet);float landingHeight=-.30f;
                 if(p.Fraction<landing)at.Y=float.Lerp(Anchors[p.Section].Y,landingHeight,MathF.Pow(p.Fraction/landing,1.5f));
                 else if(p.Fraction<.78f){float t=(p.Fraction-landing)/(.78f-landing);var from=Vector3.Lerp(Anchors[p.Section],Anchors[p.Section+1],landing)+new Vector3(lane,0,0);var ground=Vector3.Lerp(from,FallbackWall(p.Section,lane),t);at.X=ground.X;at.Z=ground.Z;at.Y=landingHeight;}
                 else if(p.Fraction<.95f){var wall=FallbackWall(p.Section,lane);at.X=wall.X;at.Z=wall.Z;at.Y=float.Lerp(landingHeight,Anchors[p.Section+1].Y,(p.Fraction-.78f)/.17f);}

@@ -277,7 +277,7 @@ public partial class GardenEgg : CharacterBody3D
             return false;
         }
         cliffDelay=Mathf.Max(0,cliffDelay-dt);
-        bool startCliff=cliffDelay<=0 && !motion.OnCliffRoute && state.Power>=100 && callRemaining<=0 && !inWater && !motion.Airborne &&
+        bool startCliff=cliffDelay<=0 && !motion.OnCliffRoute && state.PowerAbility>=100 && callRemaining<=0 && !inWater && !motion.Airborne &&
             !motion.LeavingPond && !islandNap.IsVisiting && !rest.Requested && !leisure.Active && !pillar.Active && state.Energy>=58;
         Vector3? cliff=callRemaining>0 ? null : motion.CliffTarget(Position,dt,startCliff);
         if (startCliff && cliff!=null)
@@ -420,11 +420,13 @@ public partial class GardenEgg : CharacterBody3D
 
     private void MakeHatchling()
     {
+        bool newborn=Data.Chao==null;
         Data.Chao ??= new PetState { Name=Data.Color+" Chao",GardenEggs=new(),
             LikesToyCars=Data.Color is "Red" or "Yellow" or "White" or "Black",
             Glutton=GD.Randf()<.25f,Crybaby=GD.Randf()<.25f,
             Sociability=(int)GD.RandRange(15,90),ActivityPreference=(int)GD.RandRange(1,5),
             Clumsy=GD.Randf()<.2f,Dexterous=GD.Randf()<.2f };
+        if(newborn)Data.Chao.InitializeFreshStatistics();
         visual=BuildChaoArt(this,Data.Chao,Data.Color);
         nameLabel=GardenArt.Sign(this,Data.Chao.Name,new(0,.63f,0),GardenArt.Cream);
     }

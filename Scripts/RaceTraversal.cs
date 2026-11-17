@@ -36,7 +36,7 @@ public sealed class RaceTraversal
                 if(surface==RaceSurface.Fly)
                 {
                     gates.Add(new(start-.02f,start+.35f,RaceObstaclePhase.Takeoff,.34f));
-                    if(pet.Fly<450)
+                    if(pet.FlyAbility<450)
                     {
                         float landing=start+course.Lengths[i]*course.FlightLanding(pet);
                         gates.Add(new(landing,landing,RaceObstaclePhase.Land,.42f));
@@ -64,7 +64,7 @@ public sealed class RaceTraversal
         if(active==null && next<gates.Count && racer.Distance>=gates[next].At-.0001f){active=gates[next++];Age=0;}
         if(active is not {} gate)
         {
-            Phase=course.TravelSurface(racer.Distance,racer.Pet) switch {RaceSurface.Swim=>RaceObstaclePhase.Swim,RaceSurface.Power=>RaceObstaclePhase.Climb,RaceSurface.Fly=>racer.Pet.Fly<450 && course.Sample(racer.Distance).Fraction>course.FlightLanding(racer.Pet)*.65f ? RaceObstaclePhase.FailedFlight : RaceObstaclePhase.Glide,_=>RaceObstaclePhase.Run};
+            Phase=course.TravelSurface(racer.Distance,racer.Pet) switch {RaceSurface.Swim=>RaceObstaclePhase.Swim,RaceSurface.Power=>RaceObstaclePhase.Climb,RaceSurface.Fly=>racer.Pet.FlyAbility<450 && course.Sample(racer.Distance).Fraction>course.FlightLanding(racer.Pet)*.65f ? RaceObstaclePhase.FailedFlight : RaceObstaclePhase.Glide,_=>RaceObstaclePhase.Run};
             return false;
         }
         Phase=gate.Phase;Age+=dt;float t=Math.Clamp(Age/gate.Seconds,0,1);float smooth=t*t*(3-2*t);

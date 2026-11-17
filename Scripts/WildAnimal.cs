@@ -112,7 +112,7 @@ internal partial class WildAnimal : TrainingAnimal,IDiscoveryInteraction
         AnimateWild(dt,Mathf.Min(actual,2),clock,Species.Skill=="Fly" && actual>.2f);
     }
     public Vector3? ApproachPoint=>Position+GlobalBasis.Z*.95f;
-    public DiscoveryPlan Prepare(DiscoveryPlan plan,ExpeditionCompanion pet)=>plan with { ThoughtSeconds=Mathf.Max(4,plan.ThoughtSeconds-(pet.Pet.State.History.KnowsAnimal(Species.Id) ? 1 : 0)-1.5f*pet.Pet.State.Intelligence/990f) };
+    public DiscoveryPlan Prepare(DiscoveryPlan plan,ExpeditionCompanion pet)=>plan with { ThoughtSeconds=Mathf.Max(4,plan.ThoughtSeconds-(pet.Pet.State.History.KnowsAnimal(Species.Id) ? 1 : 0)-1.5f*pet.Pet.State.IntelligenceAbility/990f) };
     public float InspectSeconds(PetState state)=>AnimalEncounterRules.Thought(state);
     public bool Inspected(ExpeditionCompanion pet,bool requested)
     {

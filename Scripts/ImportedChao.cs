@@ -36,7 +36,7 @@ public partial class ImportedChao : Node3D
     public static void ApplyDevelopment(Node3D art,PetState state)
     {
         if (art is not ImportedChao model) return;
-        model.crawls=state.Run/10<5;
+        model.crawls=state.Run<50;
         float progress=state.Form=="seed" ? 0 : state.SecondEvolutionProgress;
         model.development=new(1+progress*(state.Form=="stone" ? .12f : .025f),
             1+progress*(state.Form=="comet" ? .10f : .035f),1+progress*.025f);

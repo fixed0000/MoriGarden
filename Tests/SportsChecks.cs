@@ -16,7 +16,7 @@ internal static class SportsChecks
         foreach(var surface in new[]{RaceSurface.Run,RaceSurface.Swim,RaceSurface.Fly,RaceSurface.Power})
         {
             var low=new PetState{Run=50,Swim=50,Fly=50,Power=50};var high=SaveStore.Snapshot(low);
-            if(surface==RaceSurface.Run)high.Run=700;else if(surface==RaceSurface.Swim)high.Swim=700;else if(surface==RaceSurface.Fly)high.Fly=700;else high.Power=700;
+            if(surface==RaceSurface.Run)high.Run=(int)Math.Round(700*3266d/990);else if(surface==RaceSurface.Swim)high.Swim=(int)Math.Round(700*3266d/990);else if(surface==RaceSurface.Fly)high.Fly=(int)Math.Round(700*3266d/990);else high.Power=(int)Math.Round(700*3266d/990);
             check(ChaoRace.Pace(high,surface,1)>ChaoRace.Pace(low,surface,1)*2,surface+" controls actual course traversal");
         }
         var strong=new PetState{Run=550,Swim=550,Fly=550,Power=550,Stamina=550,Energy=100};

@@ -11,8 +11,8 @@ public partial class ImportedChao
         art.sportMotionDriven=false;
         if(racer.Action==RaceAction.Move && racer.Traversal.Phase==RaceObstaclePhase.Run && !racer.Traversal.OwnsMovement && racer.Fatigue>0)
         {
-            var clip=SportMotions.Find(racer.Pet.Run>=300 ? "race_run_fast" : "race_run_normal")!;
-            ApplySportMotion(art,clip,racer.Traversal.Travelled/(racer.Pet.Run>=300 ? 3.2f : 1.8f));
+            var clip=SportMotions.Find(racer.Pet.RunAbility>=300 ? "race_run_fast" : "race_run_normal")!;
+            ApplySportMotion(art,clip,racer.Traversal.Travelled/(racer.Pet.RunAbility>=300 ? 3.2f : 1.8f));
             art.GetNode<EmotionOrb>("MoodOrb").SetIdea(racer.Reaction=="cheer" ? "!" : null,racer.Reaction=="cheer");return;
         }
         var previousRotation=art.Quaternion;var previousPosition=art.Position;

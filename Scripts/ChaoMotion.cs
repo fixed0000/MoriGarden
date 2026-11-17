@@ -54,14 +54,14 @@ internal sealed class ChaoMotion
         var direction=actor.Position-ChaoRest.Bed;
         direction.Y=0;
         Launch(actor,direction.LengthSquared()>.01f ? direction.Normalized() : Vector3.Back,
-            chao.Fly>=120 && GD.Randf()<.65f,3.4f);
+            chao.FlyAbility>=120 && GD.Randf()<.65f,3.4f);
         vertical=4.3f;
     }
 
     public void GlideFromPerch(CharacterBody3D actor,Vector3 heading,PetState chao)
     {
-        bool glide=chao.Fly>=120;
-        Launch(actor,heading,glide,glide ? 2.6f+chao.Fly*.0035f : 2.3f);
+        bool glide=chao.FlyAbility>=120;
+        Launch(actor,heading,glide,glide ? 2.6f+chao.FlyAbility*.0035f : 2.3f);
         vertical=glide ? .65f : 2.35f;
         lockedHeading=.48f;
     }
@@ -263,12 +263,12 @@ internal sealed class ChaoMotion
         float distance=direction.Length();
         float stopDistance=rampApproach ? .065f : .16f;
         Vector3 forward=direction.Normalized();
-        float pace=water ? (struggling ? .30f+pet.Swim*.001f : .65f+pet.Swim*.0019f)
-            : pet.Run<50 ? .38f+pet.Run*.003f : (running ? 2.2f : .95f)+pet.Run*.0042f;
-        speed=Mathf.MoveToward(speed,distance>stopDistance ? pace : 0,dt*(2.6f+pet.Run*.004f));
+        float pace=water ? (struggling ? .30f+pet.SwimAbility*.001f : .65f+pet.SwimAbility*.0019f)
+            : pet.Run<50 ? .38f+pet.RunAbility*.003f : (running ? 2.2f : .95f)+pet.RunAbility*.0042f;
+        speed=Mathf.MoveToward(speed,distance>stopDistance ? pace : 0,dt*(2.6f+pet.RunAbility*.004f));
         if (struggling) speed=Mathf.Min(speed,pace);
-        Sprinting=!water && pet.Run>=650 && speed>=3.15f && distance>.32f;
-        float jumpSpeed=pet.Power>=100 && cliffLeg>=0 ? 10.6f : 6.9f;
+        Sprinting=!water && pet.RunAbility>=650 && speed>=3.15f && distance>.32f;
+        float jumpSpeed=pet.PowerAbility>=100 && cliffLeg>=0 ? 10.6f : 6.9f;
         bool jumpFromWater=water && !shoreExit && !struggling && !airborne && ledges && cliffLeg>0 &&
             climbGoalY-body.Position.Y>.42f && distance is >.18f and <2.1f;
         if (water && !airborne && !jumpFromWater)
@@ -320,7 +320,7 @@ internal sealed class ChaoMotion
         if (!airborne && supported && balconyJump)
         {
             balconyJump=false;
-            Launch(body,Vector3.Back,pet.Fly>=100,2.2f);
+            Launch(body,Vector3.Back,pet.FlyAbility>=100,2.2f);
             lockedHeading=.35f;
         }
         if (!airborne && supported && !rampApproach && (jumpFromWater || (balconyTrip && cliffLeg>0 && jumpSpeed>7)) &&
@@ -333,11 +333,11 @@ internal sealed class ChaoMotion
             clearLedgeBeforeMoving=true;
         }
         if (!airborne && supported && ledges && !rampApproach && distance>.23f &&
-            body.Position.Y>(pet.Fly>=120 ? .31f : .62f) && (cliffLeg<0 || climbGoalY<body.Position.Y+.21f) &&
-            HasDropAhead(body,forward,pet.Fly>=120 ? .29f : .53f))
+            body.Position.Y>(pet.FlyAbility>=120 ? .31f : .62f) && (cliffLeg<0 || climbGoalY<body.Position.Y+.21f) &&
+            HasDropAhead(body,forward,pet.FlyAbility>=120 ? .29f : .53f))
         {
             bool upper=OnUpperPlatform(body.Position);
-            Launch(body,upper ? WaterfallHeading(body.Position) : forward,pet.Fly>=120 && GD.Randf()<.68f,
+            Launch(body,upper ? WaterfallHeading(body.Position) : forward,pet.FlyAbility>=120 && GD.Randf()<.68f,
                 Mathf.Clamp(speed,1.55f,3.75f));
             lockedHeading=upper ? .55f : 0;
         }
@@ -393,7 +393,7 @@ internal sealed class ChaoMotion
         }
         if (flying)
         {
-            float skill=Mathf.Clamp(pet.Fly/990f,0,1);
+            float skill=Mathf.Clamp(pet.FlyAbility/990f,0,1);
             vertical=Mathf.Max(-Mathf.Lerp(1.65f,.57f,skill),vertical);
             float glideSpeed=Mathf.Lerp(2.45f,5.9f,skill);
             airDirection=airDirection.Normalized()*Mathf.MoveToward(airDirection.Length(),glideSpeed,dt*3.3f);

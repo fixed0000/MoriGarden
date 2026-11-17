@@ -9,9 +9,11 @@ from uuid import uuid4
 class ChaoEditor:
     def __init__(self, window):
         self.window = window
-        self.directory = Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
+        self.directory = Path(os.environ["MORI_EDITOR_DIRECTORY"]) if os.environ.get("MORI_EDITOR_DIRECTORY") else Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
         self.snapshot = None
         self.variables = {}
+        self.stat_variables = {}
+        self.statistics_rows = {}
         self.roster = {}
         self.relationship_rows = {}
         self.relationship_peer = None
@@ -19,7 +21,7 @@ class ChaoEditor:
         self.pending = None
         self.status = tk.StringVar(value="Start Mori, then click Read from game.")
         window.title("Mori — Chao Editor")
-        window.geometry("790x635")
+        window.geometry("960x690")
         window.minsize(710, 540)
         toolbar = ttk.Frame(window, padding=12)
         toolbar.pack(fill="x")
@@ -53,6 +55,7 @@ class ChaoEditor:
             self.list.delete(0, "end")
             for _, name in names:
                 self.list.insert("end", name)
+        self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
         self.roster = roster
         self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
         if self.selected not in roster:
@@ -88,17 +91,18 @@ class ChaoEditor:
             self.status.set("Waiting for the Chao list from Mori.")
             return
         self.snapshot = dict(session=snapshot["session"], target=self.selected,
-                             parameters=self.roster[self.selected],
+                             parameters=self.roster[self.selected], statistics=self.statistics_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
-        tab_index = self.tabs.index("current") if self.tabs.select() else 0
+        tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
             widget.destroy()
         self.variables.clear()
+        self.stat_variables.clear()
         self.subject.set("Current Chao: " + self.snapshot["parameters"].get("Name", "Mori"))
         groups = {
-            "Stats": {"Swim", "Fly", "Run", "Power", "Stamina", "Initiative", "Agility"},
+            "Stats": set(),
             "Favorites": {"FavoriteToy", "FavoriteFruit", "FavoriteInstrument"},
-            "Hidden": {"Intelligence", "Luck", "Kindness", "Manners", "CourtshipReadiness", "BloomRemaining", "Sociability", "ActivityPreference", "Clumsy", "Dexterous", "Aggressiveness", "Curiosity"},
+            "Hidden": {"Initiative", "Agility", "Intelligence", "Luck", "Kindness", "Manners", "CourtshipReadiness", "BloomRemaining", "Sociability", "ActivityPreference", "Clumsy", "Dexterous", "Aggressiveness", "Curiosity"},
             "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
             "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "AdultSeconds", "EvolutionFoodSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
@@ -139,9 +143,66 @@ class ChaoEditor:
                     control = ttk.Entry(fields, textvariable=var, width=15)
             control.grid(row=row, column=column + 1, sticky="w", padx=(10, 24), pady=4)
             self.variables[name] = var
+        self.build_statistics(pages["Stats"])
         self.build_relationships()
         self.tabs.select(tab_index)
         self.status.set("Edit the values you want to change. Applies to the running game.")
+
+    def build_statistics(self, panel):
+        for child in panel.winfo_children():
+            child.destroy()
+        for column, text in enumerate(("Ability", "Grade", "Level / 99", "Points", "Progress / 99")):
+            ttk.Label(panel, text=text).grid(row=0, column=column, padx=7, pady=8)
+        for row, (name, values) in enumerate(self.snapshot["statistics"].items(), 1):
+            hidden = name in ("Luck", "Intelligence")
+            limit = 4000 if hidden else 3266
+            ttk.Label(panel, text=name + (" (hidden)" if hidden else "")).grid(row=row, column=0, sticky="w")
+            variables = {}
+            for column, key in enumerate(("Grade", "Level", "Points", "Progress"), 1):
+                value = values[key]
+                var = tk.StringVar(value="EDCBAS"[value] if key == "Grade" and not hidden else str(value))
+                variables[key] = var
+                if key == "Grade" and not hidden:
+                    control = ttk.Combobox(panel, textvariable=var, values=tuple("EDCBAS"), state="readonly", width=5)
+                else:
+                    maximum = (255 if hidden else 5) if key == "Grade" else limit if key == "Points" else 99
+                    control = ttk.Spinbox(panel, textvariable=var, from_=0, to=maximum, width=9)
+                control.grid(row=row, column=column, padx=7, pady=5)
+            ttk.Label(panel, text=f"max {limit}").grid(row=row, column=5)
+            self.stat_variables[name] = variables
+        row = len(self.stat_variables) + 1
+        ttk.Label(panel, text="Points determine ability. Level and grade do not directly set strength.").grid(row=row, column=0, columnspan=6, sticky="w", pady=14)
+        preset = ttk.Frame(panel)
+        preset.grid(row=row+1, column=0, columnspan=6, sticky="w")
+        for grade in ("E", "C", "S"):
+            ttk.Button(preset, text=f"Run Lv99 / {grade}", command=lambda g=grade: self.stat_preset(g)).pack(side="left", padx=4)
+        ttk.Label(panel, text="Presets change fields only. Click Apply changes to send them.").grid(row=row+2, column=0, columnspan=6, sticky="w", pady=8)
+
+    def stat_preset(self, grade):
+        fields = self.stat_variables.get("Run")
+        if fields:
+            for key, value in dict(Grade=grade, Level=99, Points=99*(13+3*"EDCBAS".index(grade)), Progress=0).items():
+                fields[key].set(str(value))
+
+    def statistics_patch(self):
+        changes = {}
+        for name, fields in self.stat_variables.items():
+            hidden = name in ("Luck", "Intelligence")
+            values = {key: ("EDCBAS".index(var.get()) if key == "Grade" and not hidden else int(var.get())) for key, var in fields.items()}
+            maximum = 4000 if hidden else 3266
+            if not (0 <= values["Grade"] <= (255 if hidden else 5) and 0 <= values["Level"] <= 99 and 0 <= values["Points"] <= maximum and 0 <= values["Progress"] <= 99):
+                raise ValueError(f"{name}: value outside the displayed limits.")
+            if values["Level"] == 0 and values["Points"] != 0:
+                raise ValueError(f"{name}: level zero has zero points.")
+            old = self.snapshot["statistics"][name]
+            unchanged_baseline = all(values[key] == old[key] for key in ("Grade", "Level", "Points"))
+            lower = max(0, values["Level"]-1)*11
+            upper = min(maximum, (400 if hidden else 326) + values["Level"]*(15+3*values["Grade"]))
+            if not unchanged_baseline and not lower <= values["Points"] <= upper:
+                raise ValueError(f"{name}: points do not fit this level/grade. Use a preset.")
+            if values != self.snapshot["statistics"][name]:
+                changes[name] = values
+        return changes
 
     def build_relationships(self):
         panel = ttk.Frame(self.tabs, padding=12)
@@ -226,14 +287,15 @@ class ChaoEditor:
                     relationship["met"] = met
                 if score != old_relation["score"]:
                     relationship["score"] = score
-            if not patch and not relationship:
+            statistics = self.statistics_patch()
+            if not patch and not relationship and not statistics:
                 self.status.set("No changes to apply.")
                 return
             request_id = uuid4().hex
             command = self.directory / "chao-editor-request.json"
             temporary = command.with_suffix(".tmp")
             request = {"session": current["session"], "id": request_id,
-                       "target": self.snapshot["target"], "patch": patch}
+                       "target": self.snapshot["target"], "patch": patch, "statistics": statistics}
             if relationship:
                 request["relationship"] = {"other": self.relationship_peer, **relationship}
             temporary.write_text(json.dumps(request, allow_nan=False), encoding="utf-8")

@@ -11,7 +11,7 @@ public sealed class KarateFighter
     public PetState Pet {get;}
     public Vector2 Position {get;internal set;}
     public Vector2 Facing {get;internal set;}
-    public float MaxHealth=>55+Pet.Stamina*.10f;
+    public float MaxHealth=>55+Pet.StaminaAbility*.10f;
     public float Health {get;internal set;}
     public const float MaxZeal=100;
     public float Zeal {get;internal set;}
@@ -59,11 +59,11 @@ public sealed class ChaoKarate
     public string Method {get;private set;}="";
     public float CheerCooldown {get;private set;}
     public ChaoKarate(KarateFighter a,KarateFighter b){A=a;B=b;}
-    public static float AttackDuration(PetState pet)=>1.55f-pet.Run/990f*.85f;
-    public static float ZealDrain(PetState pet)=>1.6f*(1-pet.Intelligence/990f*.70f);
-    public static float MissCost(PetState pet)=>9*(1-pet.Stamina/990f*.70f);
-    public static float Defence(PetState pet)=>1+pet.Swim/990f*1.8f;
-    public static float CheerRecovery(PetState pet)=>4+pet.Luck/990f*4;
+    public static float AttackDuration(PetState pet)=>1.55f-pet.RunAbility/990f*.85f;
+    public static float ZealDrain(PetState pet)=>1.6f*(1-pet.IntelligenceAbility/990f*.70f);
+    public static float MissCost(PetState pet)=>9*(1-pet.StaminaAbility/990f*.70f);
+    public static float Defence(PetState pet)=>1+pet.SwimAbility/990f*1.8f;
+    public static float CheerRecovery(PetState pet)=>4+pet.LuckAbility/990f*4;
     public bool Cheer(string id)
     {
         var fighter=A.Id==id ? A : B.Id==id ? B : null;
@@ -76,15 +76,15 @@ public sealed class ChaoKarate
         bool danger=other.Action==KarateAction.Attack && other.Swing<.46f;
         return action switch{
             KarateAction.Attack=>4.5+smallPersonality,
-            KarateAction.Guard=>.45+self.Pet.Swim/990f*.6+(danger ? 1.4 : 0),
-            KarateAction.Dodge=>.15+self.Pet.Fly/990f*.65+(danger ? .9 : 0),
+            KarateAction.Guard=>.45+self.Pet.SwimAbility/990f*.6+(danger ? 1.4 : 0),
+            KarateAction.Dodge=>.15+self.Pet.FlyAbility/990f*.65+(danger ? .9 : 0),
             KarateAction.Retreat=>.08,
             _=>.18};
     }
     private static void Begin(KarateFighter f,KarateAction action,float duration)
     {
         f.Action=action;f.ActionTime=0;f.Duration=duration;f.Struck=false;
-        if(action==KarateAction.Attack){f.AttackSerial++;int moves=f.Pet.Power>=650 ? 5 : f.Pet.Power>=300 ? 4 : 3;f.AttackKind=f.Random.Next(moves);if(f.AttackKind==f.PreviousMove && f.MoveRepeats>=2)f.AttackKind=(f.AttackKind+1)%moves;f.MoveRepeats=f.AttackKind==f.PreviousMove ? f.MoveRepeats+1 : 1;f.PreviousMove=f.AttackKind;}
+        if(action==KarateAction.Attack){f.AttackSerial++;int moves=f.Pet.PowerAbility>=650 ? 5 : f.Pet.PowerAbility>=300 ? 4 : 3;f.AttackKind=f.Random.Next(moves);if(f.AttackKind==f.PreviousMove && f.MoveRepeats>=2)f.AttackKind=(f.AttackKind+1)%moves;f.MoveRepeats=f.AttackKind==f.PreviousMove ? f.MoveRepeats+1 : 1;f.PreviousMove=f.AttackKind;}
         if(action==KarateAction.Meditate)f.Meditations++;
     }
     public void Step(float dt)
@@ -128,18 +128,18 @@ public sealed class ChaoKarate
         if(f.NeedsMeditation && !recovering)
         {
             if(f.Action!=KarateAction.Meditate)Begin(f,KarateAction.Meditate,100);
-            f.Zeal=Math.Min(KarateFighter.MaxZeal,f.Zeal+dt*(6+f.Pet.Luck/990f*10));
+            f.Zeal=Math.Min(KarateFighter.MaxZeal,f.Zeal+dt*(6+f.Pet.LuckAbility/990f*10));
             if(f.Zeal<28)return;f.NeedsMeditation=false;Begin(f,KarateAction.Wait,.25f);
         }
         if(other.Action==KarateAction.Attack && other.AttackSerial!=f.ObservedAttack && other.Swing<.3f)
         {
             f.ObservedAttack=other.AttackSerial;
-            if(f.Action is KarateAction.Wait or KarateAction.Guard && f.Random.NextDouble()<.05+f.Pet.Fly/990f*.50)Begin(f,KarateAction.Dodge,.7f);
+            if(f.Action is KarateAction.Wait or KarateAction.Guard && f.Random.NextDouble()<.05+f.Pet.FlyAbility/990f*.50)Begin(f,KarateAction.Dodge,.7f);
         }
         if(f.ActionTime>=f.Duration)
         {
             if(f.Action==KarateAction.Knockdown){Begin(f,KarateAction.Rise,1.2f);return;}
-            if(f.Action==KarateAction.Attack){Begin(f,KarateAction.Recover,.18f+.12f*(1-f.Pet.Run/990f));return;}
+            if(f.Action==KarateAction.Attack){Begin(f,KarateAction.Recover,.18f+.12f*(1-f.Pet.RunAbility/990f));return;}
             if(f.Action==KarateAction.Hit){Begin(f,KarateAction.Recover,.16f);return;}
             if(other.Action is KarateAction.Knockdown or KarateAction.Rise)Begin(f,KarateAction.Wait,.35f);
             else if(distance>.29f)Begin(f,KarateAction.Approach,.4f);
@@ -151,7 +151,7 @@ public sealed class ChaoKarate
                 Begin(f,selected,selected==KarateAction.Attack ? AttackDuration(f.Pet) : selected==KarateAction.Wait ? .30f : .65f);
             }
         }
-        float speed=(.42f+f.Pet.Run*.0006f)*(.9f+.1f*f.Pet.Energy/100);
+        float speed=(.42f+f.Pet.RunAbility*.0006f)*(.9f+.1f*f.Pet.Energy/100);
         if(f.Action==KarateAction.Approach && distance>.265f)f.Position+=toward*Math.Min(distance-.265f,speed*dt);
         else if(f.Action==KarateAction.Retreat)f.Position+=(-toward*.28f-f.Position*.3f)*speed*dt;
         else if(f.Action==KarateAction.Dodge && f.ActionTime<.25f)f.Position+=new Vector2(-toward.Y,toward.X)*speed*dt*.24f;
@@ -165,12 +165,12 @@ public sealed class ChaoKarate
         if(!KarateContact.Touches(attacker,defender) || defender.Action is KarateAction.Knockdown or KarateAction.Rise){Miss(attacker);return;}
         if(defender.Action==KarateAction.Dodge && defender.ActionTime<.55f){defender.Dodges++;Miss(attacker);return;}
         float move=attacker.AttackKind>=3 ? 1.14f : 1;
-        float damage=(4+attacker.Pet.Power*.022f)*move*(.92f+.08f*attacker.Pet.Energy/100)/Defence(defender.Pet);
+        float damage=(4+attacker.Pet.PowerAbility*.022f)*move*(.92f+.08f*attacker.Pet.Energy/100)/Defence(defender.Pet);
         damage*=.98f+(float)attacker.Random.NextDouble()*.04f;bool guard=defender.Action==KarateAction.Guard;if(guard){damage*=.4f;defender.Blocks++;}
         if(defender.Action==KarateAction.Meditate)damage*=1.12f;
         defender.Health=Math.Max(0,defender.Health-damage);attacker.Hits++;attacker.Impact++;attacker.ImpactPoint=KarateContact.SurfacePoint(attacker.Position,attacker.Facing,attacker.AttackKind,defender.Position);
-        attacker.Zeal=Math.Min(KarateFighter.MaxZeal,attacker.Zeal+4+attacker.Pet.Luck/990f*2);defender.Zeal=Math.Max(0,defender.Zeal-(guard ? 2 : 7));
-        defender.Push=delta/distance*(guard ? .35f : (1.15f+attacker.Pet.Power*.0022f)*move);
+        attacker.Zeal=Math.Min(KarateFighter.MaxZeal,attacker.Zeal+4+attacker.Pet.LuckAbility/990f*2);defender.Zeal=Math.Max(0,defender.Zeal-(guard ? 2 : 7));
+        defender.Push=delta/distance*(guard ? .35f : (1.15f+attacker.Pet.PowerAbility*.0022f)*move);
         bool fall=!guard && (damage>12 && attacker.AttackKind>=2 || defender.Zeal<=0 && damage>8);
         if(fall){defender.Knockdowns++;Begin(defender,KarateAction.Knockdown,1.3f);}
         else if(!guard)Begin(defender,KarateAction.Hit,.28f);

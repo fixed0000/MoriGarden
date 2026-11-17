@@ -13,7 +13,7 @@ public sealed class RaceEntrant
     public PetState Pet {get;}
     public float Distance {get;internal set;}
     public float Fatigue {get;internal set;}
-    public float Capacity=>30+Pet.Stamina*.10f;
+    public float Capacity=>30+Pet.StaminaAbility*.10f;
     public float FinishedAt {get;internal set;}=-1;
     public float Speed {get;internal set;}
     public float Delay {get;internal set;}
@@ -45,7 +45,7 @@ public sealed class ChaoRace
     }
     public static float Pace(PetState pet,RaceSurface surface,float staminaFraction)
     {
-        int skill=surface switch{RaceSurface.Swim=>pet.Swim,RaceSurface.Fly=>pet.Fly,RaceSurface.Power=>pet.Power,_=>pet.Run};
+        int skill=surface switch{RaceSurface.Swim=>pet.SwimAbility,RaceSurface.Fly=>pet.FlyAbility,RaceSurface.Power=>pet.PowerAbility,_=>pet.RunAbility};
         float speed=surface switch{RaceSurface.Swim=>.36f+skill*.0042f,RaceSurface.Power=>.19f+skill*.0023f,RaceSurface.Fly=>.65f+skill*.0045f,_=>.65f+skill*.0048f};
         if(surface==RaceSurface.Run && pet.Run<50)speed*=.55f;
         // Running out of race energy removes at least 80% of the normal pace.
@@ -82,7 +82,7 @@ public sealed class ChaoRace
             if(racer.Decision<=0)
             {
                 racer.Decision=4+(float)racer.Random.NextDouble()*3;
-                if(surface==RaceSurface.Run && racer.Random.NextDouble()<.045f*(1-racer.Pet.Luck/1100f)){Trip(racer);continue;}
+                if(surface==RaceSurface.Run && racer.Random.NextDouble()<.045f*(1-racer.Pet.RunAbility/1100f)){Trip(racer);continue;}
             }
             float pace=Pace(racer.Pet,surface,racer.Fatigue/racer.Capacity)*racer.Form*(.985f+racer.Pet.Initiative/990f*.03f);
             if(racer.BoostRemaining>0 && racer.Fatigue>0)pace*=1.65f;

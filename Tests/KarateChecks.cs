@@ -56,6 +56,6 @@ internal static class KarateChecks
         var winner=new PetState();winner.GardenEggs.Clear();var athlete=new PetState{Name="Fern"};winner.GardenEggs.Add(new(){Id="fern",Hatched=true,Chao=athlete});string ticket=winner.Stadium.Begin("fern","karate-beginner");SportsRewards.Apply(winner,new(ticket,"fern","karate-beginner",1,50,5));
         check(athlete.Athletics.KarateRank=="6 Kyu" && athlete.Athletics.Cups.Contains("karate-beginner") && winner.Stadium.Toys.Contains("karate-ball"),"A five-win tournament saves the athlete's rank, cup and unique prize");
         ticket=winner.Stadium.Begin("fern","karate-beginner");var repeated=SportsRewards.Apply(winner,new(ticket,"fern","karate-beginner",1,50,5))!;check(repeated.Cup=="" && repeated.Toy=="" && athlete.Athletics.KarateRank=="6 Kyu","Repeated beginner wins cannot duplicate prizes or farm higher ranks");
-        check(bare.A.Pet.Power==700 && bare.B.Pet.Energy==new PetState().Energy,"Combat health and Zeal never overwrite permanent pet attributes");
+        check(bare.A.Pet.PowerAbility==700 && bare.B.Pet.Energy==new PetState().Energy,"Combat health and Zeal never overwrite permanent pet attributes");
     }
 }

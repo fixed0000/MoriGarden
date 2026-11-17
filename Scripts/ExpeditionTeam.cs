@@ -143,7 +143,7 @@ internal sealed class ExpeditionTeam
             var beside=nav.Nearest(point+Vector3.Right*1.2f);
             if(ExpeditionCompanion.Flat(point,beside)<.75f || occupied.Any(p=>ExpeditionCompanion.Flat(p,beside)<1.1f))
                 beside=Spawn(point,1,occupied.Append(point));
-            float Pace(PetState s)=>s.Run<50 ? .38f+s.Run*.003f : .95f+s.Run*.0042f;
+            float Pace(PetState s)=>s.Run<50 ? .38f+s.RunAbility*.003f : .95f+s.RunAbility*.0042f;
             float duration=25+ExpeditionCompanion.Flat(m.Body.Position,other.Body.Position)/Mathf.Min(Pace(m.Pet.State),Pace(other.Pet.State));
             m.SetIntent(resting ? ExpeditionIntent.Rest : intent,point,duration,true);
             other.SetIntent(resting ? ExpeditionIntent.Rest : intent,beside,duration,true);
