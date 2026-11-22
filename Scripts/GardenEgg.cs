@@ -94,9 +94,10 @@ public partial class GardenEgg : CharacterBody3D
                 interests.Cancel(this,visual);
                 pillar.Cancel();
                 rising.Cancel(); touch.Cancel(); ImportedChao.ClearActionPause(visual);
-                distress.PickUp(visual,Asleep || islandNap.IsNapping);
+                distress.PickUp(visual,Asleep || islandNap.IsNapping,Data.Chao);
             }
             held=true;
+            Data.Chao!.AdvanceCurrentState(dt,false);
             distress.Tick(dt);
             (visual.FindChild("MoodOrb",true,false) as EmotionOrb)?.SetDistressed(distress.Upset);
             rest.Cancel(); leisure.Cancel(visual);
@@ -187,11 +188,12 @@ public partial class GardenEgg : CharacterBody3D
             orb.SetUpset(upset>0);
             orb.SetDistressed(distress.Upset);
         }
+        if(Data.Hatched && InFlight)Chao?.AdvanceCurrentState(dt,false);
         if (Data.Hatched && !InFlight) return AdvanceChao(dt,fruitSlots,toy,fruitCarrier,rattle,flute,wateringCan,extraToys);
         if (!InFlight) return false;
         if (tossed && Chao?.CanAct==true)
         {
-            if (!distress.ThrowStep(this,visual,ref velocity,dt,hasPond:true)) return false;
+            if (!distress.ThrowStep(this,visual,ref velocity,dt,hasPond:true,state:Chao)) return false;
             tossed=InFlight=false;
             Data.X=Position.X; Data.Y=Position.Y; Data.Z=Position.Z;
             roam=0;
@@ -203,7 +205,7 @@ public partial class GardenEgg : CharacterBody3D
             if (hit.GetCollider() is not GodotObject body || !body.HasMeta("stone")) return;
             if (!Data.Hatched) Cracked=true;
             else if (Data.Chao!=null && upset<10)
-            { upset=12; Data.Chao.Joy=Mathf.Max(0,Data.Chao.Joy-8); changed=true; }
+            { upset=12; Data.Chao.Joy=Mathf.Max(0,Data.Chao.Joy-8); Data.Chao.ObserveEvent(ChaoStateEvent.UnpleasantContact,"rock-bump"); changed=true; }
         }))
         {
             if (Data.Hatched) visual.Rotation=new(.25f,0,Mathf.Sin(roam*21)*.21f);
@@ -239,7 +241,7 @@ public partial class GardenEgg : CharacterBody3D
         var state=Data.Chao!;
         ImportedChao.ApplyDevelopment(visual,state);
         if (nameLabel!=null) nameLabel.Text=state.Name;
-        if (reserved || Courtship?.IsPaired(this)==true) return false;
+        if (reserved || Courtship?.IsPaired(this)==true) { state.AdvanceCurrentState(dt,false); return false; }
         state.Tick(dt,Asleep || islandNap.IsNapping);
         if (!state.CanAct || distress.HoldPose(visual,state,dt)) return false;
         voice.Step(visual,state,Asleep || islandNap.IsNapping,dt);
@@ -347,6 +349,7 @@ public partial class GardenEgg : CharacterBody3D
         if (!hardLanding) return false;
         upset=9;
         state.Joy=Mathf.Max(0,state.Joy-5);
+        state.ObserveEvent(ChaoStateEvent.UnpleasantContact,"hard-landing");
         return true;
     }
 

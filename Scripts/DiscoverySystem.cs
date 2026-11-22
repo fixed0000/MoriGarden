@@ -88,6 +88,7 @@ internal sealed class DiscoverySystem
         var point=plan.Choice==DiscoveryChoice.Approach ? Reservations.Reserve(item,pet,nav,team) : pet.Body.Position;
         if(point==null)return false;
         Memory(pet).Notice(item.Definition.Id,Now,item.Definition.Revision);
+        pet.Pet.State.ObserveEvent(ChaoStateEvent.DiscoveryNoticed,item.Definition.Id);
         sessions[pet.Pet.Id]=new(pet,item,plan,point.Value,novel,requested);Log(pet,item,plan.Choice==DiscoveryChoice.Approach ? "approach" : "observe");return true;
     }
     internal bool Request(ExpeditionCompanion pet,DiscoveryInterest item)

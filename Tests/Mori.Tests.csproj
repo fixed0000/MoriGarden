@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Scripts/ChaoStateDiagnostics.cs" Link="ChaoStateDiagnostics.cs" />
+    <Compile Include="../Scripts/ChaoNeeds.cs" Link="ChaoNeeds.cs" />
+    <Compile Include="../Scripts/ChaoMood.cs" Link="ChaoMood.cs" />
+    <Compile Include="../Scripts/PetState.CurrentState.cs" Link="PetState.CurrentState.cs" />
     <Compile Include="../Scripts/ChaoPersonality.cs" Link="ChaoPersonality.cs" />
     <Compile Include="../Scripts/PetState.Personality.cs" Link="PetState.Personality.cs" />
     <Compile Include="../Scripts/ChaoStatistics.cs" Link="ChaoStatistics.cs" />

@@ -22,11 +22,11 @@ internal sealed class ChaoDistress
         waterUpset=Mathf.Max(0,waterUpset-dt);
     }
 
-    public void PickUp(Node3D art,bool wasSleeping)
+    public void PickUp(Node3D art,bool wasSleeping,PetState? state=null)
     {
         lying=reacting=0;
         ImportedChao.StopCrying(art);
-        if (wasSleeping) wakeUpset=60;
+        if (wasSleeping) { wakeUpset=60;state?.ObserveEvent(ChaoStateEvent.WakeDisturbed,"picked-up"); }
         wokeWhileHeld |= wasSleeping || sulking>0;
         sulking=0;
     }
@@ -44,7 +44,7 @@ internal sealed class ChaoDistress
         lying=reacting=sulking=0;
     }
 
-    public bool ThrowStep(CharacterBody3D body,Node3D art,ref Vector3 velocity,float dt,bool hasPond)
+    public bool ThrowStep(CharacterBody3D body,Node3D art,ref Vector3 velocity,float dt,bool hasPond,PetState? state=null)
     {
         velocity+=Vector3.Down*18*dt;
         art.Rotation=new(.45f,0,Mathf.Sin(velocity.Y)*.22f);
@@ -69,6 +69,7 @@ internal sealed class ChaoDistress
         if (!bounced)
         {
             bounced=true;
+            state?.ObserveEvent(ChaoStateEvent.Frightened,"throw-impact");
             (art.FindChild("MoodOrb",true,false) as EmotionOrb)?.SetDistressed(true);
             velocity=velocity.Bounce(normal)*.31f;
             velocity.Y=Mathf.Clamp(velocity.Y,2.15f,3.5f);

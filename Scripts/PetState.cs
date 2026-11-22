@@ -22,6 +22,7 @@ public sealed partial class PetState
     public void ChangeRelationship(float amount,string character = CurrentHero)
     {
         CharacterRelationships[character]=Math.Clamp(RelationshipWith(character)+amount,-100,100);
+        if(amount!=0)ObserveEvent(amount>0 ? ChaoStateEvent.PlayerContact : ChaoStateEvent.UnpleasantContact,"player-"+character);
         if(Math.Abs(amount)<.2f || History.LastArea.Length==0)return;
         History.Record(amount>0 ? ChaoMemoryKind.Pleasant : ChaoMemoryKind.Unpleasant,"player-care",History.LastArea,
             amount>0 ? "Enjoyed spending time with you." : "Had an upsetting moment with you.",amount>0 ? .6f : -.6f,.45f,new[]{character});
@@ -143,12 +144,14 @@ public sealed partial class PetState
 
     public void Tick(float seconds, bool sleeping)
     {
+        if(!float.IsFinite(seconds) || seconds<0)throw new ArgumentException("Invalid Chao update interval");
         History.Advance(seconds);
         Fullness = Math.Clamp(Fullness - seconds * .035f, 0, 100);
         Joy = Math.Clamp(Joy - seconds * .018f, 0, 100);
         Energy = Math.Clamp(Energy + seconds * (sleeping ? 5 : -.045f/(1+StaminaAbility*.002f)), 0, 100);
         if (CanAct) CourtshipReadiness=Math.Min(100,CourtshipReadiness+seconds/72);
         if (!sleeping) Fun=Math.Max(0,Fun-seconds*.07f);
+        AdvanceCurrentState(seconds,sleeping);
     }
 
     public bool Feed()
@@ -158,6 +161,7 @@ public sealed partial class PetState
         Care++;
         Bond++;
         TrainProgress("Stamina",40);
+        ObserveEvent(ChaoStateEvent.MealFinished,"feeding");
         return true;
     }
 
@@ -166,6 +170,7 @@ public sealed partial class PetState
         EvolutionFoodSeconds+=Form=="seed" ? 52.5f : 54f;
         Fullness=Math.Min(100,Fullness+6);
         TrainProgress("Stamina",FruitTraining.Progress(kind,last));
+        ObserveEvent(last ? ChaoStateEvent.MealFinished : ChaoStateEvent.FoodBite,"food-"+kind);
         if (!last) return;
         Care++;
         Bond++;
@@ -234,6 +239,7 @@ public sealed partial class PetState
     public void Validate()
     {
         EnsurePersonalityTree();
+        if(!float.IsFinite(SocialNeed) || SocialNeed is <0 or >100)throw new ArgumentException("SocialNeed must be between 0 and 100.");
         Expedition??=new(); Expedition.Validate();
         if (Version != 1 || !float.IsFinite(Fullness) || !float.IsFinite(Joy) || !float.IsFinite(Energy)
             || !double.IsFinite(AgeSeconds) || AgeSeconds<0 || !double.IsFinite(GardenSeconds) || GardenSeconds<0 || !float.IsFinite(Fun)

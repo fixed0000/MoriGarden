@@ -113,7 +113,7 @@ class ChaoEditor:
             "Stats": set(),
             "Favorites": {"FavoriteToy", "FavoriteFruit", "FavoriteInstrument"},
             "Hidden": {"Initiative", "Agility", "Intelligence", "Luck", "Kindness", "Manners", "CourtshipReadiness", "BloomRemaining", "Sociability", "ActivityPreference", "Clumsy", "Dexterous", "Aggressiveness", "Curiosity"},
-            "Care": {"Fullness", "Joy", "Energy", "Fun", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
+            "Care": {"Fullness", "Joy", "Energy", "Fun", "SocialNeed", "Bond", "Care", "LikesToyCars", "Glutton", "Crybaby"},
             "Life": {"IsEgg", "InCocoon", "AgeSeconds", "EggSeconds", "ChildSeconds", "AdultSeconds", "EvolutionFoodSeconds", "CocoonSeconds", "Form", "RecentAnimalSkill"},
         }
         pages = {}

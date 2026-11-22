@@ -85,6 +85,7 @@ internal sealed class ChaoEditorBridge
                         }
                         next.GardenEggs=current.GardenEggs;
                         next.GardenTrees=current.GardenTrees;
+                        next.KeepCurrentRuntimeFrom(current);
                         updated=next;
                         EditedTarget=target;
                         roster[target]=next;
@@ -101,6 +102,7 @@ internal sealed class ChaoEditorBridge
             statistics=entry.Value.Statistics,
             personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
             personality=entry.Value.Personality,
+            currentState=ChaoStateDiagnostics.Capture(entry.Value),
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
             {
                 var link=ownerState.SocialLink(entry.Key,peer.Key);

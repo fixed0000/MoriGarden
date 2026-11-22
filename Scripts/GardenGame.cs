@@ -171,7 +171,7 @@ public partial class GardenGame : Node3D
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
         string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
         string? stadiumMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--stadium-check" or "--stadium-review" or "--stadium-inspect");
-        testMode = OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        testMode = OS.GetCmdlineUserArgs().Contains("--needs-check") || OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))savePath=ProjectSettings.GlobalizePath("user://stats-preview/pet.json");
@@ -181,7 +181,8 @@ public partial class GardenGame : Node3D
             ResolveRecoveryDirectory();
             pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
             saveLoaded=true;
-            if(!string.IsNullOrWhiteSpace(OS.GetEnvironment("MORI_SAVE_DIRECTORY")))GetWindow().Title="MoriGarden — Recovery copy · "+pet.Name;
+            if(!string.IsNullOrWhiteSpace(OS.GetEnvironment("MORI_SAVE_DIRECTORY")))
+                GetWindow().Title="MoriGarden — Recovery copy · "+pet.Name+" · "+System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(savePath));
         }
         catch(Exception error) when(error is System.IO.IOException or ArgumentException or UnauthorizedAccessException)
         {ShowLoadFailure(error);return;}
@@ -244,6 +245,7 @@ public partial class GardenGame : Node3D
         camera = cameraRig.View; cameraRig.Follow(player.Position, 0, true);
         BuildUi();
         BuildTeamUi();
+        BuildNeedsDebug();
         GetTree().AutoAcceptQuit = false;
         Notify(pet.IsEgg ? "Pick up the egg with E. Hold X to rock it, then set it down." : "Welcome back to the garden.", 7);
         if (loadWarning.Length > 0) Notify(loadWarning, 12);
@@ -252,6 +254,8 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        UpdateNeedsDebug((float)delta);
+        if(OS.GetCmdlineUserArgs().Contains("--needs-check")){RunNeedsSceneCheck();return;}
         if(OS.GetCmdlineUserArgs().Contains("--recovery-check") && CheckRecoveryScene())return;
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))InspectStatistics();
         if(OS.GetCmdlineUserArgs().Contains("--stadium-inspect"))InspectStadium();
@@ -955,7 +959,7 @@ public partial class GardenGame : Node3D
         {
             if (tossedMori && pet.CanAct)
             {
-                if (moriDistress.ThrowStep(friend,friendArt,ref throwVelocity,dt,zone==GardenZone.Garden))
+                if (moriDistress.ThrowStep(friend,friendArt,ref throwVelocity,dt,zone==GardenZone.Garden,pet))
                 {
                     moriInFlight=tossedMori=false;
                     wanderTarget=friend.Position;
@@ -972,6 +976,7 @@ public partial class GardenGame : Node3D
                 {
                     upsetTime=12;
                     pet.Joy=Math.Max(0,pet.Joy-8);
+                    pet.ObserveEvent(ChaoStateEvent.UnpleasantContact,"rock-bump");
                     Notify("Mori bumped into a rock and is upset.");
                     Save();
                 }
@@ -1152,6 +1157,7 @@ public partial class GardenGame : Node3D
         {
             upsetTime=9;
             pet.Joy=Math.Max(0,pet.Joy-5);
+            pet.ObserveEvent(ChaoStateEvent.UnpleasantContact,"hard-landing");
         }
         if (moving || inWater) chaoGait+=dt*(inWater && pet.Swim<100 ? 5.2f : Mathf.Clamp(chaoMotion.GroundSpeed*9,4,19));
         ImportedChao.MovePose(friendArt,chaoGait,moving,inWater,pet.Swim>=100,chaoMotion.Sprinting,chaoMotion.Airborne,chaoMotion.Flying);
@@ -1462,7 +1468,7 @@ public partial class GardenGame : Node3D
             courtship.Suspend(friend);
             moriPillar.Cancel();
             moriInterests.Cancel(friend,friendArt); moriLeisure.Cancel(friendArt);
-            moriDistress.PickUp(friendArt,sleeping || moriIslandNap.IsNapping);
+            moriDistress.PickUp(friendArt,sleeping || moriIslandNap.IsNapping,pet);
             sleeping = false;
             moriRest.Cancel(); moriLeisure.Cancel(friendArt);
             moriIslandNap.Cancel(friendArt);

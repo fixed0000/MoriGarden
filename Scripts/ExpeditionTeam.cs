@@ -123,6 +123,8 @@ internal sealed class ExpeditionTeam
             var side=axis.Cross(Vector3.Up)*.6f;
             m.UpdateGoal(nav.Nearest(target-side));other.UpdateGoal(nav.Nearest(target+side));
             m.WalkedTogether=other.WalkedTogether=true;
+            m.Pet.State.ObserveEvent(ChaoStateEvent.PositiveSocial,"expedition-walk");
+            other.Pet.State.ObserveEvent(ChaoStateEvent.PositiveSocial,"expedition-walk");
         }
     }
     internal void Decide(ExpeditionCompanion m,Vector3 player)

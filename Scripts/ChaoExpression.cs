@@ -6,6 +6,14 @@ public enum ChaoExpression { Neutral,Happy,Delighted,Curious,Surprised,Sad,Afrai
 internal enum ChaoPoseKind { Idle,Walk,Crawl,Water,Air,Rest,Sleep,Rise,Thought,Interaction,Grip,Distress }
 public static class ChaoExpressiveness
 {
+    // Only a fallback for free idle poses; existing face/pose flags keep priority.
+    public static ChaoExpression FromMood(ChaoMoodSnapshot mood) => mood.DominantEmotion switch
+    {
+        ChaoEmotion.Happy=>ChaoExpression.Happy,ChaoEmotion.Excited=>ChaoExpression.Delighted,
+        ChaoEmotion.Curious=>ChaoExpression.Curious,ChaoEmotion.Sad or ChaoEmotion.Lonely=>ChaoExpression.Sad,
+        ChaoEmotion.Frustrated=>ChaoExpression.Annoyed,ChaoEmotion.Afraid=>ChaoExpression.Afraid,
+        ChaoEmotion.Sleepy=>ChaoExpression.Sleepy,_=>ChaoExpression.Neutral
+    };
     public static float Intensity(PetState state)=>.7f+state.Sociability*.002f+state.Initiative/990f*.12f;
     public static float Response(PetState state)=>5+state.Initiative/990f*3;
     public static float BlinkDelay(Random random,PetState? state)=>2.7f+(float)random.NextDouble()*4.4f-(state?.Energy<25 ? .8f : 0);

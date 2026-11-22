@@ -60,6 +60,11 @@ public partial class ImportedChao
         presentationClock+=dt;
         presentationPoseWritten=poseSerial!=lastPresentationPose;
         var request=presentationClock<expressionUntil ? requestedExpression : PoseKind==ChaoPoseKind.Thought ? ChaoExpression.Curious : PoseKind==ChaoPoseKind.Interaction || PoseKind==ChaoPoseKind.Grip ? ChaoExpression.Focused : ChaoExpression.Neutral;
+        if(presentationClock>=expressionUntil && request==ChaoExpression.Neutral && PoseKind==ChaoPoseKind.Idle && personality!=null)
+        {
+            var mood=personality.Mood.Snapshot;request=ChaoExpressiveness.FromMood(mood);
+            if(request!=ChaoExpression.Neutral)expressionIntensity=mood.EmotionIntensity;
+        }
         Expression=ChaoExpressiveness.Resolve(eyesClosed && PoseKind is ChaoPoseKind.Sleep or ChaoPoseKind.Rest,
             eyesSquint && PoseKind==ChaoPoseKind.Water,eyesHalf || eyesSquint && PoseKind==ChaoPoseKind.Distress,eyesHappy,personality?.Energy ?? 90,request);
         if(Expression!=previousExpression){emotionSince=presentationClock;previousExpression=Expression;}

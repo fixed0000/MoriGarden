@@ -9,6 +9,7 @@ internal static class ChaoExperience
         System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(definition.Title.ToLowerInvariant()) : "a quiet place";
     internal static void Study(PetState pet,DiscoveryDefinition item,bool requested,string? guide=null)
     {
+        pet.ObserveEvent(ChaoStateEvent.DiscoveryFinished,item.Id);
         string place=AreaTitle(item.AreaId);
         var kind=guide!=null ? ChaoMemoryKind.SharedStudy : requested ? ChaoMemoryKind.PlayerDiscovery : ChaoMemoryKind.IndependentStudy;
         string description=guide!=null ? $"Explored a discovery with {guide}'s guidance." : requested ? $"Studied something interesting in {place} with your encouragement." : $"Explored something interesting in {place} independently.";
@@ -20,6 +21,8 @@ internal static class ChaoExperience
         string verb=kind==ChaoMemoryKind.SharedRest ? "Rested" : kind==ChaoMemoryKind.Introduction ? "Became acquainted" : "Explored";
         bool added=a.History.Record(kind,source,area,$"{verb} with {b.Name}.",.6f,.65f,new[]{second});
         bool other=b.History.Record(kind,source,area,$"{verb} with {a.Name}.",.6f,.65f,new[]{first});
+        if(added)a.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source);
+        if(other)b.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source);
         if(added)a.History.Grow(a,source+"-"+second,"Sociability",.16f);
         if(other)b.History.Grow(b,source+"-"+first,"Sociability",.16f);
         if(!relationship || !added || !other)return;

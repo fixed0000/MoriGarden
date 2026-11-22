@@ -109,6 +109,7 @@ internal sealed class ChaoBallGame
                 if (time>=3)
                 {
                     a.Pet.Joy=Mathf.Max(0,a.Pet.Joy-(scold ? 12 : polite ? 3 : 5));
+                    a.Pet.Mood.React(ChaoEmotion.Sad,scold ? .75f : .35f,scold ? 8 : 4,"ball-declined",70);
                     a.Pet.History.Record(ChaoMemoryKind.Unpleasant,"ball-invitation",a.Pet.History.LastArea,
                         polite ? $"{b.Pet.Name} politely declined an invitation to play." : $"{b.Pet.Name} declined an invitation to play.",polite ? -.08f : scold ? -.65f : -.25f,scold ? .55f : .25f,new[]{b.Id});
                     ImportedChao.ClearBallReaction(b.Art); Orb(b)?.SetIdea(null,false);
@@ -207,8 +208,9 @@ internal sealed class ChaoBallGame
     private void CompletePass()
     {
         a!.Pet.Fun=Mathf.Min(100,a.Pet.Fun+3); b!.Pet.Fun=Mathf.Min(100,b.Pet.Fun+3);
+        a.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball"); b.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball");
         towardB=!towardB;
-        if (++passes>=10) Next(Phase.Finish); else BeginToss();
+        if (++passes>=10) { a.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");b.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");Next(Phase.Finish); } else BeginToss();
     }
     private void Place()
     {

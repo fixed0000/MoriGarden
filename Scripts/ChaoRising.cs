@@ -70,6 +70,7 @@ internal sealed class ChaoTouch
             return true;
         }
         ImportedChao.MovePose(art,0,false,false,false,false,false,false);
+        if(!upset && elapsed<2)ImportedChao.Express(art,ChaoExpression.Neutral);
         if (!upset && elapsed>=2) art.Rotation=new(0,0,Mathf.Sin(elapsed*8)*.035f);
         return true;
     }

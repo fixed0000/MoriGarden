@@ -43,6 +43,8 @@ public partial class ToyCar : CharacterBody3D
         phraseOffset=leader.playing%1.20f; lastShake=-1;
         ensemble=leader.ensemble ?? new System.Collections.Generic.HashSet<ToyCar> { leader };
         leader.ensemble=ensemble; ensemble.Add(this);
+        playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble");
+        leader.playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble");
     }
     private void FinishEnsemble()
     {
@@ -180,6 +182,7 @@ public partial class ToyCar : CharacterBody3D
         if (playing<PlayDuration) return;
         if (before<PlayDuration)
         {
+            playChao?.ObserveEvent(ChaoStateEvent.PlayFinished,ItemName);
             FinishEnsemble();
             GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
             placementFrom=Position;
@@ -288,6 +291,7 @@ public partial class ToyCar : CharacterBody3D
         playForward=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
         playOrigin=actor.Position+playForward*.30f;
         chao.Fun=Mathf.Min(100,chao.Fun+.5f);
+        chao.ObserveEvent(ChaoStateEvent.PlayStarted,ItemName);
         Position=playOrigin;
         return true;
     }
