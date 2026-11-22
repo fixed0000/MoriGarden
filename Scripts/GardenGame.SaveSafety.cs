@@ -21,6 +21,16 @@ public partial class GardenGame
     }
     private void ResolveRecoveryDirectory()
     {
+        // Automated scene regressions can use a fresh private artifacts folder,
+        // instead of touching even earlier test profiles in user://.
+        string testDirectory=OS.GetEnvironment("MORI_TEST_DIRECTORY");
+        if(!string.IsNullOrWhiteSpace(testDirectory))
+        {
+            string artifacts=Path.GetFullPath(ProjectSettings.GlobalizePath("res://artifacts"))+Path.DirectorySeparatorChar;
+            if(!testMode || !Path.IsPathFullyQualified(testDirectory) || !Path.GetFullPath(testDirectory).StartsWith(artifacts,StringComparison.OrdinalIgnoreCase))
+                throw new SaveLoadException("Scene tests require an isolated folder inside project artifacts.");
+            savePath=Path.Combine(Path.GetFullPath(testDirectory),"pet.json");
+        }
         string directory=OS.GetEnvironment("MORI_SAVE_DIRECTORY");
         if(OS.GetCmdlineUserArgs().Contains("--recovery-check") && string.IsNullOrWhiteSpace(directory))throw new SaveLoadException("Recovery checks require a separate copied save directory.");
         if(string.IsNullOrWhiteSpace(directory))return;

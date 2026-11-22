@@ -19,7 +19,7 @@ internal sealed class ChaoEditorBridge
             && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.Expedition) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)
             && p.Name!=nameof(PetState.Stadium) && p.Name!=nameof(PetState.Athletics)
             && p.Name!=nameof(PetState.Statistics) && p.Name!=nameof(PetState.StatSchemaVersion) && p.Name!=nameof(PetState.StatReincarnations)
-            && !ChaoStatistics.Names.Contains(p.Name)).ToArray();
+            && p.Name!=nameof(PetState.PersonalitySchemaVersion) && !ChaoStatistics.Names.Contains(p.Name)).ToArray();
 
     public ChaoEditorBridge(string directory) => this.directory=directory;
 
@@ -27,7 +27,7 @@ internal sealed class ChaoEditorBridge
 
     public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit)
     {
-        foreach(var pet in roster.Values)pet.EnsureStatistics();
+        foreach(var pet in roster.Values){pet.EnsureStatistics();pet.EnsurePersonality();}
         Directory.CreateDirectory(directory);
         string command=Path.Combine(directory,"chao-editor-request.json");
         PetState? updated=null;
@@ -47,13 +47,15 @@ internal sealed class ChaoEditorBridge
                     else
                     {
                         var values=JsonSerializer.SerializeToNode(current)!.AsObject();
+                        var next=values.Deserialize<PetState>() ?? throw new ArgumentException("Empty editor update");
                         var patch=request["patch"]!.AsObject();
                         foreach (var (key,value) in patch)
                         {
                             if (!fields.Any(field=>field.Name==key)) throw new ArgumentException("Unknown parameter: "+key);
-                            values[key]=value?.DeepClone();
+                            var field=fields.Single(f=>f.Name==key);
+                            if(value==null && field.PropertyType!=typeof(string))throw new ArgumentException("Missing parameter: "+key);
+                            field.SetValue(next,value?.Deserialize(field.PropertyType));
                         }
-                        var next=values.Deserialize<PetState>() ?? throw new ArgumentException("Empty editor update");
                         if(request["statistics"] is JsonObject statPatch)
                             foreach(var (name,record) in statPatch)
                             {
@@ -97,6 +99,8 @@ internal sealed class ChaoEditorBridge
         var chao=roster.Select(entry=>new { id=entry.Key,
             parameters=fields.ToDictionary(field=>field.Name,field=>field.GetValue(entry.Value)),
             statistics=entry.Value.Statistics,
+            personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
+            personality=entry.Value.Personality,
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
             {
                 var link=ownerState.SocialLink(entry.Key,peer.Key);

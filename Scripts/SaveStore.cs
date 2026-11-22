@@ -13,6 +13,8 @@ public static class SaveStore
         message = "";
         if (!File.Exists(path) && !File.Exists(path+".bak") && !HasExistingData(path)) return PetState.NewEgg();
         try { return Read(path); }
+        catch (UnsupportedPersonalitySchemaException ex)
+        { throw new SaveLoadException(ex.Message,ex); }
         catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
         {
             try
@@ -21,6 +23,8 @@ public static class SaveStore
                 message = "The main save could not be read. A backup was loaded.";
                 return backup;
             }
+            catch (UnsupportedPersonalitySchemaException schemaError)
+            { throw new SaveLoadException(schemaError.Message,schemaError); }
             catch
             {
                 throw new SaveLoadException("The garden could not be loaded. Original files were kept; no replacement Chao was created. Recover a verified copy before saving.",ex);
@@ -41,12 +45,13 @@ public static class SaveStore
         {
             if (!File.Exists(candidate)) continue;
             try { return Read(candidate); }
+            catch (UnsupportedPersonalitySchemaException) { return null; }
             catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException) { }
         }
         return null;
     }
 
-    public static PetState Snapshot(PetState pet) { pet.EnsureStatisticsTree();return JsonSerializer.Deserialize<PetState>(JsonSerializer.SerializeToUtf8Bytes(pet))!; }
+    public static PetState Snapshot(PetState pet) { pet.EnsureStatisticsTree();pet.EnsurePersonalityTree();return JsonSerializer.Deserialize<PetState>(JsonSerializer.SerializeToUtf8Bytes(pet))!; }
 
     private static PetState Read(string path)
     {

@@ -73,8 +73,6 @@ public sealed partial class PetState
 
     public string PreferredToy => string.IsNullOrEmpty(FavoriteToy) ? (LikesToyCars ? "Toy Car" : "Rattle") : FavoriteToy;
     public bool EnjoysToyCars => LikesToyCars || FavoriteToy=="Toy Car";
-    public bool Glutton { get; set; }
-    public bool Crybaby { get; set; }
     public float Fun { get; set; } = 65;
     public string Form { get; set; } = "seed";
 
@@ -84,9 +82,7 @@ public sealed partial class PetState
     public bool Dexterous { get; set; }
     public static float BallMissChance(PetState p) => Math.Clamp(.12f+(p.Clumsy ? .40f : 0)+(3-p.ActivityPreference)*.065f-(p.Dexterous ? .09f : 0),.025f,.85f);
     public int Manners { get; set; } = 50;
-    public int Kindness { get; set; }
     public int Aggressiveness { get; set; }
-    public int Curiosity { get; set; }
     public int Initiative { get; set; }
     public bool FindsFood => IntelligenceAbility>=80 && Initiative>=65;
 
@@ -107,7 +103,7 @@ public sealed partial class PetState
     public bool CanAct => !IsEgg && !InCocoon;
     public string LifeStage => IsEgg ? "Egg" : InCocoon ? "Cocoon" : Form == "seed" ? "Child" : SecondEvolutionProgress>=1 ? "Second evolution" : "Adult";
 
-    public static PetState NewEgg() { var pet=new PetState { IsEgg=true,EggSeconds=28 };pet.InitializeFreshStatistics();return pet; }
+    public static PetState NewEgg() { var pet=new PetState { IsEgg=true,EggSeconds=28 };pet.InitializeFreshStatistics();pet.InitializeFreshPersonality();return pet; }
 
     public bool Hatch()
     {
@@ -237,6 +233,7 @@ public sealed partial class PetState
 
     public void Validate()
     {
+        EnsurePersonalityTree();
         Expedition??=new(); Expedition.Validate();
         if (Version != 1 || !float.IsFinite(Fullness) || !float.IsFinite(Joy) || !float.IsFinite(Energy)
             || !double.IsFinite(AgeSeconds) || AgeSeconds<0 || !double.IsFinite(GardenSeconds) || GardenSeconds<0 || !float.IsFinite(Fun)

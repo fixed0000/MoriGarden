@@ -34,7 +34,7 @@ internal static class MemoryChecks
         for(int i=0;i<300;i++)memory.Grow(pet,"one-object","Curiosity",.22f);
         check(pet.Curiosity==baseline,"One repeated action cannot farm personality");
         for(int i=0;i<300;i++)memory.Grow(pet,"unique-"+i,"Curiosity",.22f);
-        check(pet.Curiosity>baseline && pet.Curiosity<=baseline+8 && pet.Curiosity<0,"Many different successes give small capped growth and preserve cautious character");
+        check(pet.Curiosity==baseline,"Stage 1.2: even diverse experiences cannot change innate curiosity");
         var other=new PetState();check(other.History.Events.Count==0 && other.History.Confidence==0,"Histories and confidence evidence are not shared between pets");
         memory.Record(ChaoMemoryKind.Pleasant,"cherished",WorldCatalog.Meadow,"A cherished moment.",1,1);
         for(int i=0;i<150;i++)memory.Record(ChaoMemoryKind.Pleasant,"small-"+i,WorldCatalog.Meadow,"A minor moment.",.2f,.1f);

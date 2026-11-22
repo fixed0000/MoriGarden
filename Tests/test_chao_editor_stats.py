@@ -1,6 +1,9 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json
+import tempfile
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location("chao_editor", Path(__file__).resolve().parents[1] / "Tools" / "chao_editor.py")
 module = importlib.util.module_from_spec(spec)
@@ -37,6 +40,28 @@ class EditorStatTests(unittest.TestCase):
     def test_legacy_bar_can_be_edited_without_erasing_strength(self):
         editor=self.editor();editor.stat_variables["Run"]["Progress"].set(45)
         self.assertEqual(editor.statistics_patch()["Run"]["Points"],1980)
+
+    def test_unrelated_patch_does_not_replace_personality(self):
+        editor = module.ChaoEditor.__new__(module.ChaoEditor)
+        personality = dict(Curious=-31, Kindness=12, Energetic=-75, Naive=-60,
+                           Solitude=7, Vitality=22, BigEater=75, Regain=-9,
+                           Skillful=34, Charm=-17, Chatty=6, Carefree=23, Fickle=-10)
+        editor.snapshot = dict(session="isolated-session", target="main", parameters=dict(Joy=60),
+                               personality=personality.copy(), relationships=[])
+        editor.variables = dict(Joy=Value(75))
+        editor.stat_variables = {}
+        editor.relationship_peer = None
+        editor.pending = None
+        editor.status = Value("")
+        editor.window = SimpleNamespace(after=lambda *args: None)
+        editor.read = lambda: dict(session="isolated-session", chao=[dict(id="main")])
+        with tempfile.TemporaryDirectory(prefix="MoriEditorPersonality-") as directory:
+            editor.directory = Path(directory)
+            editor.apply()
+            request = json.loads((editor.directory/"chao-editor-request.json").read_text())
+            self.assertEqual(request["patch"], dict(Joy=75))
+            self.assertNotIn("personality", request)
+            self.assertEqual(editor.snapshot["personality"], personality)
 
 
 if __name__ == "__main__": unittest.main()

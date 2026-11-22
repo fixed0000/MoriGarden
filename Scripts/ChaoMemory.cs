@@ -84,6 +84,8 @@ public sealed class ChaoMemory
         .OrderByDescending(e=>e.Influence(Seconds)*e.Valence).FirstOrDefault();
     public void Grow(PetState pet,string source,string trait,float credit)
     {
+        // Base personality is innate in stage 1.2; retain memories and social growth.
+        if(trait is "Curiosity" or "Kindness")return;
         if(GrowthSources.Count>=128 || !GrowthSources.Add(trait+"|"+source))return;
         int value=trait switch {"Curiosity"=>pet.Curiosity,"Sociability"=>pet.Sociability,"Kindness"=>pet.Kindness,"Bond"=>pet.Bond,_=>0};
         if(!Baseline.ContainsKey(trait))Baseline[trait]=value;

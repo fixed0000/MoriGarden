@@ -62,6 +62,8 @@ class ChaoEditor:
             self.list.delete(0, "end")
             for _, name in names:
                 self.list.insert("end", name)
+        # Canonical personality is carried by the game; the editor sends only patches.
+        self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
         self.roster = roster
         self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
@@ -99,6 +101,7 @@ class ChaoEditor:
             return
         self.snapshot = dict(session=snapshot["session"], target=self.selected,
                              parameters=self.roster[self.selected], statistics=self.statistics_rows.get(self.selected, {}),
+                             personality=self.personality_rows.get(self.selected),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():

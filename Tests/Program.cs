@@ -9,6 +9,7 @@ void Check(bool condition, string label)
     if (!condition) throw new Exception(label);
     Console.WriteLine("PASS " + label); checks++;
 }
+PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);
 SaveRecoveryChecks.Run(Check);
 var pet = new PetState { Fullness = 90, Energy = 90 };
