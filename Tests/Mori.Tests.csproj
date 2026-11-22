@@ -5,6 +5,7 @@
     <Compile Include="../Scripts/ChaoEditorBridge.cs" Link="ChaoEditorBridge.cs" />
     <Compile Include="../Scripts/PetState.Statistics.cs" Link="PetState.Statistics.cs" />
     <Compile Include="../Scripts/PetState.cs" Link="PetState.cs" />
+    <Compile Include="../Scripts/SaveIntegrity.cs" Link="SaveIntegrity.cs" />
     <Compile Include="../Scripts/SaveStore.cs" Link="SaveStore.cs" />
     <Compile Include="../Scripts/WorldCatalog.cs" Link="WorldCatalog.cs" />
     <Compile Include="../Scripts/ExpeditionRoster.cs" Link="ExpeditionRoster.cs" />

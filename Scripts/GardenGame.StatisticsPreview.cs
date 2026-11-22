@@ -11,6 +11,7 @@ public partial class GardenGame
     private void InspectStatistics()
     {
         if(statisticsPreviewReady)return;statisticsPreviewReady=true;
+        GetWindow().Title="MoriGarden — GENERATED STAT TEST · Not your personal garden";
         PetState Profile(string name,int grade)
         {
             var p=PetState.NewEgg();p.Hatch();p.Name=name;p.GardenEggs.Clear();p.Bond=50;p.Form="bloom";p.Energy=p.Fullness=p.Fun=100;

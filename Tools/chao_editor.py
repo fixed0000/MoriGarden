@@ -9,7 +9,10 @@ from uuid import uuid4
 class ChaoEditor:
     def __init__(self, window):
         self.window = window
-        self.directory = Path(os.environ["MORI_EDITOR_DIRECTORY"]) if os.environ.get("MORI_EDITOR_DIRECTORY") else Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
+        personal = Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
+        selected = os.environ.get("MORI_SAVE_DIRECTORY") or os.environ.get("MORI_EDITOR_DIRECTORY")
+        self.directory = Path(selected).resolve() if selected else personal
+        profile = "Personal garden" if self.directory == personal else self.directory.name
         self.snapshot = None
         self.variables = {}
         self.stat_variables = {}
@@ -20,9 +23,10 @@ class ChaoEditor:
         self.selected = None
         self.pending = None
         self.status = tk.StringVar(value="Start Mori, then click Read from game.")
-        window.title("Mori — Chao Editor")
+        window.title("Mori — Chao Editor · " + profile)
         window.geometry("960x690")
         window.minsize(710, 540)
+        ttk.Label(window, text="Profile: " + profile + " · " + str(self.directory), padding=(12, 6), wraplength=900).pack(fill="x")
         toolbar = ttk.Frame(window, padding=12)
         toolbar.pack(fill="x")
         ttk.Button(toolbar, text="Read from game", command=self.reload).pack(side="left")
@@ -46,7 +50,10 @@ class ChaoEditor:
         self.window.after(1000, self.refresh_roster)
 
     def read(self):
-        return json.loads((self.directory / "chao-editor-state.json").read_text(encoding="utf-8"))
+        snapshot = json.loads((self.directory / "chao-editor-state.json").read_text(encoding="utf-8"))
+        if snapshot.get("profileDirectory") and Path(snapshot["profileDirectory"]).resolve() != self.directory.resolve():
+            raise ValueError("This snapshot belongs to a different garden profile.")
+        return snapshot
 
     def update_roster(self, snapshot):
         roster = {chao["id"]: chao["parameters"] for chao in snapshot.get("chao", [])}

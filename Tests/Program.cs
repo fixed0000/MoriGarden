@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Mori;
 
+if(args.Length==3 && args[0]=="--audit-recovery") { SaveRecoveryChecks.Audit(args[1],args[2]);return; }
 int checks = 0;
 void Check(bool condition, string label)
 {
@@ -9,6 +10,7 @@ void Check(bool condition, string label)
     Console.WriteLine("PASS " + label); checks++;
 }
 StatDevelopmentChecks.Run(Check);
+SaveRecoveryChecks.Run(Check);
 var pet = new PetState { Fullness = 90, Energy = 90 };
 Check(pet.Feed() && pet.Fullness == 100, "Food clamps at 100");
 Check(!pet.Feed() && pet.Care == 1, "Full pet cannot farm care by feeding");
@@ -37,11 +39,11 @@ try
     restored = SaveStore.Load(path, out warning);
     Check(restored.Stars == 32 && warning.Length > 0, "Corrupt save recovers backup");
     File.WriteAllText(path + ".bak", "null");
-    restored = SaveStore.Load(path, out warning);
-    Check(restored.Form == "seed" && File.Exists(path + ".damaged"), "Unrecoverable save retained for inspection");
+    bool protectedSave=false;try{SaveStore.Load(path,out _);}catch(SaveLoadException){protectedSave=true;}
+    Check(protectedSave && File.ReadAllText(path)=="{broken" && File.ReadAllText(path+".bak")=="null", "Unreadable saves stop loading without synthesizing a replacement garden");
     File.WriteAllText(path, "{\"Version\":99}");
-    restored = SaveStore.Load(path, out warning);
-    Check(warning.Length > 0, "Unsupported version is reported");
+    protectedSave=false;try{SaveStore.Load(path,out _);}catch(SaveLoadException){protectedSave=true;}
+    Check(protectedSave, "Unsupported version is reported without replacing pets");
 }
 finally
 {

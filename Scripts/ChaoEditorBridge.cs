@@ -104,7 +104,7 @@ internal sealed class ChaoEditorBridge
                     score=link?.ScoreFrom(entry.Key) ?? 0, status=link?.StatusFrom(entry.Key) ?? "Stranger" };
             }).ToArray() }).ToArray();
         string path=Path.Combine(directory,"chao-editor-state.json");
-        File.WriteAllText(path+".tmp",JsonSerializer.Serialize(new { session,status,lastRequest,chao }));
+        File.WriteAllText(path+".tmp",JsonSerializer.Serialize(new { session,status,lastRequest,profileDirectory=Path.GetFullPath(directory),chao }));
         File.Move(path+".tmp",path,true);
         return updated;
     }

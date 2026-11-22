@@ -176,7 +176,15 @@ public partial class GardenGame : Node3D
         string loadWarning = "";
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))savePath=ProjectSettings.GlobalizePath("user://stats-preview/pet.json");
         if(stadiumMode!=null)savePath=ProjectSettings.GlobalizePath(OS.GetCmdlineUserArgs().Contains("--outcomes-only") ? "user://stadium-outcomes/pet.json" : $"user://{stadiumMode[2..]}/pet.json");
-        pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
+        try
+        {
+            ResolveRecoveryDirectory();
+            pet = testMode ? new PetState() : SaveStore.Load(savePath, out loadWarning);
+            saveLoaded=true;
+            if(!string.IsNullOrWhiteSpace(OS.GetEnvironment("MORI_SAVE_DIRECTORY")))GetWindow().Title="MoriGarden — Recovery copy · "+pet.Name;
+        }
+        catch(Exception error) when(error is System.IO.IOException or ArgumentException or UnauthorizedAccessException)
+        {ShowLoadFailure(error);return;}
         pet.Stadium.Cancel(); // Interrupted competitions return safely to the stadium, never claim an unfinished result.
         if (!testMode) editor=new ChaoEditorBridge(System.IO.Path.GetDirectoryName(savePath)!);
         RenderingServer.SetDefaultClearColor(new Color("849da7"));
@@ -244,6 +252,7 @@ public partial class GardenGame : Node3D
 
     public override void _Process(double delta)
     {
+        if(OS.GetCmdlineUserArgs().Contains("--recovery-check") && CheckRecoveryScene())return;
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))InspectStatistics();
         if(OS.GetCmdlineUserArgs().Contains("--stadium-inspect"))InspectStadium();
         if(OS.GetCmdlineUserArgs().Contains("--stadium-review")){try{ReviewStadium((float)delta);}catch(Exception ex){GD.PushError("STADIUM_REVIEW_FAILED: "+ex);GetTree().Quit(1);}return;}
@@ -2365,6 +2374,7 @@ public partial class GardenGame : Node3D
 
     private void Save()
     {
+        if(!saveLoaded)return;
         try { CaptureGardenState(); SaveStore.Save(savePath, pet); saveTimer = 0; }
         catch (Exception ex) { GD.PushWarning(ex.Message); Notify("Could not save the game. Check access to the save folder.", 10); }
     }

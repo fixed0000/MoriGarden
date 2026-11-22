@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Mori;
 
@@ -9,7 +11,7 @@ public static class SaveStore
     public static PetState Load(string path, out string message)
     {
         message = "";
-        if (!File.Exists(path)) return PetState.NewEgg();
+        if (!File.Exists(path) && !File.Exists(path+".bak") && !HasExistingData(path)) return PetState.NewEgg();
         try { return Read(path); }
         catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
         {
@@ -21,12 +23,16 @@ public static class SaveStore
             }
             catch
             {
-                message = "The save could not be read. Started a new garden and kept the old file as .damaged.";
-                try { File.Copy(path, path + ".damaged", true); }
-                catch { message = "Could not read or back up the save. Check access to the save folder."; }
-                return new PetState();
+                throw new SaveLoadException("The garden could not be loaded. Original files were kept; no replacement Chao was created. Recover a verified copy before saving.",ex);
             }
         }
+    }
+
+    private static bool HasExistingData(string path)
+    {
+        string folder=Path.GetDirectoryName(Path.GetFullPath(path))!;
+        return File.Exists(path+".tmp") || File.Exists(path+".damaged") || File.Exists(Path.Combine(folder,"chao-editor-state.json")) ||
+            Directory.Exists(Path.Combine(folder,"slots")) && Directory.EnumerateFiles(Path.Combine(folder,"slots"),"slot-*.json*").Any();
     }
 
     public static PetState? LoadSlot(string path)
@@ -45,9 +51,11 @@ public static class SaveStore
     private static PetState Read(string path)
     {
         string json=File.ReadAllText(path);
-        var pet = JsonSerializer.Deserialize<PetState>(json)
+        var root=JsonNode.Parse(json) as JsonObject ?? throw new ArgumentException("Invalid garden record");
+        SaveIntegrity.Prepare(root);
+        var pet = root.Deserialize<PetState>()
                   ?? throw new ArgumentException("Empty save");
-        pet.Validate();
+        SaveIntegrity.Validate(pet);
         using(var document=JsonDocument.Parse(json))
         {
             if(!document.RootElement.TryGetProperty("History",out var history) || history.ValueKind!=JsonValueKind.Object)pet.History.PastUnknown=true;
@@ -66,7 +74,23 @@ public static class SaveStore
 
     public static void Save(string path, PetState pet)
     {
-        pet.Validate();
+        SaveIntegrity.Validate(pet);
+        // Never overwrite a file that we cannot fully read, even if another
+        // caller tries to save a fresh or partially recovered garden over it.
+        if(File.Exists(path))
+        {
+            try{Read(path);}
+            catch(Exception ex) when(ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
+            {throw new SaveLoadException("Existing save is unreadable. It was not overwritten; choose a separate recovery copy.",ex);}
+        }
+        else if(File.Exists(path+".bak"))
+        {
+            try{Read(path+".bak");}
+            catch(Exception ex) when(ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
+            {throw new SaveLoadException("The only backup is unreadable. Saving a replacement garden was stopped.",ex);}
+        }
+        else if(File.Exists(path+".tmp") || File.Exists(path+".damaged"))
+            throw new SaveLoadException("Unresolved save data exists. Keep it and recover to a separate folder first.");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(pet, new JsonSerializerOptions { WriteIndented = true }));
         if (File.Exists(path))
