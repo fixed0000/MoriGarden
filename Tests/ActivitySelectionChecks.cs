@@ -46,9 +46,9 @@ internal static class ActivitySelectionChecks
         bool second=p1.ObserveEvent(ChaoStateEvent.PositiveSocial,"same-source","contact-two");
         for(int i=0;i<1000;i++)p1.ObserveEvent(ChaoStateEvent.PositiveSocial,"same-source","contact-two");
         check(second && p1.SocialNeed==64 && p1.Mood.ActiveReactions.Count==1,"Activity K: two actual contact IDs relieve twice, one repeated ID once, despite emotion cooldown");
-        var traitsA=Normal();traitsA.Curiosity=-100;traitsA.Kindness=-100;traitsA.Initiative=0;traitsA.Sociability=0;
-        var traitsB=Normal();traitsB.Curiosity=100;traitsB.Kindness=100;traitsB.Initiative=990;traitsB.Sociability=100;
-        check(new ChaoActivityCoordinator(new Random(1)).Evaluate(traitsA,All()).Select(s=>s.Score).SequenceEqual(new ChaoActivityCoordinator(new Random(1)).Evaluate(traitsB,All()).Select(s=>s.Score)),"Stage 1.4A category scores do not introduce personality, initiative or sociability weighting");
+        var traitsA=Normal();traitsA.Personality=new(){Kindness=-100};traitsA.Initiative=0;traitsA.Sociability=0;
+        var traitsB=Normal();traitsB.Personality=new(){Kindness=100};traitsB.Initiative=990;traitsB.Sociability=100;
+        check(new ChaoActivityCoordinator(new Random(1)).Evaluate(traitsA,All()).Select(s=>s.Score).SequenceEqual(new ChaoActivityCoordinator(new Random(1)).Evaluate(traitsB,All()).Select(s=>s.Score)),"Category scores do not duplicate legacy initiative/sociability or add a deferred kindness effect");
         p1.SocialNeed=80;p1.ObserveEvent(ChaoStateEvent.PlayerContact,"player","player-one");p1.ObserveEvent(ChaoStateEvent.PlayerContact,"player","player-two");
         check(p1.SocialNeed==68,"Player contact keeps six-point relief per distinct completion");
         chooser=new(new Random(5));p1=Normal();var snapshot=chooser.Evaluate(p1,All()).Single(s=>s.Availability.Activity==ChaoActivity.Play).Score;

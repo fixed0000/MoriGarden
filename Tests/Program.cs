@@ -10,6 +10,7 @@ void Check(bool condition, string label)
     Console.WriteLine("PASS " + label); checks++;
 }
 ActivitySelectionChecks.Run(Check);
+PersonalityDecisionChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

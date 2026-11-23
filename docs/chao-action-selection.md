@@ -108,3 +108,7 @@ Integration: `Scripts/GardenGame.cs`, `Scripts/GardenEgg.cs`, `Scripts/ChaoInter
 Contact idempotency/runtime preservation: `Scripts/PetState.CurrentState.cs`, `Scripts/PetState.cs`, `Scripts/ChaoExperience.cs`. Diagnostics/tests/documentation: `Scripts/ChaoStateDiagnostics.cs`, `Tests/Mori.Tests.csproj`, `Tests/Program.cs`, `docs/chao-needs-mood.md`.
 
 Final full native regression: **SMOKE_OK**, including stadium, interactions, landscape, Coastal water, expedition team/discovery/travel, greenhouse, wildlife and personality scenarios. No stderr errors.
+
+## Subsequent stage
+
+Stage 1.4B adds bounded canonical personality adjustments and weighted choice among close candidates. The no-personality/max-only statements above describe the 1.4A baseline; see [current scoring and research](chao-personality-decisions.md). Executor ownership, availability, contact relief and safety contracts are retained.

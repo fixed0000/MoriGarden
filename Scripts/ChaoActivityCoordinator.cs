@@ -11,14 +11,25 @@ public enum ChaoActivity { Eat, Sleep, Play, Socialize, Leisure, Wander }
 public enum ActivityInterruptibility { Atomic, ShortSafe, LongOptional }
 public sealed record ActivityAvailability(ChaoActivity Activity,bool Available,string Reason,float EstimatedDuration,
     ActivityInterruptibility Interruptibility,int AvailableTargetCount);
-public sealed record ActivityScore(ActivityAvailability Availability,float Score);
+public sealed record ActivityScore(ActivityAvailability Availability,float Score)
+{
+    public float BaseScore { get; init; }
+    public float PersonalityAdjustment { get; init; }
+    public float FinalScore { get; init; }
+    public float RepeatPenalty { get; init; }
+    public float RandomVariation { get; init; }
+    public IReadOnlyList<PersonalityContribution> Contributions { get; init; }=Array.Empty<PersonalityContribution>();
+}
 public sealed record ActivityCompletion(ChaoActivity Activity,double At);
 
 // Selection and ownership only. No Godot dependency, targets, animation, movement,
-// memories, relationships or personality weights. One instance per garden actor.
+// memories or relationships. Personality scoring is a separate pure component.
 public sealed class ChaoActivityCoordinator
 {
     private readonly Random random;
+    private ChaoPersonality? cachedPersonality;
+    private ChaoPersonalityActivityWeights personalityWeights=new(null);
+    public int PersonalityRefreshes { get; private set; }
     private readonly Queue<ActivityCompletion> history=new();
     private readonly Dictionary<ChaoActivity,(string Reason,int Count,double Until)> failures=new();
     public ChaoActivity? SelectedActivity { get; private set; }
@@ -34,6 +45,8 @@ public sealed class ChaoActivityCoordinator
     public IReadOnlyList<ActivityCompletion> History=>history.ToArray();
     public int Selections { get; private set; }
     public int Interruptions { get; private set; }
+    public int FailedAttempts { get; private set; }
+    public int CompletedRepeats { get; private set; }
     public string LastCancellation { get; private set; }="";
     public ChaoActivityCoordinator(Random random) => this.random=random;
     public void Advance(float seconds)
@@ -42,6 +55,8 @@ public sealed class ChaoActivityCoordinator
     {ChaoActivity.Eat=>ChaoNeed.Hunger,ChaoActivity.Sleep=>ChaoNeed.Fatigue,ChaoActivity.Play=>ChaoNeed.Boredom,ChaoActivity.Socialize=>ChaoNeed.SocialNeed,_=>null};
     public IReadOnlyList<ActivityScore> Evaluate(PetState pet,IEnumerable<ActivityAvailability> available)
     {
+        if(!(cachedPersonality?.Equals(pet.Personality) ?? pet.Personality==null))
+        {cachedPersonality=pet.Personality?.Copy();personalityWeights=new(cachedPersonality);PersonalityRefreshes++;}
         var needs=pet.Needs.Evaluate().Priorities.ToDictionary(n=>n.Need);
         var options=available.ToArray();
         var previous=history.LastOrDefault();
@@ -56,8 +71,11 @@ public sealed class ChaoActivityCoordinator
                 _=>(a.Activity==ChaoActivity.Play ? .12f : .10f)+needs[need!.Value].Weight*.75f};
             bool criticalPhysiology=a.Activity is ChaoActivity.Eat or ChaoActivity.Sleep && needs[need!.Value].Level==NeedUrgency.Critical;
             bool alternatives=options.Any(o=>o.Activity!=a.Activity && o.Available && o.AvailableTargetCount>0 && (!failures.TryGetValue(o.Activity,out var f) || f.Until<=Now));
-            if(previous?.Activity==a.Activity && !criticalPhysiology && alternatives)score=Math.Max(0,score-.15f);
-            return new ActivityScore(a,score);
+            var personality=personalityWeights.Evaluate(a.Activity,score,need is {} n ? needs[n].Level : NeedUrgency.Low);
+            float penalty=previous?.Activity==a.Activity && !criticalPhysiology && alternatives ? .15f : 0;
+            return new ActivityScore(a,Math.Max(0,personality.FinalScore-penalty))
+            {BaseScore=score,PersonalityAdjustment=personality.Adjustment,FinalScore=personality.FinalScore,
+                RepeatPenalty=penalty,Contributions=personality.Contributions};
         }).ToArray();
         return Scores;
     }
@@ -66,9 +84,29 @@ public sealed class ChaoActivityCoordinator
         Evaluate(pet,available);
         if(SelectedActivity!=null)return SelectedActivity;
         float best=Scores.Where(s=>s.Availability.Available).Select(s=>s.Score).DefaultIfEmpty(0).Max();
-        var tied=Scores.Where(s=>s.Availability.Available && s.Score>0 && Math.Abs(s.Score-best)<.000001f).ToArray();
-        if(tied.Length==0)return null;
-        var selected=tied[random.Next(tied.Length)].Availability;
+        // A critical available physiological need is deterministic; never gamble
+        // away starvation/rest to a nearby optional score or Fickle jitter.
+        var critical=pet.Needs.Evaluate().Priorities.Where(n=>n.Need is ChaoNeed.Hunger or ChaoNeed.Fatigue && n.Level==NeedUrgency.Critical)
+            .OrderByDescending(n=>n.Weight).ThenBy(n=>n.Need).Select(n=>n.Need==ChaoNeed.Hunger ? ChaoActivity.Eat : ChaoActivity.Sleep)
+            .Select(a=>Scores.FirstOrDefault(s=>s.Availability.Activity==a && s.Availability.Available && s.Score>0)).FirstOrDefault(s=>s!=null);
+        ActivityAvailability selected;
+        if(critical!=null)selected=critical.Availability;
+        else
+        {
+            var close=Scores.Where(s=>s.Availability.Available && s.Score>0 && best-s.Score<=.12f+.000001f).ToArray();
+            if(close.Length==0)return null;
+            if(close.Length==1)selected=close[0].Availability;
+            else
+            {
+                float baseBest=Scores.Where(s=>s.Availability.Available).Max(s=>s.BaseScore);
+                close=close.Select(s=>s with{RandomVariation=baseBest-s.BaseScore<=.10f+.000001f && personalityWeights.MaximumVariation>0
+                    ? ((float)random.NextDouble()*2-1)*personalityWeights.MaximumVariation : 0}).ToArray();
+                Scores=Scores.Select(s=>close.FirstOrDefault(c=>c.Availability.Activity==s.Availability.Activity) ?? s).ToArray();
+                float total=close.Sum(s=>Math.Max(.000001f,s.Score+s.RandomVariation)),pick=(float)random.NextDouble()*total;
+                selected=close[^1].Availability;
+                foreach(var score in close){pick-=Math.Max(.000001f,score.Score+score.RandomVariation);if(pick<=0){selected=score.Availability;break;}}
+            }
+        }
         Adopt(selected.Activity,"pending start",selected.Interruptibility);
         return SelectedActivity;
     }
@@ -102,11 +140,13 @@ public sealed class ChaoActivityCoordinator
     public void Complete()
     {
         if(SelectedActivity is not {} a)return;
+        if(history.LastOrDefault()?.Activity==a)CompletedRepeats++;
         history.Enqueue(new(a,Now));while(history.Count>5)history.Dequeue();failures.Remove(a);Clear();
     }
     public void Fail(string reason)
     {
         if(SelectedActivity is not {} a)return;
+        FailedAttempts++;
         var old=failures.GetValueOrDefault(a);int count=old.Reason==reason ? old.Count+1 : 1;
         failures[a]=(reason,count,Now+(count>=3 ? 12 : 4));LastFailureReason=$"{a}: {reason}";Clear();
     }
@@ -115,6 +155,7 @@ public sealed class ChaoActivityCoordinator
     private void Clear(){SelectedActivity=null;CurrentExecutor="";MinimumCommitment=0;Interruptibility=ActivityInterruptibility.LongOptional;}
     public string Describe()=>
         $"\nActivity: {SelectedActivity?.ToString() ?? "Idle"}\nExecutor: {CurrentExecutor}\nCommitment left: {MinimumRemaining:0.0}s\n"+
-        string.Join('\n',Scores.Select(s=>$"{s.Availability.Activity}: {s.Score:0.00} / {(s.Availability.Available ? "available" : s.Availability.Reason)}"))+
+        string.Join('\n',Scores.Select(s=>$"{s.Availability.Activity}: base {s.BaseScore:0.00}, personality {s.PersonalityAdjustment:+0.00;-0.00;0.00}, final {s.FinalScore:0.00}, repeat -{s.RepeatPenalty:0.00}, choice {s.Score:0.00}, variation {s.RandomVariation:+0.000;-0.000;0.000}\n  "+
+            (s.Availability.Available ? string.Join(", ",s.Contributions.Select(c=>$"{c.Trait}={c.Normalized:0.00}: {c.Contribution:+0.00;-0.00;0.00}")) : s.Availability.Reason)))+
         $"\nLast completed: {history.LastOrDefault()?.Activity.ToString() ?? "None"}\nLast failure: {LastFailureReason}\nCancellation: {LastCancellation}\nSelections {Selections}, interruptions {Interruptions}";
 }
