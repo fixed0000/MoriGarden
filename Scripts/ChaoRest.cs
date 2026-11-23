@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 namespace Mori;
 
@@ -18,14 +19,18 @@ internal sealed class ChaoRest
     private float timeout, facing;
     private readonly ChaoSettling settling=new();
     private bool landed;
+    internal bool GroundRest { get; private set; }
+    internal string LastFailureReason { get; private set; }="";
+    internal int FreeSlots=>Enumerable.Range(0,Slots.Length).Count(i=>!Spaces.ContainsKey(i));
     private readonly ChaoWander detour=new();
-    public bool HandlesPose => hop>0;
+    public bool HandlesPose => GroundRest || hop>0;
     private readonly ChaoMotion walk=new();
     public bool Requested { get; private set; }
 
     public void Request(Vector3 actor)
     {
         if (Requested || slot>=0) return;
+        GroundRest=false;LastFailureReason="";
         float nearest=float.MaxValue;
         for (int i=0;i<Slots.Length;i++)
         {
@@ -45,6 +50,11 @@ internal sealed class ChaoRest
         timeout=35;
         Requested=true;
     }
+    internal bool RequestGround(CharacterBody3D actor)
+    {
+        if(Requested || !GardenActivityAdapter.SafeRestFloor(actor))return false;
+        GroundRest=true;LastFailureReason="";approach=destination=actor.Position;hop=0;landed=true;settling.Cancel();timeout=35;Requested=true;return true;
+    }
 
     public void Cancel()
     {
@@ -58,7 +68,12 @@ internal sealed class ChaoRest
         reached=false;
         if (!Requested) return false;
         timeout-=dt;
-        if (timeout<=0) { Cancel(); return false; }
+        if (timeout<=0) { LastFailureReason="Rest approach timed out";Cancel(); return false; }
+        if(GroundRest)
+        {
+            if(settling.Step(actor,art,chao.Manners,dt)){Requested=false;reached=true;}
+            return true;
+        }
         Vector3 delta=approach-actor.Position; delta.Y=0;
         if (hop<=0 && delta.Length()>.19f)
         {

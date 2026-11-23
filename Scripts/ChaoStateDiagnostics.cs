@@ -12,6 +12,7 @@ public static class ChaoStateDiagnostics
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
         mood=pet.Mood.Snapshot,
         priorities=pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities,
+        activity=pet.GardenActivity==null ? null : new{pet.GardenActivity.SelectedActivity,pet.GardenActivity.StartedAt,pet.GardenActivity.MinimumRemaining,pet.GardenActivity.LastFailureReason,pet.GardenActivity.CurrentExecutor,pet.GardenActivity.Scores,pet.GardenActivity.History},
         reactions=pet.Mood.ActiveReactions.Select(r=>new{r.Emotion,r.Intensity,r.Source,r.Priority,
             r.Duration,r.ExpiresAt,Remaining=Math.Max(0,r.ExpiresAt-pet.Mood.Now)}).ToArray()
     };
@@ -24,13 +25,14 @@ public static class ChaoStateDiagnostics
         text.AppendLine($"Joy {pet.Joy:F1} / SocialNeed {pet.SocialNeed:F1}\n");
         text.AppendLine($"Emotion: {mood.DominantEmotion} ({mood.EmotionIntensity:F2})");
         text.AppendLine($"Valence {mood.Valence:F2} / Arousal {mood.Arousal:F2}\n");
-        text.AppendLine("Urgency (weights only; planner unchanged)");
+        text.AppendLine("Need urgency and interruption eligibility");
         foreach(var need in pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities)
             text.AppendLine($"{need.Need}: {need.Level} / {need.Weight:F2}\n  {need.LevelSeconds:F0}s; interrupt long optional: {need.CanInterruptCurrentAction}");
         text.AppendLine("\nActive temporary reactions");
         foreach(var r in pet.Mood.ActiveReactions)
             text.AppendLine($"{r.Emotion} {r.Intensity:F2} / priority {r.Priority}\n  {Math.Max(0,r.ExpiresAt-pet.Mood.Now):F1}s left / {r.Source}");
         if(pet.Mood.ActiveReactions.Count==0)text.AppendLine("None");
+        if(pet.GardenActivity!=null)text.AppendLine(pet.GardenActivity.Describe());
         return text.ToString();
     }
 }

@@ -9,6 +9,7 @@ void Check(bool condition, string label)
     if (!condition) throw new Exception(label);
     Console.WriteLine("PASS " + label); checks++;
 }
+ActivitySelectionChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

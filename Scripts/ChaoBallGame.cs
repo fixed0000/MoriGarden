@@ -16,9 +16,12 @@ internal sealed class ChaoBallGame
     private Vector3 start,end,spotA,spotB;
     private bool towardB=true,miss,scold,polite;
     private int passes;
+    private string contactSession="";
     internal bool Active => a!=null;
     internal string Stage => phase.ToString();
     public bool Uses(CharacterBody3D actor) => a?.Actor==actor || b?.Actor==actor;
+    internal void RebindPlayer(CharacterBody3D actor,PetState state,Node3D art)
+    {if(a?.Actor==actor)a=a with{Pet=state,Art=art};if(b?.Actor==actor)b=b with{Pet=state,Art=art};}
 
     public void Cancel(CharacterBody3D? actor=null)
     {
@@ -43,6 +46,7 @@ internal sealed class ChaoBallGame
             if (ball==null) return;
             a=all.FirstOrDefault(c=>c.Actor==ball.PlayActor);
             if (a==null) { ball.FinishBall(); ball=null; return; }
+            contactSession=Guid.NewGuid().ToString("N");
             time=total=voice=0; passes=0; towardB=true; scold=polite=false;
             phase=a.Pet.Sociability>50 ? Phase.Consider : Phase.Solo;
         }
@@ -208,7 +212,7 @@ internal sealed class ChaoBallGame
     private void CompletePass()
     {
         a!.Pet.Fun=Mathf.Min(100,a.Pet.Fun+3); b!.Pet.Fun=Mathf.Min(100,b.Pet.Fun+3);
-        a.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball"); b.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball");
+        a.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes); b.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes);
         towardB=!towardB;
         if (++passes>=10) { a.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");b.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");Next(Phase.Finish); } else BeginToss();
     }

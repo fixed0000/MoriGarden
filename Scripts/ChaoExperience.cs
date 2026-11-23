@@ -21,8 +21,8 @@ internal static class ChaoExperience
         string verb=kind==ChaoMemoryKind.SharedRest ? "Rested" : kind==ChaoMemoryKind.Introduction ? "Became acquainted" : "Explored";
         bool added=a.History.Record(kind,source,area,$"{verb} with {b.Name}.",.6f,.65f,new[]{second});
         bool other=b.History.Record(kind,source,area,$"{verb} with {a.Name}.",.6f,.65f,new[]{first});
-        if(added)a.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source);
-        if(other)b.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source);
+        if(added)a.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source,source+"@"+a.History.Seconds.ToString("R",System.Globalization.CultureInfo.InvariantCulture));
+        if(other)b.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-"+source,source+"@"+b.History.Seconds.ToString("R",System.Globalization.CultureInfo.InvariantCulture));
         if(added)a.History.Grow(a,source+"-"+second,"Sociability",.16f);
         if(other)b.History.Grow(b,source+"-"+first,"Sociability",.16f);
         if(!relationship || !added || !other)return;

@@ -26,6 +26,18 @@ internal sealed class ChaoInterests
     public bool Busy => stage!=Stage.Idle;
     internal bool CanPauseForSocial => stage is Stage.Idle or Stage.Approach;
     public bool HasMeal => stage==Stage.Meal;
+    internal Node3D? Target=>toy is {} t ? t : fruit;
+    internal ChaoActivity Category=>toy!=null ? ChaoActivity.Play : ChaoActivity.Eat;
+    internal ActivityInterruptibility Interruptibility=>rising.Active || stage is Stage.Meal or Stage.Play or Stage.Shake ? ActivityInterruptibility.Atomic : stage==Stage.Idea ? ActivityInterruptibility.ShortSafe : ActivityInterruptibility.LongOptional;
+    internal string LastFailureReason { get; private set; }="";
+    internal bool BeginSelected(ChaoActivity category,CharacterBody3D actor,PetState state,IEnumerable<FruitTree> fruits,IEnumerable<ToyCar> toys,System.Func<Node3D,bool> usable)
+    {
+        if(Busy)return false;LastFailureReason="";delay=0;Choose(actor,state,fruits,toys,category,usable);return Busy;
+    }
+    internal static int CountTargets(ChaoActivity category,CharacterBody3D actor,PetState state,IEnumerable<FruitTree> fruits,IEnumerable<ToyCar> toys,System.Func<Node3D,bool> usable)=>
+        category==ChaoActivity.Play ? toys.Count(t=>t.Available(actor,state) && usable(t)) : fruits.Count(f=>(FoodAvailable(f,actor,state) || CanShake(f,actor,state)) && usable(f));
+    private static bool CanShake(FruitTree food,CharacterBody3D actor,PetState chao)=>
+        (!food.IsSpecial || IsFavorite(food,chao)) && !FoodAvailable(food,actor,chao) && chao.PowerAbility>=100 && chao.Fullness<72 && food.CanShake && actor.Position.DistanceTo(food.Position)<7;
 
     public FruitTree? TakeMeal(Node3D art,PetState chao)
     {
@@ -72,7 +84,7 @@ internal sealed class ChaoInterests
         {
             case Stage.Approach:
             case Stage.Idea:
-                if (!Available(actor,chao) || elapsed>(chao.Run<50 ? 54 : 24)) { Finish(art); return false; }
+                if (!Available(actor,chao) || elapsed>(chao.Run<50 ? 54 : 24)) { LastFailureReason="Target unavailable or approach timed out";Finish(art); return false; }
                 Vector3 target=toy?.Position ?? (tree ? fruit!.Position : fruit!.FruitPosition);
                 Vector3 offset=target-actor.Position;
                 offset.Y=0;
@@ -161,12 +173,12 @@ internal sealed class ChaoInterests
         }
     }
 
-    private void Choose(CharacterBody3D actor,PetState chao,IEnumerable<FruitTree> fruits,IEnumerable<ToyCar> toys)
+    private void Choose(CharacterBody3D actor,PetState chao,IEnumerable<FruitTree> fruits,IEnumerable<ToyCar> toys,ChaoActivity? category=null,System.Func<Node3D,bool>? usable=null)
     {
         float best=0;
         foreach (var item in toys)
         {
-            if (!item.Available(actor,chao)) continue;
+            if (category==ChaoActivity.Eat || !item.Available(actor,chao) || usable?.Invoke(item)==false) continue;
             bool preferred=item.IsFavorite(chao);
             float score=(100-chao.Fun)*(preferred ? 2.15f : 1)/
                 (1+actor.Position.DistanceTo(item.Position)*.19f);
@@ -175,10 +187,10 @@ internal sealed class ChaoInterests
         }
         foreach (var food in fruits)
         {
+            if(category==ChaoActivity.Play || usable?.Invoke(food)==false)continue;
             bool preferred=IsFavorite(food,chao);
             bool loose=FoodAvailable(food,actor,chao);
-            bool canShake=(!food.IsSpecial || preferred) && !loose && chao.PowerAbility>=100 && chao.Fullness<72 && food.CanShake &&
-                actor.Position.DistanceTo(food.Position)<7;
+            bool canShake=CanShake(food,actor,chao);
             if (!loose && !canShake) continue;
             float distance=actor.Position.DistanceTo(loose ? food.FruitPosition : food.Position);
             float score=(100-chao.Fullness)*(loose ? 1.15f : .74f)*(preferred ? 2.15f : 1)/(1+distance*.19f);

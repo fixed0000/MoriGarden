@@ -32,10 +32,14 @@ internal sealed class ChaoIntroductions
         scan=2.5f;
     }
 
-    public void Advance(float dt,PetState owner,Func<IReadOnlyList<Candidate>> available,Action save)
+    internal bool CanStart(PetState owner,Candidate a,Candidate b)=>meeting==null && a.Pet.CanAct && b.Pet.CanAct && a.Actor!=b.Actor && owner.SocialLink(a.Id,b.Id)?.Introduced!=true && CanSee(a.Actor,b.Actor);
+    internal bool TryStart(PetState owner,Candidate a,Candidate b)
+    {if(!CanStart(owner,a,b))return false;meeting=new(a,b);return true;}
+    public void Advance(float dt,PetState owner,Func<IReadOnlyList<Candidate>> available,Action save,bool allowStart=true)
     {
         if (meeting==null)
         {
+            if(!allowStart)return;
             scan-=dt;
             if (scan>0) return;
             scan=.45f;

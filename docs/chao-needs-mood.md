@@ -45,13 +45,13 @@ weight = clamp(value/100 * (essential ? 0.92 : 0.76)
              + min(0.06, secondsAtSameLevel/6000), 0, 1)
 ```
 
-The age bonus caps after six minutes. A very high optional need can outweigh a modest essential need, so there is no fixed global ordering. High/Critical Hunger/Fatigue can recommend interruption **only when the caller explicitly supplies LongOptional context**. ShortSafe/None context never grants immediate interruption. Boredom/SocialNeed do not cancel actions. **No planner consumes these scores in stage 1.3.**
+The age bonus caps after six minutes. A very high optional need can outweigh a modest essential need, so there is no fixed global ordering. High/Critical Hunger/Fatigue can recommend interruption **only when the caller explicitly supplies LongOptional context**. ShortSafe/None context never grants immediate interruption. Boredom/SocialNeed do not cancel actions. **No planner consumes these scores in stage 1.3.** Stage 1.4A subsequently connects a thin garden-only category coordinator; the original 1.3 behavior above is recorded here for context.
 
 ## SocialNeed
 
 Awake: +0.02/s, or 12 points per ten-minute garden day. Sleeping: +0.001/s, or 0.6 points per day. After 1,200 awake seconds without a positive contact, the awake rate gains +0.015/s. The extra rate is integrated only for the portion of a tick beyond that threshold; small and large timesteps agree. Sleep does not advance the awake-solitude clock. All results clamp to 0..100.
 
-Accepted positive player contact subtracts **6**. A successful social event subtracts **8** for each actual participant. Those contacts reset the awake-solitude clock. They are gated by the same stable-source reaction cooldown as the event, so repeated frame calls do not grant unlimited relief. Sociability does not modify the rate or change meaning.
+Accepted positive player contact subtracts **6**. A successful social event subtracts **8** for each actual participant. Those contacts reset the awake-solitude clock. Since stage 1.4A these physical effects are deduplicated by completed-contact identity, independently of emotion cooldown; a new actual contact still relieves the need even if its emotional overlay is suppressed. Legacy unstamped callers receive frame-level deduplication. See `chao-action-selection.md`. Sociability does not modify the rate or change meaning.
 
 The starting value reaches Moderate in about 4m10s without contact. Prolonged solitude adds pressure only after two garden days; the meter reaches 65 after three awake days. Several seconds of real positive social contact can substantially relieve it. This intentionally creates a slow current need rather than urgency every few seconds. This stage does not make pets seek company according to the new meter.
 

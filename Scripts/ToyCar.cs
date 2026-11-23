@@ -24,6 +24,8 @@ public partial class ToyCar : CharacterBody3D
     internal bool IsGroundToy => !IsInstrument && !IsRattle && !IsBeachBall;
     internal CharacterBody3D? PlayActor => player;
     internal PetState? PlayState => playChao;
+    internal void RebindPlayer(CharacterBody3D actor,PetState state,Node3D art)
+    {if(player==actor){playChao=state;playArt=art;}}
     internal void FinishBall()
     {
         if (player==null) return;
@@ -43,8 +45,9 @@ public partial class ToyCar : CharacterBody3D
         phraseOffset=leader.playing%1.20f; lastShake=-1;
         ensemble=leader.ensemble ?? new System.Collections.Generic.HashSet<ToyCar> { leader };
         leader.ensemble=ensemble; ensemble.Add(this);
-        playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble");
-        leader.playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble");
+        string contact=System.Guid.NewGuid().ToString("N");
+        playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble",contact);
+        leader.playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble",contact);
     }
     private void FinishEnsemble()
     {

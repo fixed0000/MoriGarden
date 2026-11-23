@@ -11,6 +11,10 @@ public sealed partial class PetState
     public float SocialNeed { get; set; }=20;
     private ChaoNeeds? needs;
     private ChaoMood? mood;
+    private long contactSequence;
+    private readonly System.Collections.Generic.Queue<string> contactOrder=new();
+    private readonly System.Collections.Generic.HashSet<string> contacts=new(StringComparer.Ordinal);
+    [JsonIgnore] public ChaoActivityCoordinator? GardenActivity { get; internal set; }
     [JsonIgnore] public ChaoNeeds Needs => needs ??=new(this);
     [JsonIgnore] public ChaoMood Mood => mood ??=new(this);
 
@@ -20,11 +24,16 @@ public sealed partial class PetState
         Needs.Advance(seconds,sleeping);Mood.Advance(seconds,sleeping);
     }
     internal void KeepCurrentRuntimeFrom(PetState source)
-    { needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this); }
+    {
+        needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this);GardenActivity=source.GardenActivity;contactSequence=source.contactSequence;
+        foreach(var id in source.contactOrder){contactOrder.Enqueue(id);contacts.Add(id);}
+    }
+    public string NewContactId(string source)=>source+":"+(++contactSequence).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    public bool ObserveEvent(ChaoStateEvent kind,string source)
+    public bool ObserveEvent(ChaoStateEvent kind,string source,string? contactId=null)
     {
         if(string.IsNullOrWhiteSpace(source) || source.Length>128)throw new ArgumentException("Invalid Chao state event source");
+        if(contactId!=null && (string.IsNullOrWhiteSpace(contactId) || contactId.Length>256))throw new ArgumentException("Invalid completed contact identity");
         var rule=kind switch
         {
             ChaoStateEvent.FoodBite=>(ChaoEmotion.Happy,.35f,3f,30,0f),
@@ -40,9 +49,21 @@ public sealed partial class PetState
             ChaoStateEvent.Frightened=>(ChaoEmotion.Afraid,.8f,3f,95,0f),
             _=>throw new ArgumentException("Unknown Chao state event")
         };
-        if(!Mood.React(rule.Item1,rule.Item2,rule.Item3,kind+":"+source,rule.Item4))return false;
-        if(rule.Item5>0)Needs.PositiveContact(rule.Item5);
+        bool physical=false;
+        if(rule.Item5>0)
+        {
+            // Explicit completion IDs are independent of the emotion source's cooldown.
+            // Legacy callers receive frame-level idempotency, never one relief per call.
+            string id=kind+":"+(contactId ?? source+"@"+Mood.Now.ToString("R",System.Globalization.CultureInfo.InvariantCulture));
+            if(id.Length>300)throw new ArgumentException("Invalid contact identity");
+            if(contacts.Add(id))
+            {
+                contactOrder.Enqueue(id);while(contactOrder.Count>256)contacts.Remove(contactOrder.Dequeue());
+                Needs.PositiveContact(rule.Item5);physical=true;
+            }
+        }
+        bool emotion=Mood.React(rule.Item1,rule.Item2,rule.Item3,kind+":"+source,rule.Item4);
         if(kind==ChaoStateEvent.WakeDisturbed)Mood.WakeDisturbed();
-        return true;
+        return physical || emotion;
     }
 }

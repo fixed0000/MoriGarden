@@ -37,6 +37,16 @@ public partial class GardenEgg : CharacterBody3D
     internal void ClearUpset() => upset=0;
     private readonly ChaoMotion motion=new();
     private readonly ChaoDistress distress=new();
+    private GardenActivityAdapter? activityAdapter;
+    internal GardenActivityAdapter ActivityAdapter=>activityAdapter ??=new(this,()=>visual,interests,rest,leisure,motion,Data.Id);
+    internal void PrepareActivityFrame(float dt)
+    {
+        if(Chao is {} state && GetTree().CurrentScene is GardenGame game)
+            ActivityAdapter.Begin(dt,state,game.ActivityContext,Asleep,held || reserved || callRemaining>0 || touch.Active || InFlight,
+                game.GardenSocialUses(this),islandNap.IsVisiting || pillar.Active || motion.OnCliffRoute || game.GardenWateringUses(this));
+        if(Chao!=null && (rising.Active || distress.Busy || motion.Recovering || motion.Airborne || ImportedChao.Pausing(visual)))
+            ActivityAdapter.Coordinator.ProtectTransition("protected physical transition");
+    }
     private bool held;
     internal bool IsCarried => held;
     internal GardenCourtship? Courtship { get; set; }
@@ -180,6 +190,7 @@ public partial class GardenEgg : CharacterBody3D
     public bool Advance(float dt,IEnumerable<FruitTree>? fruitSlots=null,ToyCar? toy=null,Vector3? fruitCarrier=null,
         ToyCar? rattle=null,ToyCar? flute=null,WateringCan? wateringCan=null,IEnumerable<ToyCar>? extraToys=null)
     {
+        if(Data.Hatched)PrepareActivityFrame(dt);
         upset=Mathf.Max(0,upset-dt);
         petCooldown=Mathf.Max(0,petCooldown-dt);
         distress.Tick(dt);
@@ -268,7 +279,7 @@ public partial class GardenEgg : CharacterBody3D
             napRemaining-=dt;
             if (napRemaining<=0 && state.Energy>=100)
             {
-                Asleep=false; rising.Begin(visual); leapAfterRising=true; rest.Cancel(); sleepDelay=18;
+                Asleep=false; rising.Begin(visual); leapAfterRising=!rest.GroundRest; rest.Cancel(); sleepDelay=18;
             }
             return false;
         }
@@ -278,8 +289,11 @@ public partial class GardenEgg : CharacterBody3D
             rest.Cancel(); leisure.Cancel(visual);
             return false;
         }
+        ActivityAdapter.Select(!motion.Airborne && !motion.LeavingPond && !inWater && callRemaining<=0);
+        if(GetTree().CurrentScene is GardenGame ownerGame && ownerGame.GardenSocialUses(this))return false;
+        bool coordinatedLeisure=ActivityAdapter.Allows(ChaoActivity.Leisure);
         cliffDelay=Mathf.Max(0,cliffDelay-dt);
-        bool startCliff=cliffDelay<=0 && !motion.OnCliffRoute && state.PowerAbility>=100 && callRemaining<=0 && !inWater && !motion.Airborne &&
+        bool startCliff=coordinatedLeisure && cliffDelay<=0 && !motion.OnCliffRoute && state.PowerAbility>=100 && callRemaining<=0 && !inWater && !motion.Airborne &&
             !motion.LeavingPond && !islandNap.IsVisiting && !rest.Requested && !leisure.Active && !pillar.Active && state.Energy>=58;
         Vector3? cliff=callRemaining>0 ? null : motion.CliffTarget(Position,dt,startCliff);
         if (startCliff && cliff!=null)
@@ -288,18 +302,18 @@ public partial class GardenEgg : CharacterBody3D
             interests.Cancel(this,visual);
             wateringCan?.Cancel(this);
         }
-        if (cliff==null && wateringCan?.Step(this,visual,state,motion,dt,callRemaining<=0 && !rest.Requested && !islandNap.IsVisiting && !leisure.Active)==true)
+        if (cliff==null && wateringCan?.Step(this,visual,state,motion,dt,coordinatedLeisure && callRemaining<=0 && !rest.Requested && !islandNap.IsVisiting && !leisure.Active)==true)
             return false;
         if (pillar.Active && pillar.Step(this,visual,state,motion,dt,false)) return false;
-        bool canChoose=!motion.Airborne && !motion.LeavingPond && !inWater && callRemaining<=0 &&
-            !rest.Requested && !islandNap.IsVisiting && !leisure.Active && fruitCarrier==null;
-        if (cliff==null && interests.Step(this,visual,state,motion,dt,canChoose,fruitSlots ?? Enumerable.Empty<FruitTree>(),
+        bool canChoose=coordinatedLeisure && !motion.Airborne && !motion.LeavingPond && !inWater && callRemaining<=0 &&
+            !rest.Requested && !islandNap.IsVisiting && !leisure.Active;
+        if (cliff==null && interests.Step(this,visual,state,motion,dt,false,fruitSlots ?? Enumerable.Empty<FruitTree>(),
             toys,out bool fed))
             return fed;
         if (cliff==null && !motion.LeavingPond && fruitReaction.Step(this,visual,state,motion,fruitCarrier,dt)) return false;
         callRemaining=Mathf.Max(0,callRemaining-dt);
         bool called=callRemaining>0 && Position.DistanceTo(callTarget)>1.2f;
-        if (cliff==null && (islandNap.IsVisiting || (!motion.LeavingPond && !called && !rest.Requested && !leisure.Active)) && islandNap.Step(this,visual,state,motion,dt)) return false;
+        if (cliff==null && (islandNap.IsVisiting || (coordinatedLeisure && !motion.LeavingPond && !called && !rest.Requested && !leisure.Active)) && islandNap.Step(this,visual,state,motion,dt)) return false;
         if (cliff==null && pillar.Step(this,visual,state,motion,dt,canChoose && state.Energy>=58)) return false;
         Vector3 beforeRest=Position;
         if (cliff==null && !motion.Airborne && !motion.LeavingPond && !inWater && !called && rest.Step(this,state,dt,out bool arrived,visual))
@@ -315,9 +329,9 @@ public partial class GardenEgg : CharacterBody3D
             return false;
         }
         sleepDelay-=dt;
-        if (!called && sleepDelay<=0 && state.Energy<58) rest.Request(Position);
+        // Autonomous rest requests now come exclusively from the coordinator.
         if (cliff==null && !motion.Airborne && !motion.LeavingPond && !inWater &&
-            leisure.Step(this,visual,state,motion,dt,!called && !rest.Requested && !islandNap.IsVisiting && !pillar.Active && !interests.Busy))
+            leisure.Step(this,visual,state,motion,dt,coordinatedLeisure && !called && !rest.Requested && !islandNap.IsVisiting && !pillar.Active && !interests.Busy))
             return false;
         roam-=dt;
         if (roam<=0 || (!inWater && !motion.LeavingPond && motion.BlockedTime>.75f))

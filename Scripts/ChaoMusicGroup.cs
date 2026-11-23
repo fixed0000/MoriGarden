@@ -16,6 +16,18 @@ internal sealed class ChaoMusicGroup
     private Vector3 stand;
     public bool Uses(CharacterBody3D actor) => visitor?.Actor==actor;
     internal bool Active => visitor!=null;
+    internal void RebindPlayer(CharacterBody3D actor,PetState state,Node3D art)
+    {if(visitor?.Actor==actor)visitor=visitor with{Pet=state,Art=art};if(leader?.Actor==actor)leader=leader with{Pet=state,Art=art};}
+    private static bool Compatible(PetState root,ChaoIntroductions.Candidate musician,ChaoIntroductions.Candidate candidate)=>
+        candidate.Actor!=musician.Actor && candidate.Pet.Fun<100 && candidate.Pet.Energy>=35 && candidate.Pet.Fullness>=28 &&
+        candidate.Actor.Position.DistanceTo(musician.Actor.Position)<=5 && Mathf.Abs(candidate.Actor.Position.Y-musician.Actor.Position.Y)<=.15f &&
+        (root.SocialLink(candidate.Id,musician.Id)?.ScoreFrom(candidate.Id) ?? 0)>=0 && Clear(candidate.Actor,musician.Actor.Position);
+    internal int JoinTargetCount(PetState root,ChaoIntroductions.Candidate candidate,IReadOnlyList<ChaoIntroductions.Candidate> all,IEnumerable<ToyCar> toys)
+    {
+        if(Active)return 0;var props=toys.ToArray();
+        return props.Count(t=>t.CanJoin && all.FirstOrDefault(c=>c.Actor==t.PlayActor) is {} lead && Compatible(root,lead,candidate) &&
+            props.Any(p=>p.IsInstrument && p.CanPickUp && p.PlayActor==null && p.Position.DistanceTo(candidate.Actor.Position)<8 && !GardenArt.IsPondWater(p.Position)));
+    }
 
     public void Cancel(CharacterBody3D? actor=null)
     {
@@ -41,11 +53,7 @@ internal sealed class ChaoMusicGroup
             if (musician==null) continue;
             foreach (var candidate in free)
             {
-                if (candidate.Actor==musician.Actor || candidate.Pet.Fun>=100 || candidate.Pet.Energy<35 || candidate.Pet.Fullness<28 ||
-                    candidate.Actor.Position.DistanceTo(musician.Actor.Position)>5 ||
-                    Mathf.Abs(candidate.Actor.Position.Y-musician.Actor.Position.Y)>.15f ||
-                    (root.SocialLink(candidate.Id,musician.Id)?.ScoreFrom(candidate.Id) ?? 0)<0 ||
-                    !Clear(candidate.Actor,musician.Actor.Position)) continue;
+                if (!Compatible(root,musician,candidate)) continue;
                 var prop=props.Where(t=>t.IsInstrument && t.CanPickUp && t.PlayActor==null &&
                     t.Position.DistanceTo(candidate.Actor.Position)<8 && !GardenArt.IsPondWater(t.Position))
                     .OrderBy(t=>t.Position.DistanceSquaredTo(candidate.Actor.Position)).FirstOrDefault();
@@ -60,10 +68,11 @@ internal sealed class ChaoMusicGroup
     }
 
     public void Advance(float dt,PetState root,IReadOnlyList<ChaoIntroductions.Candidate> all,
-        IReadOnlyList<ChaoIntroductions.Candidate> free,IEnumerable<ToyCar> toys,System.Action<ChaoIntroductions.Candidate>? reserve=null)
+        IReadOnlyList<ChaoIntroductions.Candidate> free,IEnumerable<ToyCar> toys,System.Action<ChaoIntroductions.Candidate>? reserve=null,bool allowStart=true)
     {
         if (!Active)
         {
+            if(!allowStart)return;
             scan-=dt;
             if (scan>0) return;
             scan=3;

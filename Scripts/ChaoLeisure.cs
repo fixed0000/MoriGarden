@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 namespace Mori;
 
@@ -16,11 +17,24 @@ internal sealed class ChaoLeisure
     private int route=-1, waypoint;
     private bool sky;
     private Vector3 goal;
+    private int[]? allowedRoutes;
+    private Vector3[]? allowedSpots;
     private readonly ChaoWander steer=new();
     private readonly ChaoRising rising=new();
     public bool Active => route>=0 || sky || rising.Active;
     internal bool CanPauseForSocial => !sky && !rising.Active;
     internal bool WatchingSky => sky && pause>0;
+    internal ActivityInterruptibility Interruptibility=>rising.Active || sky && pause>0 ? ActivityInterruptibility.Atomic : pause>0 ? ActivityInterruptibility.ShortSafe : ActivityInterruptibility.LongOptional;
+    internal string LastFailureReason { get; private set; }="";
+    internal bool Reconsider(CharacterBody3D actor)
+    {delay=0;LastFailureReason="";allowedRoutes=ReachableRoutes(actor);allowedSpots=SkySpots.Where(p=>Supported(actor,p)).ToArray();return allowedRoutes.Length+allowedSpots.Length>0;}
+    private static bool Supported(CharacterBody3D actor,Vector3 at)
+    {
+        var hit=actor.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(at+Vector3.Up*.6f,at-Vector3.Up*.3f,1));
+        return hit.Count>0 && ((Vector3)hit["normal"]).Y>.7f && Mathf.Abs(((Vector3)hit["position"]).Y-at.Y)<.13f;
+    }
+    private static int[] ReachableRoutes(CharacterBody3D actor)=>Enumerable.Range(0,Routes.Length).Where(i=>Routes[i].All(p=>Supported(actor,p))).ToArray();
+    internal static int AvailableTargets(CharacterBody3D actor)=>ReachableRoutes(actor).Length+SkySpots.Count(p=>Supported(actor,p));
     public void Cancel(Node3D art)
     {
         if (Active) { ImportedChao.MovePose(art,0,false,false,false,false,false,false); ImportedChao.CloseEyes(art,false); }
@@ -46,21 +60,24 @@ internal sealed class ChaoLeisure
         {
             delay-=dt;
             if (delay>0 || actor.Position.Y>.15f || motion.IsSwimmingAt(actor.Position)) return false;
-            if (GD.Randf()<.32f)
+            var routes=allowedRoutes ?? Enumerable.Range(0,Routes.Length).ToArray();
+            var spots=allowedSpots ?? SkySpots;
+            if(routes.Length==0 && spots.Length==0)return false;
+            if (spots.Length>0 && (routes.Length==0 || GD.Randf()<.32f))
             {
-                Vector3 favorite=SkySpots[0];float score=-1;
-                foreach(var spot in SkySpots)
+                Vector3 favorite=spots[0];float score=-1;
+                foreach(var spot in spots)
                 {
                     float weight=GD.Randf()*(1+state.History.PlaceBias(state.History.LastArea,new(spot.X,spot.Y,spot.Z)));
                     if(weight>score){favorite=spot;score=weight;}
                 }
                 BeginSky(favorite);
             }
-            else BeginRoute((int)(GD.Randi()%(uint)Routes.Length));
+            else BeginRoute(routes[(int)(GD.Randi()%(uint)routes.Length)]);
             previousDistance=float.MaxValue;
         }
         elapsed+=dt;
-        if (elapsed>300) { Cancel(art); return false; }
+        if (elapsed>300) { LastFailureReason="Leisure route timed out";Cancel(art); return false; }
         if (pause>0)
         {
             pause-=dt;
@@ -87,7 +104,7 @@ internal sealed class ChaoLeisure
         }
         if (distance>previousDistance-.003f) stuck+=dt; else stuck=0;
         previousDistance=distance;
-        if (stuck>2.5f) { Cancel(art); delay=1.5f; return false; }
+        if (stuck>2.5f) { LastFailureReason="Leisure route blocked";Cancel(art); delay=1.5f; return false; }
         var heading=steer.Steer(actor,delta,dt);
         heading=ChaoMotion.AvoidNeighbors(actor,heading);
         bool moved=motion.Step(actor,heading,state,false,false,dt,false,out _);

@@ -171,7 +171,7 @@ public partial class GardenGame : Node3D
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
         string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
         string? stadiumMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--stadium-check" or "--stadium-review" or "--stadium-inspect");
-        testMode = OS.GetCmdlineUserArgs().Contains("--needs-check") || OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        testMode = OS.GetCmdlineUserArgs().Contains("--activity-check") || OS.GetCmdlineUserArgs().Contains("--needs-check") || OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))savePath=ProjectSettings.GlobalizePath("user://stats-preview/pet.json");
@@ -255,6 +255,7 @@ public partial class GardenGame : Node3D
     public override void _Process(double delta)
     {
         UpdateNeedsDebug((float)delta);
+        if(OS.GetCmdlineUserArgs().Contains("--activity-check")){RunActivityCheckMode();return;}
         if(OS.GetCmdlineUserArgs().Contains("--needs-check")){RunNeedsSceneCheck();return;}
         if(OS.GetCmdlineUserArgs().Contains("--recovery-check") && CheckRecoveryScene())return;
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))InspectStatistics();
@@ -372,6 +373,7 @@ public partial class GardenGame : Node3D
                             friendArt=BuildLifeArt();
                         }
                     }
+                    RebindGardenExecutors(editor.EditedTarget,edited);
                     expeditionTeam?.RefreshStates(pet);
                     SiteMission?.RefreshOwner(pet);
                     Save();
@@ -533,7 +535,7 @@ public partial class GardenGame : Node3D
         if (!StadiumBlocking && !racing && !shopOpen && !machineOpen && !machineOpening && relationshipSubject==null && !memoriesOpen) MovePlayer((float)delta);
         foreach (var toy in world.GetChildren().OfType<ToyCar>()) toy.Advance((float)delta);
         if (zone==GardenZone.Garden)
-            musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
+            musicGroup.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial,allowStart:false);
         if (zone==GardenZone.Garden)
             ballGame.Advance((float)delta,pet,BallParticipants(),SocialCandidates(true),world.GetChildren().OfType<ToyCar>(),PauseForSocial);
         CanInGarden?.Advance((float)delta);
@@ -548,7 +550,7 @@ public partial class GardenGame : Node3D
         AdvanceWildlife((float)delta);
         if (zone==GardenZone.Garden)
         {
-            introductions.Advance((float)delta,pet,SocialCandidates,Save);
+            introductions.Advance((float)delta,pet,SocialCandidates,Save,allowStart:false);
             courtship.Advance((float)delta,pet.GardenEggs.Count<12,LayGardenEgg,PairChao);
         }
         UpdateMachineLoad((float)delta);
@@ -943,6 +945,11 @@ public partial class GardenGame : Node3D
     private void MoveFriend(float dt)
     {
         ImportedChao.ApplyDevelopment(friendArt,pet);
+        if(GardenActivitiesEnabled && friend.Visible && pet.CanAct)
+            MainActivity.Begin(dt,pet,ActivityContext,sleeping,carrying || moriInFlight || callTime>0 || moriTouch.Active || ((offerTime>0 || thinkTime>0 || eatTime>0) && offeredResident==null),
+                GardenSocialUses(friend),moriIslandNap.IsVisiting || moriPillar.Active || chaoMotion.OnCliffRoute || swimmingTrip || CanInGarden?.IsUsing(friend)==true);
+        if(GardenActivitiesEnabled && friend.Visible && (moriRising.Active || moriDistress.Busy || chaoMotion.Recovering || chaoMotion.Airborne || ImportedChao.Pausing(friendArt)))
+            MainActivity.Coordinator.ProtectTransition("protected physical transition");
         if (testMode && (frame is >=15 and <=44 || frame is >=95 and <=114 || frame is >=132 and <=145 || frame is >=166 and <=209 || frame is >=240 and <=289)) return;
         if (!friend.Visible || racing || courtship.IsPaired(friend) || (introductions.Uses(friend) || ballGame.Uses(friend) || musicGroup.Uses(friend))) return;
         upsetTime=Math.Max(0,upsetTime-dt);
@@ -1023,7 +1030,7 @@ public partial class GardenGame : Node3D
             napRemaining-=dt;
             if (napRemaining<=0 && pet.Energy>=100)
             {
-                sleeping=false; moriRising.Begin(friendArt); leapAfterRising=true; moriRest.Cancel(); wanderTime=0;
+                sleeping=false; moriRising.Begin(friendArt); leapAfterRising=!moriRest.GroundRest; moriRest.Cancel(); wanderTime=0;
             }
             return;
         }
@@ -1034,8 +1041,11 @@ public partial class GardenGame : Node3D
             moriRest.Cancel(); moriLeisure.Cancel(friendArt);
             return;
         }
+        if(GardenActivitiesEnabled)MainActivity.Select(callTime<=0 && !chaoMotion.Airborne && !chaoMotion.LeavingPond && !chaoMotion.IsSwimmingAt(friend.Position));
+        if(GardenActivitiesEnabled && GardenSocialUses(friend))return;
+        bool coordinatedLeisure=GardenActivitiesEnabled && MainActivity.Allows(ChaoActivity.Leisure);
         balconyDelay=Mathf.Max(0,balconyDelay-dt);
-        bool startCliff=balconyDelay<=0 && !chaoMotion.OnCliffRoute && pet.PowerAbility>=100 && callTime<=0 && !swimmingTrip && !chaoMotion.Airborne &&
+        bool startCliff=coordinatedLeisure && balconyDelay<=0 && !chaoMotion.OnCliffRoute && pet.PowerAbility>=100 && callTime<=0 && !swimmingTrip && !chaoMotion.Airborne &&
             !chaoMotion.IsSwimmingAt(friend.Position) && !chaoMotion.LeavingPond && !moriRest.Requested &&
             !moriIslandNap.IsVisiting && !moriLeisure.Active && !moriPillar.Active && pet.Energy>=58;
         Vector3? cliff=zone==GardenZone.Garden && callTime<=0 && !swimmingTrip
@@ -1047,19 +1057,19 @@ public partial class GardenGame : Node3D
             CanInGarden?.Cancel(friend);
         }
         if (cliff==null && CanInGarden?.Step(friend,friendArt,pet,chaoMotion,dt,
-            callTime<=0 && !moriRest.Requested && !moriIslandNap.IsVisiting && !moriLeisure.Active && !swimmingTrip)==true) return;
+            coordinatedLeisure && callTime<=0 && !moriRest.Requested && !moriIslandNap.IsVisiting && !moriLeisure.Active && !swimmingTrip)==true) return;
         if (moriPillar.Active && moriPillar.Step(friend,friendArt,pet,chaoMotion,dt,false)) return;
-        bool canChoose=heldFruit==null && heldToy==null && heldAnimal==null && !chaoMotion.Airborne &&
+        bool canChoose=coordinatedLeisure && !chaoMotion.Airborne &&
             !chaoMotion.LeavingPond && !chaoMotion.IsSwimmingAt(friend.Position) && callTime<=0 &&
             !moriRest.Requested && !moriIslandNap.IsVisiting && !moriLeisure.Active && !swimmingTrip;
-        if (zone==GardenZone.Garden && cliff==null && moriInterests.Step(friend,friendArt,pet,chaoMotion,dt,canChoose,
+        if (zone==GardenZone.Garden && cliff==null && moriInterests.Step(friend,friendArt,pet,chaoMotion,dt,false,
             FruitSlots(),world.GetChildren().OfType<ToyCar>(),out bool fed))
         {
             if (fed) Save();
             return;
         }
         if (zone==GardenZone.Garden && cliff==null && !chaoMotion.LeavingPond && moriFruitReaction.Step(friend,friendArt,pet,chaoMotion,FruitCarrier,dt)) return;
-        if (zone==GardenZone.Garden && cliff==null && (moriIslandNap.IsVisiting || (!chaoMotion.LeavingPond && callTime<=0 && !moriRest.Requested && !moriLeisure.Active)) &&
+        if (zone==GardenZone.Garden && cliff==null && (moriIslandNap.IsVisiting || (coordinatedLeisure && !chaoMotion.LeavingPond && callTime<=0 && !moriRest.Requested && !moriLeisure.Active)) &&
             moriIslandNap.Step(friend,friendArt,pet,chaoMotion,dt)) return;
         if (zone==GardenZone.Garden && cliff==null && moriPillar.Step(friend,friendArt,pet,chaoMotion,dt,
             canChoose && !moriRest.Requested && pet.Energy>=58)) return;
@@ -1076,7 +1086,7 @@ public partial class GardenGame : Node3D
             return;
         }
         if (zone==GardenZone.Garden && cliff==null && !chaoMotion.Airborne && !chaoMotion.LeavingPond &&
-            moriLeisure.Step(friend,friendArt,pet,chaoMotion,dt,callTime<=0 && !moriRest.Requested &&
+            moriLeisure.Step(friend,friendArt,pet,chaoMotion,dt,coordinatedLeisure && callTime<=0 && !moriRest.Requested &&
                 !moriIslandNap.IsVisiting && !moriPillar.Active && !moriInterests.Busy && !swimmingTrip)) return;
         if (cliff!=null) wanderTime=3;
         bool inWater = zone == GardenZone.Garden && chaoMotion.IsSwimmingAt(friend.Position);
@@ -1113,12 +1123,7 @@ public partial class GardenGame : Node3D
             if (wanderTime<=0)
             {
                 activity++;
-                if (zone==GardenZone.Garden && (pet.Energy<45 || (activity%5==0 && pet.Energy<62)))
-                {
-                    moriRest.Request(friend.Position);
-                    if (!inWater && !chaoMotion.LeavingPond) return;
-                }
-                if (zone==GardenZone.Garden && activity%4==2)
+                if (zone==GardenZone.Garden && coordinatedLeisure && activity%4==2)
                 {
                     swimmingTrip=true;
                     leavingWater=false;
@@ -2006,12 +2011,12 @@ public partial class GardenGame : Node3D
         {
             if (egg==machineResident) continue;
             if ((introductions.Uses(egg) || ballGame.Uses(egg) || musicGroup.Uses(egg)))
-            { egg.Chao?.Tick(dt,false); continue; }
+            { egg.Chao?.Tick(dt,false); egg.PrepareActivityFrame(dt); continue; }
             if (egg==heldEgg)
             {
                 egg.Hold(CarryPoint(HandPosition()-Vector3.Up*(egg.Data.Hatched ? .14f : .19f)),
                     !egg.Data.Hatched && Held(Key.X),dt);
-                egg.Rotation=player.Rotation;
+                egg.Rotation=player.Rotation; egg.PrepareActivityFrame(dt);
                 continue;
             }
             bool wasHatched=egg.Data.Hatched;
@@ -2040,10 +2045,11 @@ public partial class GardenGame : Node3D
     private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates() => SocialCandidates(false);
     private void PauseForSocial(ChaoIntroductions.Candidate candidate)
     {
+        AdapterFor(candidate.Actor).ReserveSocial();
         if(candidate.Actor is GardenEgg egg) egg.PauseForSocial();
         else { moriInterests.Cancel(friend,friendArt); moriLeisure.Cancel(friendArt); ImportedChao.ClearActionPause(friendArt); }
     }
-    private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates(bool forPlay)
+    private IReadOnlyList<ChaoIntroductions.Candidate> SocialCandidates(bool forPlay,bool respectCoordinator=true)
     {
         var candidates=new List<ChaoIntroductions.Candidate>();
         if (racing || machineOpen || machineOpening || machineLoad>0) return candidates;
@@ -2059,7 +2065,7 @@ public partial class GardenGame : Node3D
         foreach (var egg in world.GetChildren().OfType<GardenEgg>())
             if (!ballGame.Uses(egg) && !musicGroup.Uses(egg) && !introductions.Uses(egg) && egg!=heldEgg && egg!=machineResident && egg!=offeredResident && (forPlay ? egg.CanJoinPlay : egg.CanSocialize) && !ImportedChao.Pausing(egg.Art) && CanSocializeHere(egg))
                 candidates.Add(new(egg.Data.Id,egg,egg.Art,egg.Chao!));
-        return candidates;
+        return respectCoordinator ? candidates.Where(SocialLeaseable).ToArray() : candidates;
     }
 
     private bool CanSocializeHere(CharacterBody3D actor) =>
@@ -2311,6 +2317,7 @@ public partial class GardenGame : Node3D
     private void SwitchZone(GardenZone next,bool restoring=false)
     {
         if (!restoring) CaptureGardenState();
+        mainActivity?.Reset();activityClaims=new();
         GardenZone previous = zone;
         if (!restoring && friend.Visible) petZonePosition = friend.Position;
         if (!restoring && previous==GardenZone.Garden)

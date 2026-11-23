@@ -22,7 +22,7 @@ public sealed partial class PetState
     public void ChangeRelationship(float amount,string character = CurrentHero)
     {
         CharacterRelationships[character]=Math.Clamp(RelationshipWith(character)+amount,-100,100);
-        if(amount!=0)ObserveEvent(amount>0 ? ChaoStateEvent.PlayerContact : ChaoStateEvent.UnpleasantContact,"player-"+character);
+        if(amount!=0)ObserveEvent(amount>0 ? ChaoStateEvent.PlayerContact : ChaoStateEvent.UnpleasantContact,"player-"+character,amount>0 ? NewContactId("player-care") : null);
         if(Math.Abs(amount)<.2f || History.LastArea.Length==0)return;
         History.Record(amount>0 ? ChaoMemoryKind.Pleasant : ChaoMemoryKind.Unpleasant,"player-care",History.LastArea,
             amount>0 ? "Enjoyed spending time with you." : "Had an upsetting moment with you.",amount>0 ? .6f : -.6f,.45f,new[]{character});
