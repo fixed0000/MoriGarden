@@ -12,6 +12,7 @@ public static class ChaoStateDiagnostics
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
         mood=pet.Mood.Snapshot,
         learnedPreferences=pet.LearnedPreferenceDiagnostics(),
+        placePreferences=pet.PlacePreferenceDiagnostics(),
         priorities=pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities,
         activity=pet.GardenActivity==null ? null : new{pet.GardenActivity.SelectedActivity,pet.GardenActivity.StartedAt,pet.GardenActivity.MinimumRemaining,pet.GardenActivity.LastFailureReason,pet.GardenActivity.CurrentExecutor,pet.GardenActivity.Scores,pet.GardenActivity.History},
         reactions=pet.Mood.ActiveReactions.Select(r=>new{r.Emotion,r.Intensity,r.Source,r.Priority,
@@ -40,6 +41,12 @@ public static class ChaoStateDiagnostics
         foreach(var group in Enum.GetValues<LearnedItemGroup>())
             foreach(var (id,entry) in group==LearnedItemGroup.Toy ? pet.LearnedPreferences.ToyPreferences : pet.LearnedPreferences.FruitPreferences)
                 text.AppendLine($"{group} / {id}: {pet.LearnedPreferences.EffectiveBias(group,id,pet.History.Seconds):+0.000;-0.000;0.000}, experiences {entry.ExperienceCount}, last credit {entry.LastCreditSeconds:0.0}s");
+        text.AppendLine("\nLeisure destination preferences");
+        var leisure=pet.LeisureSelection;
+        text.AppendLine($"Current: {leisure?.CurrentId ?? "None"} / {LeisureDestinationCatalog.Find(leisure?.CurrentId)?.Type.ToString() ?? "None"}\nArea: {leisure?.AreaId ?? "Inactive"}\nLast outcome: {leisure?.Outcome ?? "None"}\nRecent route: {leisure?.RecentRoute ?? "None"}; sky: {leisure?.RecentSky ?? "None"}");
+        foreach(var score in ChaoLeisurePreferenceScorer.Candidates(pet.History,LeisureDestinationCatalog.Area,
+            leisure?.Destinations.Where(d=>d.Available).Select(d=>d.Id) ?? Array.Empty<string>(),leisure?.RecentRoute,leisure?.RecentSky))
+            text.AppendLine($"{score.Id} / {score.Type} / {(score.Available ? "available" : "unavailable")}\n  learned {score.LearnedBias:0.000}, spatial {score.SpatialBias:+0.000;-0.000;0.000}, total {score.TotalBias:+0.000;-0.000;0.000}, weight {score.SelectionWeight:0.000}");
         return text.ToString();
     }
 }

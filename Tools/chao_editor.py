@@ -63,6 +63,7 @@ class ChaoEditor:
             for _, name in names:
                 self.list.insert("end", name)
         # Canonical personality is carried by the game; the editor sends only patches.
+        self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
         self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
@@ -104,6 +105,7 @@ class ChaoEditor:
                              parameters=self.roster[self.selected], statistics=self.statistics_rows.get(self.selected, {}),
                              personality=self.personality_rows.get(self.selected),
                              learnedPreferences=self.learned_rows.get(self.selected, {}),
+                             placePreferences=self.place_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -162,8 +164,15 @@ class ChaoEditor:
         self.status.set("Edit the values you want to change. Applies to the running game.")
 
     def build_learned_preferences(self):
-        panel = ttk.Frame(self.tabs, padding=12)
-        self.tabs.add(panel, text="Experience")
+        page = ttk.Frame(self.tabs, padding=12)
+        self.tabs.add(page, text="Experience")
+        sections = ttk.Notebook(page)
+        sections.pack(fill="both", expand=True)
+        panel = ttk.Frame(sections)
+        sections.add(panel, text="Personality and items")
+        places = ttk.Frame(sections, padding=6)
+        sections.add(places, text="Garden places — read-only")
+        self.build_place_preferences(places)
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -186,6 +195,21 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def build_place_preferences(self, panel):
+        data = self.snapshot.get("placePreferences") or {}
+        current = data.get("current") or {}
+        ttk.Label(panel, text="Existing Mori Garden leisure destinations · memory-derived · read-only").pack(anchor="w")
+        ttk.Label(panel, text=f"Current: {current.get('CurrentId') or 'None'}\nLast outcome: {current.get('Outcome', 'None')}\nRecent route: {current.get('RecentRoute') or 'None'} · Recent sky: {current.get('RecentSky') or 'None'}", wraplength=680).pack(anchor="w", pady=8)
+        columns = ("id", "type", "available", "learned", "spatial", "total", "weight")
+        table = ttk.Treeview(panel, columns=columns, show="headings", height=9)
+        for key, label, width in zip(columns, ("Destination", "Type", "Available", "Learned", "Spatial", "Total", "Weight"), (210, 45, 65, 65, 65, 65, 60)):
+            table.heading(key, text=label)
+            table.column(key, width=width, minwidth=40)
+        table.pack(fill="both", expand=True)
+        for item in data.get("destinations", []):
+            table.insert("", "end", values=(item["Id"], str(item["Type"]), "Yes" if item["Available"] else "No", f"{item['LearnedBias']:.3f}", f"{item['SpatialBias']:+.3f}", f"{item['TotalBias']:+.3f}", f"{item['SelectionWeight']:.3f}"))
+        ttk.Label(panel, text="Availability comes from the active leisure executor; no targets are unlocked here.", wraplength=680).pack(anchor="w", pady=6)
 
     def build_statistics(self, panel):
         for child in panel.winfo_children():

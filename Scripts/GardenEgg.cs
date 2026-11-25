@@ -23,6 +23,7 @@ public partial class GardenEgg : CharacterBody3D
     private readonly ChaoPillarVisit pillar=new();
     private readonly ChaoWander wander=new();
     private readonly ChaoLeisure leisure=new();
+    internal ChaoLeisure LeisureExecutor=>leisure;
     private Vector3 wanderTarget;
     private bool reserved;
     private readonly ChaoRest rest=new();

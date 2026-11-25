@@ -12,6 +12,7 @@ void Check(bool condition, string label)
 ActivitySelectionChecks.Run(Check);
 PersonalityDecisionChecks.Run(Check);
 LearnedPreferenceChecks.Run(Check);
+PlacePreferenceChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

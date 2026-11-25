@@ -25,7 +25,7 @@ public sealed partial class PetState
     }
     internal void KeepCurrentRuntimeFrom(PetState source)
     {
-        LearnedPreferences.KeepRuntimeFrom(source.LearnedPreferences);
+        LearnedPreferences.KeepRuntimeFrom(source.LearnedPreferences);LeisureSelection=source.LeisureSelection;
         needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this);GardenActivity=source.GardenActivity;contactSequence=source.contactSequence;
         foreach(var id in source.contactOrder){contactOrder.Enqueue(id);contacts.Add(id);}
     }
