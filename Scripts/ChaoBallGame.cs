@@ -17,8 +17,11 @@ internal sealed class ChaoBallGame
     private bool towardB=true,miss,scold,polite;
     private int passes;
     private string contactSession="";
+    private bool sharedCompleted;
     internal bool Active => a!=null;
     internal string Stage => phase.ToString();
+    internal string? PartnerId => b?.Id;
+    internal int CompletedPasses => passes;
     public bool Uses(CharacterBody3D actor) => a?.Actor==actor || b?.Actor==actor;
     internal void RebindPlayer(CharacterBody3D actor,PetState state,Node3D art)
     {if(a?.Actor==actor)a=a with{Pet=state,Art=art};if(b?.Actor==actor)b=b with{Pet=state,Art=art};}
@@ -47,11 +50,12 @@ internal sealed class ChaoBallGame
             a=all.FirstOrDefault(c=>c.Actor==ball.PlayActor);
             if (a==null) { ball.FinishBall(); ball=null; return; }
             contactSession=Guid.NewGuid().ToString("N");
-            time=total=voice=0; passes=0; towardB=true; scold=polite=false;
+            time=total=voice=0; passes=0; towardB=true; scold=polite=sharedCompleted=false;
             phase=a.Pet.Sociability>50 ? Phase.Consider : Phase.Solo;
         }
         if (!Valid(a) || ball==null || !GodotObject.IsInstanceValid(ball) || ball.PlayActor!=a.Actor ||
-            b!=null && !Valid(b)) { Cancel(); return; }
+            !all.Any(c=>c.Id==a.Id && c.Actor==a.Actor) ||
+            b!=null && (!Valid(b) || !all.Any(c=>c.Id==b.Id && c.Actor==b.Actor))) { Cancel(); return; }
         time+=dt; total+=dt; voice-=dt;
         if (total>70 || (a.Pet.Energy<8 || b?.Pet.Energy<8)) { Place(); Cancel(); return; }
         switch (phase)
@@ -59,11 +63,19 @@ internal sealed class ChaoBallGame
             case Phase.Consider:
                 Carry(a); ImportedChao.IdeaPose(a.Art); Orb(a)?.SetIdea("?",true);
                 if (time<ChaoThought.Minimum) break;
-                b=available.Where(c=>c.Actor!=a.Actor && c.Pet.CanAct && c.Pet.Fun<100 &&
-                    owner.SocialLink(a.Id,c.Id) is { Met:true } link && link.ScoreFrom(a.Id)>=0 &&
-                    c.Actor.Position.DistanceTo(a.Actor.Position)<5 &&
-                    Mathf.Abs(c.Actor.Position.Y-a.Actor.Position.Y)<.16f && ClearPath(a.Actor,c.Actor.Position))
-                    .OrderBy(c=>c.Actor.Position.DistanceSquaredTo(a.Actor.Position)).FirstOrDefault();
+                var inviter=a;
+                bool Eligible(ChaoIntroductions.Candidate c)=>Valid(c) && c.Actor!=inviter.Actor && c.Pet.Fun<100 &&
+                    all.Any(member=>member.Id==c.Id && member.Actor==c.Actor) &&
+                    owner.SocialLink(inviter.Id,c.Id) is { Met:true } link && link.ScoreFrom(inviter.Id)>=0 &&
+                    c.Actor.Position.DistanceTo(inviter.Actor.Position)<5 &&
+                    Mathf.Abs(c.Actor.Position.Y-inviter.Actor.Position.Y)<.16f && ClearPath(inviter.Actor,c.Actor.Position);
+                var eligible=available.Where(Eligible).ToList();
+                while(eligible.Count>0)
+                {
+                    string? id=a.Pet.SocialSelection.Select(owner,a.Id,a.Pet,eligible.Select(c=>new SocialPartnerCandidate(c.Id,c.Actor.Position.DistanceTo(a.Actor.Position))),"Ball");
+                    var chosen=eligible.FirstOrDefault(c=>c.Id==id);if(chosen==null)break;
+                    eligible.Remove(chosen);if(Eligible(chosen)){b=chosen;break;}
+                }
                 Orb(a)?.SetIdea("",true); ImportedChao.EndThink(a.Art);
                 if (b!=null) reserve?.Invoke(b);
                 Next(b==null ? Phase.Solo : Phase.Approach);
@@ -114,7 +126,7 @@ internal sealed class ChaoBallGame
                 {
                     a.Pet.Joy=Mathf.Max(0,a.Pet.Joy-(scold ? 12 : polite ? 3 : 5));
                     a.Pet.Mood.React(ChaoEmotion.Sad,scold ? .75f : .35f,scold ? 8 : 4,"ball-declined",70);
-                    a.Pet.History.Record(ChaoMemoryKind.Unpleasant,"ball-invitation",a.Pet.History.LastArea,
+                    if(scold)a.Pet.History.Record(ChaoMemoryKind.Unpleasant,"ball-invitation",a.Pet.History.LastArea,
                         polite ? $"{b.Pet.Name} politely declined an invitation to play." : $"{b.Pet.Name} declined an invitation to play.",polite ? -.08f : scold ? -.65f : -.25f,scold ? .55f : .25f,new[]{b.Id});
                     ImportedChao.ClearBallReaction(b.Art); Orb(b)?.SetIdea(null,false);
                     b=null; Place(); Next(Phase.Sad);
@@ -215,6 +227,7 @@ internal sealed class ChaoBallGame
         a.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes); b.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes);
         towardB=!towardB;
         if (++passes>=10) {
+            if(!sharedCompleted){sharedCompleted=true;ChaoSocialPartnerScorer.CompleteShared("shared-ball",new[]{(a.Id,a.Pet),(b.Id,b.Pet)});}
             ball!.CompleteLearnedPlay();
             b.Pet.LearnedPreferences.Credit(LearnedItemGroup.Toy,"beach-ball",b.Pet.History.Seconds,contactSession+":completed-partner");
             a.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");b.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");Next(Phase.Finish);

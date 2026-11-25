@@ -13,6 +13,7 @@ public static class ChaoStateDiagnostics
         mood=pet.Mood.Snapshot,
         learnedPreferences=pet.LearnedPreferenceDiagnostics(),
         placePreferences=pet.PlacePreferenceDiagnostics(),
+        socialPartners=new{pet.SocialSelection.LastInteraction,pet.SocialSelection.LastChosenPartner,pet.SocialSelection.LastCompletedPartner,pet.SocialSelection.LastCandidates},
         priorities=pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities,
         activity=pet.GardenActivity==null ? null : new{pet.GardenActivity.SelectedActivity,pet.GardenActivity.StartedAt,pet.GardenActivity.MinimumRemaining,pet.GardenActivity.LastFailureReason,pet.GardenActivity.CurrentExecutor,pet.GardenActivity.Scores,pet.GardenActivity.History},
         reactions=pet.Mood.ActiveReactions.Select(r=>new{r.Emotion,r.Intensity,r.Source,r.Priority,
@@ -47,6 +48,9 @@ public static class ChaoStateDiagnostics
         foreach(var score in ChaoLeisurePreferenceScorer.Candidates(pet.History,LeisureDestinationCatalog.Area,
             leisure?.Destinations.Where(d=>d.Available).Select(d=>d.Id) ?? Array.Empty<string>(),leisure?.RecentRoute,leisure?.RecentSky))
             text.AppendLine($"{score.Id} / {score.Type} / {(score.Available ? "available" : "unavailable")}\n  learned {score.LearnedBias:0.000}, spatial {score.SpatialBias:+0.000;-0.000;0.000}, total {score.TotalBias:+0.000;-0.000;0.000}, weight {score.SelectionWeight:0.000}");
+        text.AppendLine($"\nSocial partner preferences\nInteraction: {pet.SocialSelection.LastInteraction}; choice: {pet.SocialSelection.LastChosenPartner ?? "None"}; last completed: {pet.SocialSelection.LastCompletedPartner ?? "None"}");
+        foreach(var score in pet.SocialSelection.LastCandidates)
+            text.AppendLine($"{score.Id}: relation {score.Relationship} ({score.RelationshipContribution:+0.000;-0.000;0}), memory {score.PartnerBias:+0.000;-0.000;0} ({score.MemoryContribution:+0.000;-0.000;0})\n  eligible {score.Available}; partner {score.PartnerWeight:0.000} × distance {score.DistanceWeight:0.000} × recent {score.RecentMultiplier:0.00} = {score.FinalWeight:0.000}");
         return text.ToString();
     }
 }

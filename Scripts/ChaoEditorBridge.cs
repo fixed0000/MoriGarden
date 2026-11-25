@@ -104,6 +104,7 @@ internal sealed class ChaoEditorBridge
             personality=entry.Value.Personality,
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             placePreferences=entry.Value.PlacePreferenceDiagnostics(),
+            socialPreferences=entry.Value.SocialPreferenceDiagnostics(ownerState,entry.Key,roster),
             currentState=ChaoStateDiagnostics.Capture(entry.Value),
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
             {

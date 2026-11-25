@@ -13,6 +13,7 @@ ActivitySelectionChecks.Run(Check);
 PersonalityDecisionChecks.Run(Check);
 LearnedPreferenceChecks.Run(Check);
 PlacePreferenceChecks.Run(Check);
+SocialPartnerPreferenceChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

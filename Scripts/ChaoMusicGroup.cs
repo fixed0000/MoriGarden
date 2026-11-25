@@ -16,17 +16,36 @@ internal sealed class ChaoMusicGroup
     private Vector3 stand;
     public bool Uses(CharacterBody3D actor) => visitor?.Actor==actor;
     internal bool Active => visitor!=null;
+    internal string? LeaderId => leader?.Id;
+    internal string? VisitorId => visitor?.Id;
     internal void RebindPlayer(CharacterBody3D actor,PetState state,Node3D art)
     {if(visitor?.Actor==actor)visitor=visitor with{Pet=state,Art=art};if(leader?.Actor==actor)leader=leader with{Pet=state,Art=art};}
     private static bool Compatible(PetState root,ChaoIntroductions.Candidate musician,ChaoIntroductions.Candidate candidate)=>
-        candidate.Actor!=musician.Actor && candidate.Pet.Fun<100 && candidate.Pet.Energy>=35 && candidate.Pet.Fullness>=28 &&
+        GodotObject.IsInstanceValid(candidate.Actor) && GodotObject.IsInstanceValid(musician.Actor) &&
+        candidate.Actor.IsInsideTree() && musician.Actor.IsInsideTree() && !candidate.Actor.IsQueuedForDeletion() && !musician.Actor.IsQueuedForDeletion() &&
+        candidate.Pet.CanAct && musician.Pet.CanAct && candidate.Actor!=musician.Actor && candidate.Pet.Fun<100 && candidate.Pet.Energy>=35 && candidate.Pet.Fullness>=28 &&
         candidate.Actor.Position.DistanceTo(musician.Actor.Position)<=5 && Mathf.Abs(candidate.Actor.Position.Y-musician.Actor.Position.Y)<=.15f &&
         (root.SocialLink(candidate.Id,musician.Id)?.ScoreFrom(candidate.Id) ?? 0)>=0 && Clear(candidate.Actor,musician.Actor.Position);
     internal int JoinTargetCount(PetState root,ChaoIntroductions.Candidate candidate,IReadOnlyList<ChaoIntroductions.Candidate> all,IEnumerable<ToyCar> toys)
     {
         if(Active)return 0;var props=toys.ToArray();
-        return props.Count(t=>t.CanJoin && all.FirstOrDefault(c=>c.Actor==t.PlayActor) is {} lead && Compatible(root,lead,candidate) &&
-            props.Any(p=>p.IsInstrument && p.CanPickUp && p.PlayActor==null && p.Position.DistanceTo(candidate.Actor.Position)<8 && !GardenArt.IsPondWater(p.Position)));
+        return Options(root,candidate,all,props).Count;
+    }
+    private sealed record JoinOption(ChaoIntroductions.Candidate Musician,ToyCar Lead,ToyCar Prop);
+    private static bool FreeInstrument(ToyCar prop,ChaoIntroductions.Candidate candidate)=>
+        GodotObject.IsInstanceValid(prop) && prop.IsInstrument && prop.CanPickUp && prop.PlayActor==null &&
+        prop.Position.DistanceTo(candidate.Actor.Position)<8 && !GardenArt.IsPondWater(prop.Position) && Clear(candidate.Actor,prop.Position);
+    private static List<JoinOption> Options(PetState root,ChaoIntroductions.Candidate candidate,IReadOnlyList<ChaoIntroductions.Candidate> all,ToyCar[] props)
+    {
+        var options=new List<JoinOption>();
+        foreach(var lead in props.Where(t=>t.CanJoin))
+        {
+            var musician=all.FirstOrDefault(c=>c.Actor==lead.PlayActor && c.Pet.CanAct);
+            if(musician==null || !Compatible(root,musician,candidate))continue;
+            var prop=props.Where(p=>FreeInstrument(p,candidate)).OrderBy(p=>p.Position.DistanceSquaredTo(candidate.Actor.Position)).FirstOrDefault();
+            if(prop!=null)options.Add(new(musician,lead,prop));
+        }
+        return options;
     }
 
     public void Cancel(CharacterBody3D? actor=null)
@@ -47,20 +66,20 @@ internal sealed class ChaoMusicGroup
     {
         if (Active) return false;
         var props=toys.ToArray();
-        foreach (var lead in props.Where(t=>t.CanJoin))
+        foreach (var candidate in free)
         {
-            var musician=all.FirstOrDefault(c=>c.Actor==lead.PlayActor);
-            if (musician==null) continue;
-            foreach (var candidate in free)
+            if(!all.Any(c=>c.Id==candidate.Id && c.Actor==candidate.Actor))continue;
+            var options=Options(root,candidate,all,props);
+            while(options.Count>0)
             {
-                if (!Compatible(root,musician,candidate)) continue;
-                var prop=props.Where(t=>t.IsInstrument && t.CanPickUp && t.PlayActor==null &&
-                    t.Position.DistanceTo(candidate.Actor.Position)<8 && !GardenArt.IsPondWater(t.Position))
-                    .OrderBy(t=>t.Position.DistanceSquaredTo(candidate.Actor.Position)).FirstOrDefault();
-                if (prop==null) continue;
-                visitor=candidate; leader=musician; instrument=prop; leadInstrument=lead;
-                prop.Hold(prop.Position); stage=0; time=0; lease=90; motion.Reset();
-                stand=musician.Actor.Position+musician.Actor.Basis.X*(candidate.Actor.Position.X<musician.Actor.Position.X ? -.78f : .78f);
+                var id=candidate.Pet.SocialSelection.Select(root,candidate.Id,candidate.Pet,
+                    options.Select(o=>new SocialPartnerCandidate(o.Musician.Id,o.Musician.Actor.Position.DistanceTo(candidate.Actor.Position))),"Music");
+                var option=options.FirstOrDefault(o=>o.Musician.Id==id);if(option==null)break;
+                options.RemoveAll(o=>o.Musician.Id==id);
+                if(!option.Lead.CanJoin || !Compatible(root,option.Musician,candidate) || !FreeInstrument(option.Prop,candidate))continue;
+                visitor=candidate; leader=option.Musician; instrument=option.Prop; leadInstrument=option.Lead;
+                instrument.Hold(instrument.Position); stage=0; time=0; lease=90; motion.Reset();
+                stand=leader.Actor.Position+leader.Actor.Basis.X*(candidate.Actor.Position.X<leader.Actor.Position.X ? -.78f : .78f);
                 return true;
             }
         }
@@ -81,7 +100,8 @@ internal sealed class ChaoMusicGroup
         }
         if (visitor==null || leader==null || instrument==null || leadInstrument==null) return;
         if (!GodotObject.IsInstanceValid(visitor.Art) || !GodotObject.IsInstanceValid(leader.Art) ||
-            !leadInstrument.Performing || !visitor.Pet.CanAct || GardenArt.IsPondWater(visitor.Actor.Position) || (lease-=dt)<=0)
+            !all.Any(c=>c.Id==leader.Id && c.Actor==leader.Actor) || !all.Any(c=>c.Id==visitor.Id && c.Actor==visitor.Actor) ||
+            !leadInstrument.Performing || !visitor.Pet.CanAct || !leader.Pet.CanAct || GardenArt.IsPondWater(visitor.Actor.Position) || (lease-=dt)<=0)
         { Cancel(); return; }
         time+=dt;
         var orb=visitor.Art.GetNodeOrNull<EmotionOrb>("MoodOrb");
@@ -112,10 +132,11 @@ internal sealed class ChaoMusicGroup
         var propToPlay=instrument;
         var conductor=leadInstrument;
         var actor=visitor;
+        var musicianId=leader.Id;
         instrument=null; visitor=leader=null; leadInstrument=null; scan=4;
         actor.Art.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea("",true);
         if (!propToPlay.BeginPlay(actor.Actor,actor.Pet)) propToPlay.Toss(Vector3.Zero);
-        else { propToPlay.StartWith(conductor); propToPlay.PlayPose(actor.Actor,actor.Art); }
+        else { propToPlay.StartWith(conductor,actor.Id,musicianId); propToPlay.PlayPose(actor.Actor,actor.Art); }
     }
 
     private static bool Clear(CharacterBody3D actor,Vector3 to) => actor.GetWorld3D().DirectSpaceState.IntersectRay(

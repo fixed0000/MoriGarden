@@ -142,6 +142,8 @@ internal sealed class ChaoIntroductions
                         link.Met=link.Introduced=true;
                         link.Score=Math.Clamp(link.Score+4+(pair.A.Pet.Sociability+pair.B.Pet.Sociability)/38,-100,100);
                         ChaoExperience.Together(owner,pair.A.Id,pair.A.Pet,pair.B.Id,pair.B.Pet,ChaoMemoryKind.Introduction,"introduction","garden",false);
+                        pair.A.Pet.SocialSelection.LastCompletedPartner=pair.B.Id;
+                        pair.B.Pet.SocialSelection.LastCompletedPartner=pair.A.Id;
                         save();
                     }
                     Mood(pair.A,"",true);

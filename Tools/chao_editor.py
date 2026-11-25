@@ -64,6 +64,7 @@ class ChaoEditor:
                 self.list.insert("end", name)
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
+        self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
         self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
         self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
@@ -106,6 +107,7 @@ class ChaoEditor:
                              personality=self.personality_rows.get(self.selected),
                              learnedPreferences=self.learned_rows.get(self.selected, {}),
                              placePreferences=self.place_rows.get(self.selected, {}),
+                             socialPreferences=self.social_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -173,6 +175,9 @@ class ChaoEditor:
         places = ttk.Frame(sections, padding=6)
         sections.add(places, text="Garden places — read-only")
         self.build_place_preferences(places)
+        partners = ttk.Frame(sections, padding=6)
+        sections.add(partners, text="Social partners — read-only")
+        self.build_social_preferences(partners)
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -195,6 +200,24 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def build_social_preferences(self, panel):
+        data = self.snapshot.get("socialPreferences") or {}
+        ttk.Label(panel, text="Directional relationships + personal memories · read-only", wraplength=670).pack(anchor="w")
+        ttk.Label(panel, text=f"Last activity: {data.get('lastInteraction', 'None')}\nLast choice: {data.get('lastChosenPartner') or 'None'}\nLast completed partner: {data.get('lastCompletedPartner') or 'None'}", wraplength=670).pack(anchor="w", pady=8)
+        columns = ("id", "name", "score", "status", "memory", "relationship", "experience", "weight", "last", "available")
+        table = ttk.Treeview(panel, columns=columns, show="headings", height=9)
+        for key, label, width in zip(columns, ("Partner ID", "Name", "Relation", "Status", "PartnerBias", "Rel. part", "Memory part", "Partner weight", "Last final weight", "Eligible at last scan"), (210, 105, 60, 100, 85, 75, 85, 100, 110, 130)):
+            table.heading(key, text=label)
+            table.column(key, width=width, minwidth=50, stretch=False)
+        scroll = ttk.Scrollbar(panel, orient="horizontal", command=table.xview)
+        table.configure(xscrollcommand=scroll.set)
+        table.pack(fill="both", expand=True)
+        scroll.pack(fill="x")
+        for row in data.get("partners", []):
+            score, last = row["score"], row.get("lastSelection")
+            table.insert("", "end", values=(row["id"], row["name"], score["Relationship"], score["Status"], f"{score['PartnerBias']:+.3f}", f"{score['RelationshipContribution']:+.3f}", f"{score['MemoryContribution']:+.3f}", f"{score['PartnerWeight']:.3f}", "—" if last is None else f"{last['FinalWeight']:.3f}", "Unknown" if last is None else "Yes" if last["Available"] else "No"))
+        ttk.Label(panel, text="Partner weight excludes distance and temporary repetition. Eligibility is an observation, not a reservation.", wraplength=670).pack(anchor="w", pady=6)
 
     def build_place_preferences(self, panel):
         data = self.snapshot.get("placePreferences") or {}

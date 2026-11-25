@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 namespace Mori;
 
@@ -19,6 +20,7 @@ public partial class ToyCar : CharacterBody3D
         preferenceSession="";
     }
     private System.Collections.Generic.HashSet<ToyCar>? ensemble;
+    private string? socialActorId;
     private Vector3 placementFrom, placementTo, placementRotation;
     private Vector3 playOrigin, playForward, velocity;
     private bool held, inFlight;
@@ -49,8 +51,9 @@ public partial class ToyCar : CharacterBody3D
     internal float PlayingSeconds => playing;
     internal bool Performing => player!=null && playing<PlayDuration;
     internal bool CanJoin => IsInstrument && Performing && playing<50;
-    internal void StartWith(ToyCar leader)
+    internal void StartWith(ToyCar leader,string? visitorId=null,string? leaderId=null)
     {
+        socialActorId=visitorId;leader.socialActorId=leaderId ?? leader.socialActorId;
         phraseOffset=leader.playing%1.20f; lastShake=-1;
         ensemble=leader.ensemble ?? new System.Collections.Generic.HashSet<ToyCar> { leader };
         leader.ensemble=ensemble; ensemble.Add(this);
@@ -62,6 +65,10 @@ public partial class ToyCar : CharacterBody3D
     {
         var group=ensemble;
         if (group==null) return;
+        if(successful && group.Count>1 && group.All(member=>
+            IsInstanceValid(member) && IsInstanceValid(member.player) && member.player!.IsInsideTree() && !member.player.IsQueuedForDeletion() &&
+            member.playChao is {CanAct:true} && member.socialActorId!=null && member.player.Position.DistanceTo(member.playOrigin)<=1))
+            ChaoSocialPartnerScorer.CompleteShared("music-ensemble",group.Select(member=>(member.socialActorId!,member.playChao!)).ToArray());
         foreach(var member in group) member.ensemble=null;
         foreach(var member in group)
         {
@@ -226,6 +233,7 @@ public partial class ToyCar : CharacterBody3D
     private void EndPlay()
     {
         FinishEnsemble();
+        socialActorId=null;
         preferenceSession="";
         GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
         if (IsInstanceValid(playArt)) { playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false); ImportedChao.PauseAfterAction(playArt); }
@@ -301,7 +309,7 @@ public partial class ToyCar : CharacterBody3D
     public bool BeginPlay(CharacterBody3D actor,PetState chao)
     {
         if (GardenArt.IsPondWater(actor.Position) || (!IsRattle && !IsInstrument && !IsBeachBall && !chao.EnjoysToyCars) || chao.Fun>=100) return false;
-        player=actor; playChao=chao; playing=phraseOffset=0; held=inFlight=false;
+        player=actor; playChao=chao; socialActorId=null;playing=phraseOffset=0; held=inFlight=false;
         preferenceSession=System.Guid.NewGuid().ToString("N");
         lastShake=-1;
         playForward=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);

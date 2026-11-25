@@ -38,9 +38,15 @@ public partial class GardenGame
     private bool StartSocialActivity(CharacterBody3D actor)
     {
         var raw=SocialCandidates(true,false);var self=raw.FirstOrDefault(c=>c.Actor==actor);if(self==null)return false;
-        foreach(var peer in raw.Where(c=>c.Actor!=actor && SocialLeaseable(c)))
-            if(introductions.TryStart(pet,self,peer))
+        var eligible=raw.Where(c=>c.Actor!=actor && SocialLeaseable(c) && introductions.CanStart(pet,self,c)).ToList();
+        while(eligible.Count>0)
+        {
+            string? chosen=self.Pet.SocialSelection.Select(pet,self.Id,self.Pet,eligible.Select(c=>new SocialPartnerCandidate(c.Id,c.Actor.Position.DistanceTo(actor.Position))),"Introduction",false);
+            var peer=eligible.FirstOrDefault(c=>c.Id==chosen);if(peer==null)break;
+            eligible.Remove(peer);
+            if(SocialLeaseable(peer) && introductions.TryStart(pet,self,peer))
             {PauseForSocial(self);PauseForSocial(peer);return true;}
+        }
         var props=world.GetChildren().OfType<ToyCar>().Where(t=>activityClaims.Free(t,actor)).ToArray();
         if(musicGroup.TryJoin(pet,BallParticipants(),new[]{self},props)){PauseForSocial(self);return true;}
         return false;
