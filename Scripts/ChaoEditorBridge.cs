@@ -102,6 +102,7 @@ internal sealed class ChaoEditorBridge
             statistics=entry.Value.Statistics,
             personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
             personality=entry.Value.Personality,
+            learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             currentState=ChaoStateDiagnostics.Capture(entry.Value),
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>
             {
@@ -110,8 +111,13 @@ internal sealed class ChaoEditorBridge
                     score=link?.ScoreFrom(entry.Key) ?? 0, status=link?.StatusFrom(entry.Key) ?? "Stranger" };
             }).ToArray() }).ToArray();
         string path=Path.Combine(directory,"chao-editor-state.json");
-        File.WriteAllText(path+".tmp",JsonSerializer.Serialize(new { session,status,lastRequest,profileDirectory=Path.GetFullPath(directory),chao }));
-        File.Move(path+".tmp",path,true);
+        string snapshotJson=JsonSerializer.Serialize(new { session,status,lastRequest,profileDirectory=Path.GetFullPath(directory),chao });
+        // Windows readers/OneDrive can briefly deny replacement of the snapshot.
+        // Keep an already applied edit authoritative and retry publication next
+        // Poll; never replay the command or touch the actual garden save here.
+        try{File.WriteAllText(path+".tmp",snapshotJson);File.Move(path+".tmp",path,true);}
+        catch(IOException) { }
+        catch(UnauthorizedAccessException) { }
         return updated;
     }
 }

@@ -9,6 +9,15 @@ public partial class ToyCar : CharacterBody3D
     private PetState? playChao;
     private Node3D? playArt;
     private float playing, cooldown, phraseOffset;
+    private string preferenceSession="";
+    public string PreferenceId=>LearnedPreferenceIds.Toy(IsRattle,IsFlute,IsElectricGuitar,IsSynthesizer,IsBeachBall,IsDrums);
+    internal void CompleteLearnedPlay()
+    {
+        if(playChao==null || preferenceSession.Length==0 || !IsInstanceValid(player) || !player!.IsInsideTree() || player.IsQueuedForDeletion() ||
+            !IsBeachBall && player.Position.DistanceTo(playOrigin)>1)return;
+        playChao.LearnedPreferences.Credit(LearnedItemGroup.Toy,PreferenceId,playChao.History.Seconds,preferenceSession);
+        preferenceSession="";
+    }
     private System.Collections.Generic.HashSet<ToyCar>? ensemble;
     private Vector3 placementFrom, placementTo, placementRotation;
     private Vector3 playOrigin, playForward, velocity;
@@ -49,7 +58,7 @@ public partial class ToyCar : CharacterBody3D
         playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble",contact);
         leader.playChao?.ObserveEvent(ChaoStateEvent.PositiveSocial,"music-ensemble",contact);
     }
-    private void FinishEnsemble()
+    private void FinishEnsemble(bool successful=false)
     {
         var group=ensemble;
         if (group==null) return;
@@ -57,6 +66,7 @@ public partial class ToyCar : CharacterBody3D
         foreach(var member in group)
         {
             if (!IsInstanceValid(member) || member==this || member.player==null) continue;
+            if(successful)member.CompleteLearnedPlay();
             member.placementFrom=member.Position; member.placementRotation=member.Rotation;
             member.placementTo=member.PlacementPoint(member.player);
             member.playing=member.PlayDuration;
@@ -186,7 +196,8 @@ public partial class ToyCar : CharacterBody3D
         if (before<PlayDuration)
         {
             playChao?.ObserveEvent(ChaoStateEvent.PlayFinished,ItemName);
-            FinishEnsemble();
+            CompleteLearnedPlay();
+            FinishEnsemble(successful:true);
             GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
             placementFrom=Position;
             placementRotation=Rotation;
@@ -215,6 +226,7 @@ public partial class ToyCar : CharacterBody3D
     private void EndPlay()
     {
         FinishEnsemble();
+        preferenceSession="";
         GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue")?.Stop();
         if (IsInstanceValid(playArt)) { playArt!.GetNodeOrNull<EmotionOrb>("MoodOrb")?.SetIdea(null,false); ImportedChao.PauseAfterAction(playArt); }
         if (strap!=null) strap.Hide();
@@ -290,6 +302,7 @@ public partial class ToyCar : CharacterBody3D
     {
         if (GardenArt.IsPondWater(actor.Position) || (!IsRattle && !IsInstrument && !IsBeachBall && !chao.EnjoysToyCars) || chao.Fun>=100) return false;
         player=actor; playChao=chao; playing=phraseOffset=0; held=inFlight=false;
+        preferenceSession=System.Guid.NewGuid().ToString("N");
         lastShake=-1;
         playForward=Vector3.Back.Rotated(Vector3.Up,actor.Rotation.Y);
         playOrigin=actor.Position+playForward*.30f;

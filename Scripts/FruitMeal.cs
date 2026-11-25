@@ -13,6 +13,9 @@ internal sealed class FruitMeal
     private string? giver;
     private float duration;
     private Vector3 from;
+    private string completionId="";
+    private int consumedBites;
+    private bool preferenceCompleted;
     public float Duration => duration;
     public float Remaining => Duration-elapsed;
     public bool Rejected { get; private set; }
@@ -21,6 +24,7 @@ internal sealed class FruitMeal
     public void Begin(FruitTree fruit,PetState chao,Vector3 start,bool alreadyFull=false,string? givenBy=null)
     {
         elapsed=0;
+        completionId=System.Guid.NewGuid().ToString("N");consumedBites=0;preferenceCompleted=false;
         from=start;
         startBites=fruit.Bites;
         Rejected=false;
@@ -74,6 +78,7 @@ internal sealed class FruitMeal
         {
             bool favoriteGift=giver!=null && fruit.IsSpecial && fruit.Kind==chao.FavoriteFruit && fruit.Bites==0;
             fruit.TakeBite();
+            consumedBites++;
             if (favoriteGift)
             {
                 chao.Bond++;
@@ -94,6 +99,11 @@ internal sealed class FruitMeal
             }
         }
         if ((fullAtStart || RejectedForTaste) && elapsed>=Duration) Rejected=true;
+        if(!preferenceCompleted && !RejectedForTaste && consumedBites>0 && elapsed>=Duration)
+        {
+            preferenceCompleted=true;
+            chao.LearnedPreferences.Credit(LearnedItemGroup.Fruit,fruit.Kind,chao.History.Seconds,completionId);
+        }
         ImportedChao.EatPose(art,pause ? 0 : chewTime);
         if (art.FindChild("HeadPivot",true,false) is Node3D head)
             head.Rotation=new(0,pause ? Mathf.Sin(elapsedPause*1.75f)*.33f : 0,0);

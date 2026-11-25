@@ -181,7 +181,7 @@ internal sealed class ChaoInterests
             if (category==ChaoActivity.Eat || !item.Available(actor,chao) || usable?.Invoke(item)==false) continue;
             bool preferred=item.IsFavorite(chao);
             float score=(100-chao.Fun)*(preferred ? 2.15f : 1)/
-                (1+actor.Position.DistanceTo(item.Position)*.19f);
+                (1+actor.Position.DistanceTo(item.Position)*.19f)*chao.LearnedPreferences.Multiplier(LearnedItemGroup.Toy,item.PreferenceId,chao.History.Seconds);
             if (score<=best) continue;
             best=score; toy=item; fruit=null; favorite=preferred; tree=false;
         }
@@ -193,7 +193,8 @@ internal sealed class ChaoInterests
             bool canShake=CanShake(food,actor,chao);
             if (!loose && !canShake) continue;
             float distance=actor.Position.DistanceTo(loose ? food.FruitPosition : food.Position);
-            float score=(100-chao.Fullness)*(loose ? 1.15f : .74f)*(preferred ? 2.15f : 1)/(1+distance*.19f);
+            float score=(100-chao.Fullness)*(loose ? 1.15f : .74f)*(preferred ? 2.15f : 1)/(1+distance*.19f)*
+                chao.LearnedPreferences.Multiplier(LearnedItemGroup.Fruit,food.Kind,chao.History.Seconds);
             if (score<=best) continue;
             best=score; fruit=food; toy=null; favorite=preferred; tree=canShake;
         }

@@ -57,8 +57,8 @@ public sealed partial class PetState : IJsonOnDeserialized, IJsonOnSerializing
         Personality=ChaoPersonality.CreateInitial(random ?? Random.Shared);PersonalitySchemaVersion=1;
         legacyCuriosity=legacyKindness=0;legacyGlutton=legacyCrybaby=false;
     }
-    void IJsonOnDeserialized.OnDeserialized() => EnsurePersonality();
-    void IJsonOnSerializing.OnSerializing() => EnsurePersonality();
+    void IJsonOnDeserialized.OnDeserialized() { EnsurePersonality();ValidateLearnedPreferences(); }
+    void IJsonOnSerializing.OnSerializing() { EnsurePersonality();ValidateLearnedPreferences(); }
 }
 
 public sealed class UnsupportedPersonalitySchemaException : ArgumentException

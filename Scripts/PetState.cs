@@ -238,7 +238,7 @@ public sealed partial class PetState
 
     public void Validate()
     {
-        EnsurePersonalityTree();
+        EnsurePersonalityTree();ValidateLearnedPreferences();
         if(!float.IsFinite(SocialNeed) || SocialNeed is <0 or >100)throw new ArgumentException("SocialNeed must be between 0 and 100.");
         Expedition??=new(); Expedition.Validate();
         if (Version != 1 || !float.IsFinite(Fullness) || !float.IsFinite(Joy) || !float.IsFinite(Energy)

@@ -11,6 +11,7 @@ public static class ChaoStateDiagnostics
         meters=new {pet.Fullness,Hunger=pet.Needs.Hunger,pet.Energy,Fatigue=pet.Needs.Fatigue,
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
         mood=pet.Mood.Snapshot,
+        learnedPreferences=pet.LearnedPreferenceDiagnostics(),
         priorities=pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities,
         activity=pet.GardenActivity==null ? null : new{pet.GardenActivity.SelectedActivity,pet.GardenActivity.StartedAt,pet.GardenActivity.MinimumRemaining,pet.GardenActivity.LastFailureReason,pet.GardenActivity.CurrentExecutor,pet.GardenActivity.Scores,pet.GardenActivity.History},
         reactions=pet.Mood.ActiveReactions.Select(r=>new{r.Emotion,r.Intensity,r.Source,r.Priority,
@@ -33,6 +34,12 @@ public static class ChaoStateDiagnostics
             text.AppendLine($"{r.Emotion} {r.Intensity:F2} / priority {r.Priority}\n  {Math.Max(0,r.ExpiresAt-pet.Mood.Now):F1}s left / {r.Source}");
         if(pet.Mood.ActiveReactions.Count==0)text.AppendLine("None");
         if(pet.GardenActivity!=null)text.AppendLine(pet.GardenActivity.Describe());
+        text.AppendLine("\nInnate personality (unchanged)\n"+string.Join(", ",typeof(ChaoPersonality).GetProperties().Select(p=>$"{p.Name}: {p.GetValue(pet.Personality ?? new ChaoPersonality())}")));
+        text.AppendLine($"\nFixed favorites\nToy: {pet.PreferredToy}; car compatibility: {pet.LikesToyCars}\nFruit: {pet.FavoriteFruit}; instrument: {pet.FavoriteInstrument}");
+        text.AppendLine("\nLearned preferences");
+        foreach(var group in Enum.GetValues<LearnedItemGroup>())
+            foreach(var (id,entry) in group==LearnedItemGroup.Toy ? pet.LearnedPreferences.ToyPreferences : pet.LearnedPreferences.FruitPreferences)
+                text.AppendLine($"{group} / {id}: {pet.LearnedPreferences.EffectiveBias(group,id,pet.History.Seconds):+0.000;-0.000;0.000}, experiences {entry.ExperienceCount}, last credit {entry.LastCreditSeconds:0.0}s");
         return text.ToString();
     }
 }

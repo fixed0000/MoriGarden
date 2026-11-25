@@ -185,7 +185,7 @@ internal sealed class ChaoBallGame
                 Normal(a); Happy(a); ImportedChao.ReceivePose(a.Art,.7f);
                 ball.Position=a.Actor.Position+Forward(a)*.22f+Vector3.Up*(.025f+Mathf.Abs(Mathf.Sin(time*3))*.20f);
                 if (voice<=0) { ChaoSounds.Play(ball,"ball"); voice=1.05f; }
-                if (time>=8) { Place(); Cancel(); }
+                if (time>=8) { ball.CompleteLearnedPlay();Place(); Cancel(); }
                 break;
             case Phase.Finish:
                 if (time>.6f) { Place(); Cancel(); }
@@ -214,7 +214,11 @@ internal sealed class ChaoBallGame
         a!.Pet.Fun=Mathf.Min(100,a.Pet.Fun+3); b!.Pet.Fun=Mathf.Min(100,b.Pet.Fun+3);
         a.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes); b.Pet.ObserveEvent(ChaoStateEvent.PositiveSocial,"shared-ball",contactSession+":"+passes);
         towardB=!towardB;
-        if (++passes>=10) { a.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");b.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");Next(Phase.Finish); } else BeginToss();
+        if (++passes>=10) {
+            ball!.CompleteLearnedPlay();
+            b.Pet.LearnedPreferences.Credit(LearnedItemGroup.Toy,"beach-ball",b.Pet.History.Seconds,contactSession+":completed-partner");
+            a.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");b.Pet.ObserveEvent(ChaoStateEvent.PlayFinished,"shared-ball");Next(Phase.Finish);
+        } else BeginToss();
     }
     private void Place()
     {

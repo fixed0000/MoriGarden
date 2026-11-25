@@ -63,6 +63,7 @@ class ChaoEditor:
             for _, name in names:
                 self.list.insert("end", name)
         # Canonical personality is carried by the game; the editor sends only patches.
+        self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
         self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
         self.roster = roster
@@ -102,6 +103,7 @@ class ChaoEditor:
         self.snapshot = dict(session=snapshot["session"], target=self.selected,
                              parameters=self.roster[self.selected], statistics=self.statistics_rows.get(self.selected, {}),
                              personality=self.personality_rows.get(self.selected),
+                             learnedPreferences=self.learned_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -155,8 +157,35 @@ class ChaoEditor:
             self.variables[name] = var
         self.build_statistics(pages["Stats"])
         self.build_relationships()
+        self.build_learned_preferences()
         self.tabs.select(tab_index)
         self.status.set("Edit the values you want to change. Applies to the running game.")
+
+    def build_learned_preferences(self):
+        panel = ttk.Frame(self.tabs, padding=12)
+        self.tabs.add(panel, text="Experience")
+        ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
+        traits = self.snapshot.get("personality") or {}
+        ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
+        data = self.snapshot.get("learnedPreferences") or {}
+        favorites = data.get("fixedFavorites") or {}
+        ttk.Label(panel, text="Fixed favorites").pack(anchor="w")
+        ttk.Label(panel, text=" · ".join(f"{key}: {value}" for key, value in favorites.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
+        ttk.Label(panel, text="Learned preferences — read-only · active Chao seconds").pack(anchor="w")
+        table_frame = ttk.Frame(panel)
+        table_frame.pack(fill="both", expand=True, pady=5)
+        columns = ("group", "id", "bias", "count", "last", "fixed")
+        table = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
+        for key, title, width in zip(columns, ("Group", "Item type", "Effective bias", "Experiences", "Last credit (s)", "Fixed favorite"), (55, 175, 88, 78, 95, 80)):
+            table.heading(key, text=title)
+            table.column(key, width=width, minwidth=45)
+        scroll = ttk.Scrollbar(table_frame, orient="vertical", command=table.yview)
+        table.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        table.pack(side="left", fill="both", expand=True)
+        for entry in data.get("entries", []):
+            last = entry.get("lastCreditSeconds")
+            table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
 
     def build_statistics(self, panel):
         for child in panel.winfo_children():

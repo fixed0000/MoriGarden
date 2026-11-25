@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Scripts/ChaoLearnedPreferences.cs" Link="ChaoLearnedPreferences.cs" />
+    <Compile Include="../Scripts/PetState.LearnedPreferences.cs" Link="PetState.LearnedPreferences.cs" />
     <Compile Include="../Scripts/ChaoPersonalityActivityWeights.cs" Link="ChaoPersonalityActivityWeights.cs" />
     <Compile Include="../Scripts/ChaoActivityCoordinator.cs" Link="ChaoActivityCoordinator.cs" />
     <Compile Include="../Scripts/ChaoStateDiagnostics.cs" Link="ChaoStateDiagnostics.cs" />

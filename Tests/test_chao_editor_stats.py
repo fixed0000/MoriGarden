@@ -47,7 +47,7 @@ class EditorStatTests(unittest.TestCase):
                            Solitude=7, Vitality=22, BigEater=75, Regain=-9,
                            Skillful=34, Charm=-17, Chatty=6, Carefree=23, Fickle=-10)
         editor.snapshot = dict(session="isolated-session", target="main", parameters=dict(Joy=60),
-                               personality=personality.copy(), relationships=[])
+                               personality=personality.copy(), learnedPreferences={"entries": [{"id": "rattle", "effectiveBias": 0.2}]}, relationships=[])
         editor.variables = dict(Joy=Value(75))
         editor.stat_variables = {}
         editor.relationship_peer = None
@@ -61,6 +61,9 @@ class EditorStatTests(unittest.TestCase):
             request = json.loads((editor.directory/"chao-editor-request.json").read_text())
             self.assertEqual(request["patch"], dict(Joy=75))
             self.assertNotIn("personality", request)
+            self.assertNotIn("learnedPreferences", request)
+            self.assertNotIn("LearnedPreferences", request["patch"])
+            self.assertEqual(editor.snapshot["learnedPreferences"]["entries"][0]["effectiveBias"], 0.2)
             self.assertEqual(editor.snapshot["personality"], personality)
 
 
