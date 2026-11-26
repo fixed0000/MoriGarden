@@ -15,6 +15,7 @@ public sealed record ActivityScore(ActivityAvailability Availability,float Score
 {
     public float BaseScore { get; init; }
     public float PersonalityAdjustment { get; init; }
+    public float HabitAdjustment { get; init; }
     public float FinalScore { get; init; }
     public float RepeatPenalty { get; init; }
     public float RandomVariation { get; init; }
@@ -72,9 +73,11 @@ public sealed class ChaoActivityCoordinator
             bool criticalPhysiology=a.Activity is ChaoActivity.Eat or ChaoActivity.Sleep && needs[need!.Value].Level==NeedUrgency.Critical;
             bool alternatives=options.Any(o=>o.Activity!=a.Activity && o.Available && o.AvailableTargetCount>0 && (!failures.TryGetValue(o.Activity,out var f) || f.Until<=Now));
             var personality=personalityWeights.Evaluate(a.Activity,score,need is {} n ? needs[n].Level : NeedUrgency.Low);
+            float habit=pet.ActivityHabits.EffectiveBias(a.Activity,pet.History.Seconds);
+            float beforeRepeat=Math.Clamp(score+personality.Adjustment+habit,0,1);
             float penalty=previous?.Activity==a.Activity && !criticalPhysiology && alternatives ? .15f : 0;
-            return new ActivityScore(a,Math.Max(0,personality.FinalScore-penalty))
-            {BaseScore=score,PersonalityAdjustment=personality.Adjustment,FinalScore=personality.FinalScore,
+            return new ActivityScore(a,Math.Max(0,beforeRepeat-penalty))
+            {BaseScore=score,PersonalityAdjustment=personality.Adjustment,HabitAdjustment=habit,FinalScore=beforeRepeat,
                 RepeatPenalty=penalty,Contributions=personality.Contributions};
         }).ToArray();
         return Scores;
@@ -122,6 +125,7 @@ public sealed class ChaoActivityCoordinator
     public bool CanJoinSocial => Interruptibility!=ActivityInterruptibility.Atomic && (SelectedActivity==null || SelectedActivity is ChaoActivity.Wander or ChaoActivity.Leisure &&
         Interruptibility==ActivityInterruptibility.LongOptional && MinimumRemaining<=0);
     public void ProtectTransition(string executor){CurrentExecutor=executor;Interruptibility=ActivityInterruptibility.Atomic;}
+    private static float InterruptionScore(ActivityScore score)=>Math.Max(0,Math.Clamp(score.BaseScore+score.PersonalityAdjustment,0,1)-score.RepeatPenalty);
     public bool ShouldInterrupt(PetState pet,IEnumerable<ActivityAvailability> available)
     {
         Evaluate(pet,available);
@@ -129,8 +133,10 @@ public sealed class ChaoActivityCoordinator
         foreach(var need in pet.Needs.Evaluate().Priorities.Where(n=>n.Need is ChaoNeed.Hunger or ChaoNeed.Fatigue))
         {
             var target=need.Need==ChaoNeed.Hunger ? ChaoActivity.Eat : ChaoActivity.Sleep;
-            float current=Scores.FirstOrDefault(s=>s.Availability.Activity==SelectedActivity)?.Score ?? 0;
-            if(target==SelectedActivity || !Scores.Any(s=>s.Availability.Activity==target && s.Availability.Available && s.Score>current+.000001f))continue;
+            // Preserve the pre-habit physiological interruption comparison.
+            // Habits rank the next choice; learning must not change a live lease.
+            float current=Scores.FirstOrDefault(s=>s.Availability.Activity==SelectedActivity) is {} active ? InterruptionScore(active) : 0;
+            if(target==SelectedActivity || !Scores.Any(s=>s.Availability.Activity==target && s.Availability.Available && InterruptionScore(s)>current+.000001f))continue;
             if(need.Level==NeedUrgency.Critical || need.Level==NeedUrgency.High && MinimumRemaining<=0)return true;
         }
         return false;
@@ -155,7 +161,7 @@ public sealed class ChaoActivityCoordinator
     private void Clear(){SelectedActivity=null;CurrentExecutor="";MinimumCommitment=0;Interruptibility=ActivityInterruptibility.LongOptional;}
     public string Describe()=>
         $"\nActivity: {SelectedActivity?.ToString() ?? "Idle"}\nExecutor: {CurrentExecutor}\nCommitment left: {MinimumRemaining:0.0}s\n"+
-        string.Join('\n',Scores.Select(s=>$"{s.Availability.Activity}: base {s.BaseScore:0.00}, personality {s.PersonalityAdjustment:+0.00;-0.00;0.00}, final {s.FinalScore:0.00}, repeat -{s.RepeatPenalty:0.00}, choice {s.Score:0.00}, variation {s.RandomVariation:+0.000;-0.000;0.000}\n  "+
+        string.Join('\n',Scores.Select(s=>$"{s.Availability.Activity}: base {s.BaseScore:0.00}, personality {s.PersonalityAdjustment:+0.00;-0.00;0.00}, habit {s.HabitAdjustment:+0.00;-0.00;0.00}, final {s.FinalScore:0.00}, repeat -{s.RepeatPenalty:0.00}, choice {s.Score:0.00}, variation {s.RandomVariation:+0.000;-0.000;0.000}\n  "+
             (s.Availability.Available ? string.Join(", ",s.Contributions.Select(c=>$"{c.Trait}={c.Normalized:0.00}: {c.Contribution:+0.00;-0.00;0.00}")) : s.Availability.Reason)))+
         $"\nLast completed: {history.LastOrDefault()?.Activity.ToString() ?? "None"}\nLast failure: {LastFailureReason}\nCancellation: {LastCancellation}\nSelections {Selections}, interruptions {Interruptions}";
 }

@@ -27,6 +27,7 @@
     <Compile Include="../Scripts/AnimalCatalog.cs" Link="AnimalCatalog.cs" />
     <Compile Include="../Scripts/AnimalInventory.cs" Link="AnimalInventory.cs" />
     <Compile Include="../Scripts/ChaoMemory.cs" Link="ChaoMemory.cs" />
+    <Compile Include="../Scripts/ChaoActivityHabits.cs" Link="ChaoActivityHabits.cs" />
     <Compile Include="../Scripts/ChaoSocialPartnerScorer.cs" Link="ChaoSocialPartnerScorer.cs" />
     <Compile Include="../Scripts/ChaoExpression.cs" Link="ChaoExpression.cs" />
     <Compile Include="../Scripts/ChaoExperience.cs" Link="ChaoExperience.cs" />

@@ -54,12 +54,12 @@ internal static class SocialPartnerPreferenceChecks
         check(untouched==JsonSerializer.Serialize(a) && rootUntouched==JsonSerializer.Serialize(root),"Partner R: selection leaves serialized state byte-equivalent");
         check(ChaoSocialPartnerScorer.Evaluate(root,"a",a,"b",float.NaN).FinalWeight==0 && ChaoSocialPartnerScorer.Choose(Array.Empty<SocialPartnerScore>(),new Random(1))==null,"Invalid distances and no candidates fail safely");
         var pairs=new[]{("a",a),("b",b)};float needA=a.SocialNeed,needB=b.SocialNeed;int scoreBefore=link.ScoreFrom("a");
-        ChaoSocialPartnerScorer.CompleteShared("shared-ball",pairs);
+        ChaoSocialPartnerScorer.CompleteShared("shared-ball",pairs,"completed-ball");
         check(a.History.Events.Single(e=>e.Source=="shared-ball").Participants.SequenceEqual(new[]{"b"}) && b.History.Events.Single(e=>e.Source=="shared-ball").Participants.SequenceEqual(new[]{"a"}),"Completed shared experience records stable reciprocal personal memories");
-        ChaoSocialPartnerScorer.CompleteShared("shared-ball",pairs);
+        ChaoSocialPartnerScorer.CompleteShared("shared-ball",pairs,"completed-ball");
         check(a.History.Events.Single(e=>e.Source=="shared-ball").Occurrences==1 && b.History.Events.Single(e=>e.Source=="shared-ball").Occurrences==1,"Shared credit retains the existing 120-second memory cooldown");
         check(a.SocialNeed==needA && b.SocialNeed==needB && link.ScoreFrom("a")==scoreBefore,"Memory completion does not duplicate SocialNeed or relationship rewards");
-        ChaoSocialPartnerScorer.CompleteShared("music-ensemble",new[]{("a",a),("c",new PetState())});
+        ChaoSocialPartnerScorer.CompleteShared("music-ensemble",new[]{("a",a),("c",new PetState())},"completed-music");
         check(a.SocialSelection.LastCompletedPartner=="c","Completing another shared partner removes the previous repeat penalty");
         var restored=JsonSerializer.Deserialize<PetState>(JsonSerializer.Serialize(a))!;
         check(restored.History.Events.Any(e=>e.Source=="shared-ball") && restored.SocialSelection.LastCompletedPartner==null,"Existing memory format persists while runtime partner state does not");

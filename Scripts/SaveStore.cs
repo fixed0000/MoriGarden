@@ -13,7 +13,7 @@ public static class SaveStore
         message = "";
         if (!File.Exists(path) && !File.Exists(path+".bak") && !HasExistingData(path)) return PetState.NewEgg();
         try { return Read(path); }
-        catch (Exception ex) when(ex is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException)
+        catch (Exception ex) when(ex is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException or UnsupportedActivityHabitsSchemaException)
         { throw new SaveLoadException(ex.Message,ex); }
         catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
         {
@@ -23,7 +23,7 @@ public static class SaveStore
                 message = "The main save could not be read. A backup was loaded.";
                 return backup;
             }
-            catch (Exception schemaError) when(schemaError is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException)
+            catch (Exception schemaError) when(schemaError is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException or UnsupportedActivityHabitsSchemaException)
             { throw new SaveLoadException(schemaError.Message,schemaError); }
             catch
             {
@@ -45,7 +45,7 @@ public static class SaveStore
         {
             if (!File.Exists(candidate)) continue;
             try { return Read(candidate); }
-            catch (Exception ex) when(ex is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException) { return null; }
+            catch (Exception ex) when(ex is UnsupportedPersonalitySchemaException or UnsupportedLearnedPreferencesSchemaException or UnsupportedActivityHabitsSchemaException) { return null; }
             catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or UnauthorizedAccessException) { }
         }
         return null;

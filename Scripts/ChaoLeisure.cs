@@ -12,6 +12,7 @@ internal sealed class ChaoLeisure
     private readonly bool injectedRandom;
     private string? actorIdentity,currentId,recentRoute,recentSky;
     private string area="",startArea="",outcome="None";
+    private string habitSession="";
     private PetState? owner;
     private System.Collections.Generic.IReadOnlyList<LeisurePlaceScore> scores=System.Array.Empty<LeisurePlaceScore>();
     internal ChaoLeisure(System.Random? random=null){destinationRandom=random ?? new System.Random();injectedRandom=random!=null;}
@@ -67,6 +68,7 @@ internal sealed class ChaoLeisure
         if(valid)
         {
             ChaoLeisurePreferenceScorer.RecordSuccess(state.History,area,currentId!);
+            state.ActivityHabits.Credit(ChaoActivity.Leisure,state.History.Seconds,habitSession);
             if(sky)recentSky=currentId;else recentRoute=currentId;
         }
         Cleanup(art);outcome=valid ? "Succeeded" : "Interrupted: no garden context";Publish();
@@ -75,10 +77,11 @@ internal sealed class ChaoLeisure
     {
         if (Active) { ImportedChao.MovePose(art,0,false,false,false,false,false,false); ImportedChao.CloseEyes(art,false); }
         rising.Cancel(); route=-1; sky=false; currentId=null;pause=elapsed=stuck=0; delay=7;
+        habitSession="";
     }
-    internal void BeginSky(Vector3 target) { sky=true; route=-1; goal=target; pause=elapsed=stuck=0;
+    internal void BeginSky(Vector3 target) { sky=true; route=-1; goal=target; pause=elapsed=stuck=0;habitSession=System.Guid.NewGuid().ToString("N");
         currentId=LeisureDestinationCatalog.All.FirstOrDefault(d=>d.Type==LeisureDestinationType.Sky && new Vector3(d.End.X,d.End.Y,d.End.Z)==target)?.Id;startArea=area;LastFailureReason="";Publish(); }
-    internal void BeginRoute(int index) { route=index%Routes.Length; sky=false; waypoint=0; goal=Routes[route][0]; pause=elapsed=stuck=0;
+    internal void BeginRoute(int index) { route=index%Routes.Length; sky=false; waypoint=0; goal=Routes[route][0]; pause=elapsed=stuck=0;habitSession=System.Guid.NewGuid().ToString("N");
         currentId=LeisureDestinationCatalog.All.First(d=>d.Type==LeisureDestinationType.Route && d.Index==route).Id;startArea=area;LastFailureReason="";Publish(); }
 
     public bool Step(CharacterBody3D actor,Node3D art,PetState state,ChaoMotion motion,float dt,bool canStart)

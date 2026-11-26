@@ -84,9 +84,12 @@ public partial class GardenGame
             lostToy.BeginPlay(disappearing,lostState);disappearing.Free();lostToy.Advance(61);
             if(lostState.LearnedPreferences.ToyPreferences.Count!=0)throw new Exception("A disappeared actor earned play credit");
             var beach=new ToyCar{IsBeachBall=true};world.AddChild(beach);pet.Fun=5;beach.Position=friend.Position;
+            int soloHabitBefore=pet.ActivityHabits.Entries.TryGetValue("Play",out var playHabit) ? playHabit.ExperienceCount : 0;
             beach.BeginPlay(friend,pet);var solo=new ChaoBallGame();var candidate=new ChaoIntroductions.Candidate("main",friend,friendArt,pet);
             for(int n=0;n<180;n++){pet.Tick(.05f,false);solo.Advance(.05f,pet,new[]{candidate},Array.Empty<ChaoIntroductions.Candidate>(),new[]{beach});}
             if(pet.LearnedPreferences.ToyPreferences["beach-ball"].ExperienceCount!=1)throw new Exception("Natural solo ball completion did not teach the ball type");
+            if(!pet.ActivityHabits.Entries.TryGetValue("Play",out var soloHabit) || soloHabit.ExperienceCount!=soloHabitBefore+1 || pet.ActivityHabits.Entries.ContainsKey("Socialize"))
+                throw new Exception("Natural solo ball must teach Play, not Socialize");
             FruitTree Food(string kind){var f=new FruitTree{IsFeeder=true,SingleUse=true,FruitKind=kind};world.AddChild(f);f.Place(friend.Position+Vector3.Right*.4f);return f;}
             void Eat(FruitTree food,FruitMeal meal)
             {for(int i=0;i<1200 && meal.Remaining>0;i++){pet.Tick(.05f,false);meal.Advance(.05f,food,pet,friendArt,friend.Position+Vector3.Up*.25f);}}

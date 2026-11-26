@@ -18,9 +18,10 @@ public partial class GardenGame
         try
         {
             SetPhysicsProcess(false);GD.Seed(1522);Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-            GetWindow().Title="MoriGarden — GENERATED SOCIAL PARTNER TEST";
+            GetWindow().Title=OS.GetCmdlineUserArgs().Contains("--activity-habits-check") ? "MoriGarden — GENERATED ACTIVITY HABITS TEST" : "MoriGarden — GENERATED SOCIAL PARTNER TEST";
             ChaoIntroductions.Candidate[] actors=Array.Empty<ChaoIntroductions.Candidate>();
             var completed=new System.Collections.Generic.List<object>();
+            int HabitCredits(PetState state,ChaoActivity activity)=>state.ActivityHabits.Entries.TryGetValue(activity.ToString(),out var entry) ? entry.ExperienceCount : 0;
             PetState State(string name)=>new(){Name=name,Fullness=80,Energy=80,Fun=40,Joy=70,SocialNeed=90,Run=180,Sociability=90,Dexterous=true,ActivityPreference=5,Personality=new(),PersonalitySchemaVersion=1};
             void ClearLeases()
             {
@@ -82,6 +83,7 @@ public partial class GardenGame
                 scoreAfter=pet.SocialLink("main",introduced)!.ScoreFrom("main"),weights=pet.SocialSelection.LastCandidates,
                 mainMemories=pet.History.Events.Where(e=>e.Source=="introduction").ToArray(),peerMemories=peer.Pet.History.Events.Where(e=>e.Source=="introduction").ToArray()});
             GD.Print("PARTNER_INTRO_OK: real Game acquisition, all original phases and one original Together record per Chao");
+            if(actors.Any(c=>HabitCredits(c.Pet,ChaoActivity.Socialize)!=0))throw new Exception("One-time introductions taught a repeatable social habit");
 
             await Fixture(true);Prefer(actors[0],actors[1]);
             var leadB=Instrument(actors[1].Actor,actors[1].Pet,true);var leadC=Instrument(actors[2].Actor,actors[2].Pet,true);
@@ -120,6 +122,8 @@ public partial class GardenGame
                 musicPeer.History.Events.Single(e=>e.Source=="music-ensemble").Participants.Single()!="main" ||
                 originalPet.History.Events.Any(e=>e.Source=="music-ensemble"))throw new Exception("Natural ensemble memory or rebind/need isolation failed");
             if(musicRelationships!=JsonSerializer.Serialize(pet.SocialLinks))throw new Exception("Music added relationship rewards");
+            if(HabitCredits(pet,ChaoActivity.Socialize)!=1 || HabitCredits(musicPeer,ChaoActivity.Socialize)!=1 ||
+                HabitCredits(pet,ChaoActivity.Play)!=0 || HabitCredits(musicPeer,ChaoActivity.Play)!=0)throw new Exception("Ensemble must teach only one Socialize habit per participant");
             completed.Add(new{activity="Music",initiator="main",partner=musician,weights=pet.SocialSelection.LastCandidates,
                 mainMemories=pet.History.Events.Where(e=>e.Source=="music-ensemble").ToArray(),peerMemories=musicPeer.History.Events.Where(e=>e.Source=="music-ensemble").ToArray(),
                 relationshipsBefore=musicRelationships,relationshipsAfter=JsonSerializer.Serialize(pet.SocialLinks),completionNeedDelta=0});
@@ -128,6 +132,7 @@ public partial class GardenGame
             await Fixture(true);var first=Instrument(friend,pet,true);var second=Instrument(actors[1].Actor,actors[1].Pet,false);
             second.StartWith(first,"partner-b","main");first.CancelPlay(friend);second.Advance(61);
             if(actors.Any(c=>c.Pet.History.Events.Any(e=>e.Source=="music-ensemble")))throw new Exception("Forced ensemble cleanup recorded success");
+            if(actors.Any(c=>c.Pet.ActivityHabits.Entries.Count!=0))throw new Exception("Cancelled ensemble taught a habit");
             await Fixture(true);first=Instrument(actors[1].Actor,actors[1].Pet,true);drums=new(){IsDrums=true};world.AddChild(drums);drums.Position=friend.Position+Vector3.Forward*.4f;
             if(!musicGroup.TryJoin(pet,actors,new[]{actors[0]},new[]{first,drums}))throw new Exception("Missing-actor fixture could not start");
             musicGroup.Advance(.1f,pet,new[]{actors[0]},Array.Empty<ChaoIntroductions.Candidate>(),new[]{first,drums},allowStart:false);
@@ -173,6 +178,8 @@ public partial class GardenGame
                     !inviter.Pet.Personality.Equals(innate) || favorites!=inviter.Pet.FavoriteFruit+inviter.Pet.FavoriteToy+inviter.Pet.FavoriteInstrument)
                     throw new Exception("Actual ten-pass game failed: inviter="+inviter.Id+", stage="+ballGame.Stage+", passes="+ballGame.CompletedPasses+", need="+finalNeed);
                 if(ballRelationships!=JsonSerializer.Serialize(pet.SocialLinks))throw new Exception("Ball added relationship rewards");
+                if(HabitCredits(inviter.Pet,ChaoActivity.Socialize)!=1 || HabitCredits(invited.Pet,ChaoActivity.Socialize)!=1 ||
+                    HabitCredits(inviter.Pet,ChaoActivity.Play)!=0 || HabitCredits(invited.Pet,ChaoActivity.Play)!=0)throw new Exception("Shared ball must teach Socialize, never Play or ten credits");
                 completed.Add(new{activity="Ball",initiator=inviter.Id,partner=invited.Id,passes=ballGame.CompletedPasses,weights=inviter.Pet.SocialSelection.LastCandidates,
                     inviterMemories=inviter.Pet.History.Events.Where(e=>e.Source=="shared-ball").ToArray(),peerMemories=invited.Pet.History.Events.Where(e=>e.Source=="shared-ball").ToArray(),
                     relationshipsBefore=ballRelationships,relationshipsAfter=JsonSerializer.Serialize(pet.SocialLinks),finalNeedDelta});
@@ -199,6 +206,7 @@ public partial class GardenGame
             if(SocialActivityTargets(friend)!=0)throw new Exception("No-repeatable-activity fixture invented social availability");
             MainActivity.Select(true);if(MainActivity.Coordinator.SelectedActivity==ChaoActivity.Socialize)throw new Exception("No eligible social activity did not fall back");
             GD.Print("PARTNER_SAFETY_OK: reserved actor protected, no repeatable social activity remains unavailable");
+            if(OS.GetCmdlineUserArgs().Contains("--activity-habits-check"))await CheckHabitExecutors(restored["partner-b"]);
             File.WriteAllText(Path.Combine(directory,"partner-check.json"),JsonSerializer.Serialize(new{passed=true,introCounts,musicCounts,ballCounts,completed,
                 cancelledChoices=new{introductions=3000,music=1000,ball=1500},tiredRefusal=true,ballTimeout=true,missingPerformer=true,forcedEnsembleCleanup=true,
                 mainAndResident=true,editorRebind=true,saveLoad=true,noDuplicateNeeds=true}));

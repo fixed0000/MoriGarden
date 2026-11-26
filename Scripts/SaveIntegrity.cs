@@ -15,6 +15,8 @@ internal static class SaveIntegrity
     {
         if(depth>16 || !new[]{"Name","Form","Fullness","IsEgg","Swim","Statistics","AgeSeconds"}.Any(pet.ContainsKey))
             throw new ArgumentException("Missing or invalid Chao record. The original save was kept.");
+        if(pet["ActivityHabits"] is JsonObject habits && habits["SchemaVersion"] is JsonValue schema &&
+            schema.TryGetValue<int>(out int version) && version!=1)throw new UnsupportedActivityHabitsSchemaException();
         if(!pet.ContainsKey("GardenEggs"))pet["GardenEggs"]=new JsonArray();
         if(pet["GardenEggs"] is not JsonArray eggs)throw new ArgumentException("Invalid saved Chao list.");
         var ids=new HashSet<string>(StringComparer.Ordinal){"main"};

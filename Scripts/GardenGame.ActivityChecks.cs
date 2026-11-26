@@ -76,7 +76,15 @@ public partial class GardenGame
             if(new[]{pet.GardenActivity!.SelectedActivity,toyPeer.Chao!.GardenActivity!.SelectedActivity}.Count(a=>a==ChaoActivity.Play)!=1)throw new Exception("One free toy was reserved by two actors");
             Fixture(State("Edited player",80,80,5));world.GetChildren().OfType<ToyCar>().First(t=>t.IsRattle).Position=new(20.6f,.02f,14);Simulate(8);
             var performing=world.GetChildren().OfType<ToyCar>().FirstOrDefault(t=>t.PlayedBy(friend));
-            if(performing==null)throw new Exception("Editor rebind fixture did not start a real toy interaction");
+            // The previous fixtures can leave a legitimate rise/approach prefix
+            // before thought. Observe the actual start, not an eight-second
+            // animation assumption; never hide a failed or different activity.
+            float rebindStart=8;
+            while(performing==null && rebindStart<16 && moriInterests.Busy && moriInterests.LastFailureReason.Length==0 &&
+                MainActivity.Coordinator.SelectedActivity==ChaoActivity.Play && moriInterests.Target is ToyCar {IsRattle:true})
+            {Simulate(.1f);rebindStart+=.1f;performing=world.GetChildren().OfType<ToyCar>().FirstOrDefault(t=>t.PlayedBy(friend));}
+            if(performing==null)throw new Exception("Editor rebind fixture did not start a real toy interaction: position="+friend.Position+", pose="+(friendArt as ImportedChao)?.PoseKind+", busy="+moriInterests.Busy+", interest failure="+moriInterests.LastFailureReason+"\n"+ChaoStateDiagnostics.Describe(pet));
+            GD.Print($"ACTIVITY_REBIND_START: real rattle playing at {rebindStart:0.0}s");
             var changed=SaveStore.Snapshot(pet);changed.Fun=10;changed.KeepCurrentRuntimeFrom(pet);pet=changed;RebindGardenExecutors("main",pet);Simulate(1);
             if(pet.Fun<=10 || !ReferenceEquals(performing.PlayState,pet))throw new Exception("Playing executor kept the obsolete PetState after an editor replacement");
             // Actual urgent interruption of an existing route, not a synthetic mover.

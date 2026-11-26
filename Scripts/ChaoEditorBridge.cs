@@ -103,6 +103,7 @@ internal sealed class ChaoEditorBridge
             personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
             personality=entry.Value.Personality,
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
+            activityHabits=entry.Value.ActivityHabitDiagnostics(),
             placePreferences=entry.Value.PlacePreferenceDiagnostics(),
             socialPreferences=entry.Value.SocialPreferenceDiagnostics(ownerState,entry.Key,roster),
             currentState=ChaoStateDiagnostics.Capture(entry.Value),

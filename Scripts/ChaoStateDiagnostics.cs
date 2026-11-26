@@ -12,6 +12,7 @@ public static class ChaoStateDiagnostics
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
         mood=pet.Mood.Snapshot,
         learnedPreferences=pet.LearnedPreferenceDiagnostics(),
+        activityHabits=pet.ActivityHabitDiagnostics(),
         placePreferences=pet.PlacePreferenceDiagnostics(),
         socialPartners=new{pet.SocialSelection.LastInteraction,pet.SocialSelection.LastChosenPartner,pet.SocialSelection.LastCompletedPartner,pet.SocialSelection.LastCandidates},
         priorities=pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities,
@@ -42,6 +43,10 @@ public static class ChaoStateDiagnostics
         foreach(var group in Enum.GetValues<LearnedItemGroup>())
             foreach(var (id,entry) in group==LearnedItemGroup.Toy ? pet.LearnedPreferences.ToyPreferences : pet.LearnedPreferences.FruitPreferences)
                 text.AppendLine($"{group} / {id}: {pet.LearnedPreferences.EffectiveBias(group,id,pet.History.Seconds):+0.000;-0.000;0.000}, experiences {entry.ExperienceCount}, last credit {entry.LastCreditSeconds:0.0}s");
+        text.AppendLine("\nActivity habits — read-only");
+        foreach(var a in ChaoActivityHabits.Supported)
+            text.AppendLine($"{a}: {pet.ActivityHabits.EffectiveBias(a,pet.History.Seconds):+0.000;-0.000;0.000}");
+        text.AppendLine($"Last credit: {pet.ActivityHabits.LastCreditedCategory?.ToString() ?? "None"} @ {pet.ActivityHabits.LastCreditTime?.ToString("0.0") ?? "—"}s\nLast rejected credit: {pet.ActivityHabits.LastRejectedReason}");
         text.AppendLine("\nLeisure destination preferences");
         var leisure=pet.LeisureSelection;
         text.AppendLine($"Current: {leisure?.CurrentId ?? "None"} / {LeisureDestinationCatalog.Find(leisure?.CurrentId)?.Type.ToString() ?? "None"}\nArea: {leisure?.AreaId ?? "Inactive"}\nLast outcome: {leisure?.Outcome ?? "None"}\nRecent route: {leisure?.RecentRoute ?? "None"}; sky: {leisure?.RecentSky ?? "None"}");

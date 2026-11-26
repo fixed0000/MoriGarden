@@ -65,6 +65,7 @@ class ChaoEditor:
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
+        self.habit_rows = {chao["id"]: chao.get("activityHabits", {}) for chao in snapshot.get("chao", [])}
         self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
         self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
@@ -108,6 +109,7 @@ class ChaoEditor:
                              learnedPreferences=self.learned_rows.get(self.selected, {}),
                              placePreferences=self.place_rows.get(self.selected, {}),
                              socialPreferences=self.social_rows.get(self.selected, {}),
+                             activityHabits=self.habit_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -178,6 +180,9 @@ class ChaoEditor:
         partners = ttk.Frame(sections, padding=6)
         sections.add(partners, text="Social partners — read-only")
         self.build_social_preferences(partners)
+        habits = ttk.Frame(sections, padding=6)
+        sections.add(habits, text="Activity habits")
+        self.build_activity_habits(habits)
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -200,6 +205,21 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def build_activity_habits(self, panel):
+        data = self.snapshot.get("activityHabits") or {}
+        ttk.Label(panel, text="Learned activity habits — read-only · active Chao seconds").pack(anchor="w")
+        credit = data.get("LastCreditTime")
+        ttk.Label(panel, text=f"Last credit: {data.get('LastCreditedCategory') or 'None'} · {'—' if credit is None else f'{credit:.1f}s'}\nLast rejected credit: {data.get('LastRejectedReason', 'None')}", wraplength=670).pack(anchor="w", pady=8)
+        columns = ("activity", "bias", "count", "credit", "update")
+        table = ttk.Treeview(panel, columns=columns, show="headings", height=5)
+        for key, label, width in zip(columns, ("Activity", "Effective bias", "Experiences", "Last credit (s)", "Last update (s)"), (125, 125, 100, 125, 125)):
+            table.heading(key, text=label)
+            table.column(key, width=width, minwidth=70)
+        table.pack(fill="both", expand=True)
+        for row in data.get("entries", []):
+            table.insert("", "end", values=(row["activity"], f"{row['effectiveBias']:+.4f}", row["experienceCount"], "—" if row["lastCreditSeconds"] is None else f"{row['lastCreditSeconds']:.1f}", "—" if row["lastUpdateSeconds"] is None else f"{row['lastUpdateSeconds']:.1f}"))
+        ttk.Label(panel, text="Only completed Play, Socialize and Leisure can teach habits. Needs and availability remain authoritative.", wraplength=670).pack(anchor="w", pady=6)
 
     def build_social_preferences(self, panel):
         data = self.snapshot.get("socialPreferences") or {}

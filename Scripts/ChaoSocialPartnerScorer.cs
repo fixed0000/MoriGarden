@@ -41,7 +41,7 @@ public static class ChaoSocialPartnerScorer
         foreach(var item in choices){draw-=item.FinalWeight;if(draw<0)return item;}return choices[^1];
     }
     // Completion only: no additional need relief, relationship growth or personality mutation.
-    public static void CompleteShared(string source,IReadOnlyList<(string Id,PetState State)> participants)
+    public static void CompleteShared(string source,IReadOnlyList<(string Id,PetState State)> participants,string completionId)
     {
         if(source is not ("shared-ball" or "music-ensemble") || participants.Count<2 ||
             participants.Select(p=>p.Id).Distinct().Count()!=participants.Count || participants.Any(p=>!DiscoveryMemory.ValidId(p.Id)))return;
@@ -52,6 +52,7 @@ public static class ChaoSocialPartnerScorer
                 source=="shared-ball" ? "Enjoyed playing ball with another Chao." : "Enjoyed performing music with other Chao.",.65f,.55f,peers);
             // Record may refuse cooldown/capacity; the physical interaction still completed.
             member.State.SocialSelection.LastCompletedPartner=peers[0];
+            member.State.ActivityHabits.Credit(ChaoActivity.Socialize,member.State.History.Seconds,completionId);
         }
     }
 }

@@ -48,7 +48,8 @@ class EditorStatTests(unittest.TestCase):
                            Skillful=34, Charm=-17, Chatty=6, Carefree=23, Fickle=-10)
         editor.snapshot = dict(session="isolated-session", target="main", parameters=dict(Joy=60),
                                personality=personality.copy(), learnedPreferences={"entries": [{"id": "rattle", "effectiveBias": 0.2}]},
-                               socialPreferences={"partners": [{"id": "peer", "score": {"PartnerWeight": 1.2}}]}, relationships=[])
+                               socialPreferences={"partners": [{"id": "peer", "score": {"PartnerWeight": 1.2}}]},
+                               activityHabits={"entries": [{"activity": "Play", "effectiveBias": 0.08}]}, relationships=[])
         editor.variables = dict(Joy=Value(75))
         editor.stat_variables = {}
         editor.relationship_peer = None
@@ -66,6 +67,9 @@ class EditorStatTests(unittest.TestCase):
             self.assertNotIn("LearnedPreferences", request["patch"])
             self.assertNotIn("socialPreferences", request)
             self.assertNotIn("SocialSelection", request["patch"])
+            self.assertNotIn("activityHabits", request)
+            self.assertNotIn("ActivityHabits", request["patch"])
+            self.assertEqual(editor.snapshot["activityHabits"]["entries"][0]["effectiveBias"], 0.08)
             self.assertEqual(editor.snapshot["socialPreferences"]["partners"][0]["score"]["PartnerWeight"], 1.2)
             self.assertEqual(editor.snapshot["learnedPreferences"]["entries"][0]["effectiveBias"], 0.2)
             self.assertEqual(editor.snapshot["personality"], personality)
