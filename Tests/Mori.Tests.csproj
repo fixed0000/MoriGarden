@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Scripts/ChaoMemoryDiagnostics.cs" Link="ChaoMemoryDiagnostics.cs" />
+    <Compile Include="../Scripts/ChaoObjectBiasScorer.cs" Link="ChaoObjectBiasScorer.cs" />
     <Compile Include="../Scripts/ChaoLearnedEditor.cs" Link="ChaoLearnedEditor.cs" />
     <Compile Include="../Scripts/ChaoPersonalityEditor.cs" Link="ChaoPersonalityEditor.cs" />
     <Compile Include="../Scripts/ChaoVoicePolicy.cs" Link="ChaoVoicePolicy.cs" />

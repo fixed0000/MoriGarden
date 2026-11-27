@@ -71,9 +71,7 @@ public sealed class ChaoMemory
     public bool KnowsAnimal(string id)=>Events.Any(e=>e.Kind==ChaoMemoryKind.AnimalSeen && e.Source=="animal-"+id);
     public float ObjectBias(string id,string area)
     {
-        float success=Events.Where(e=>e.Source==id && e.Area==area && e.Valence>0).Sum(e=>e.Influence(Seconds)*(1+Math.Min(e.Occurrences,4)*.15f));
-        float failure=Events.Where(e=>e.Source==id && e.Area==area && e.Valence<0).Sum(e=>e.Influence(Seconds));
-        return Math.Clamp(success*.10f-failure*.24f/(1+success),-.25f,.25f);
+        return ChaoObjectBiasScorer.Evaluate(Events,Seconds,id,area).Bias;
     }
     public float PartnerBias(string peer)=>Math.Clamp(Events.Where(e=>e.Participants.Contains(peer)).Sum(e=>e.Valence*e.Influence(Seconds))*.07f,-.3f,.4f);
     [System.Text.Json.Serialization.JsonIgnore]

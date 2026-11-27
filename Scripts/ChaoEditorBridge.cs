@@ -14,6 +14,7 @@ internal sealed class ChaoEditorBridge
     private readonly string session=Guid.NewGuid().ToString("N");
     private string lastRequest="";
     private string status="Ready";
+    private long publication;
     private readonly HashSet<string> processed=new(StringComparer.Ordinal);
     private readonly Dictionary<string,double> rhythmOffsets=new(StringComparer.Ordinal);
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
@@ -137,6 +138,7 @@ internal sealed class ChaoEditorBridge
             personalityRevision=ChaoPersonalityEditor.Revision(entry.Value),
             learnedRevision=ChaoLearnedEditor.Revision(entry.Value),
             learnedEditor=ChaoLearnedEditor.Capture(entry.Value),
+            memoryDiagnostics=ChaoMemoryDiagnostics.Capture(entry.Value,entry.Key,roster),
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             activityHabits=entry.Value.ActivityHabitDiagnostics(),
             dailyRhythm=ChaoDailyRhythmScorer.Capture(entry.Value,RhythmFor(entry.Key,worldRhythm)),
@@ -153,7 +155,7 @@ internal sealed class ChaoEditorBridge
                     score=link?.ScoreFrom(entry.Key) ?? 0, status=link?.StatusFrom(entry.Key) ?? "Stranger" };
             }).ToArray() }).ToArray();
         string path=Path.Combine(directory,"chao-editor-state.json");
-        string snapshotJson=JsonSerializer.Serialize(new { session,status,lastRequest,profileDirectory=Path.GetFullPath(directory),chao });
+        string snapshotJson=JsonSerializer.Serialize(new { session,status,lastRequest,publication=++publication,profileDirectory=Path.GetFullPath(directory),chao });
         // Windows readers/OneDrive can briefly deny replacement of the snapshot.
         // Keep an already applied edit authoritative and retry publication next
         // Poll; never replay the command or touch the actual garden save here.

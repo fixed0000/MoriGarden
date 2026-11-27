@@ -9,9 +9,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from chao_personality_editor import PersonalityEditorMixin, LEGACY
 from chao_learned_editor import LearnedEditorMixin
+from chao_memory_view import MemoryEditorMixin
 
 
-class ChaoEditor(LearnedEditorMixin, PersonalityEditorMixin):
+class ChaoEditor(MemoryEditorMixin, LearnedEditorMixin, PersonalityEditorMixin):
     def __init__(self, window):
         self.window = window
         personal = Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
@@ -99,6 +100,7 @@ class ChaoEditor(LearnedEditorMixin, PersonalityEditorMixin):
                 self.list.selection_set(index)
         self.sync_personality_snapshot(snapshot)
         self.sync_learned_snapshot(snapshot)
+        self.sync_memory_snapshot(snapshot)
 
     def refresh_roster(self):
         try:
@@ -116,7 +118,7 @@ class ChaoEditor(LearnedEditorMixin, PersonalityEditorMixin):
                 else:
                     self.status.set("Game restarted. Unsaved personality draft retained; Read from game to continue.")
         except (OSError, ValueError):
-            pass
+            self.memory_unavailable()
         self.window.after(1000, self.refresh_roster)
 
     def select_chao(self, _event):
@@ -217,6 +219,7 @@ class ChaoEditor(LearnedEditorMixin, PersonalityEditorMixin):
         self.build_personality()
         self.build_relationships()
         self.build_learned_preferences()
+        self.build_memory()
         self.tabs.select(tab_index)
         self.status.set("Edit the values you want to change. Applies to the running game.")
 
