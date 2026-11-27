@@ -8,9 +8,10 @@ from uuid import uuid4
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from chao_personality_editor import PersonalityEditorMixin, LEGACY
+from chao_learned_editor import LearnedEditorMixin
 
 
-class ChaoEditor(PersonalityEditorMixin):
+class ChaoEditor(LearnedEditorMixin, PersonalityEditorMixin):
     def __init__(self, window):
         self.window = window
         personal = Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
@@ -89,7 +90,7 @@ class ChaoEditor(PersonalityEditorMixin):
         self.roster = roster
         self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
         draft = self.active_personality_draft()
-        if self.selected not in roster and not (draft and draft.dirty):
+        if self.selected not in roster and not self.editor_dirty():
             self.selected = next(iter(roster), None)
         if self.selected in roster:
             index = list(roster).index(self.selected)
@@ -97,6 +98,7 @@ class ChaoEditor(PersonalityEditorMixin):
                 self.list.selection_clear(0, "end")
                 self.list.selection_set(index)
         self.sync_personality_snapshot(snapshot)
+        self.sync_learned_snapshot(snapshot)
 
     def refresh_roster(self):
         try:
@@ -109,7 +111,7 @@ class ChaoEditor(PersonalityEditorMixin):
             self.refresh_voice()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 draft = self.active_personality_draft()
-                if draft is None or not draft.dirty:
+                if not self.editor_dirty():
                     self.reload(force=True)
                 else:
                     self.status.set("Game restarted. Unsaved personality draft retained; Read from game to continue.")
@@ -129,7 +131,7 @@ class ChaoEditor(PersonalityEditorMixin):
             target = list(self.roster)[selection[0]]
             if target == self.selected:
                 return
-            if target != self.selected and not self.guard_personality_navigation():
+            if target != self.selected and not self.guard_editor_navigation():
                 self.list.selection_clear(0, "end")
                 self.list.selection_set(list(self.roster).index(self.selected))
                 return
@@ -137,7 +139,7 @@ class ChaoEditor(PersonalityEditorMixin):
             self.reload(force=True)
 
     def reload(self, force=False):
-        if not force and not self.guard_personality_navigation():
+        if not force and not self.guard_editor_navigation():
             return
         try:
             snapshot = self.read()
@@ -221,8 +223,16 @@ class ChaoEditor(PersonalityEditorMixin):
     def build_learned_preferences(self):
         page = ttk.Frame(self.tabs, padding=12)
         self.tabs.add(page, text="Experience")
+        section_choice = ttk.Combobox(page, state="readonly")
+        section_choice.pack(fill="x", pady=(0, 4))
         sections = ttk.Notebook(page)
         sections.pack(fill="both", expand=True)
+        sections.enable_traversal()
+        self.experience_sections = sections
+        self.prepare_learned_widgets()
+        item_editor = ttk.Frame(sections)
+        sections.add(item_editor, text="Item preferences")
+        self.build_learned_page(item_editor, ("toys", "fruits"))
         panel = ttk.Frame(sections)
         sections.add(panel, text="Personality and items")
         places = ttk.Frame(sections, padding=6)
@@ -233,7 +243,14 @@ class ChaoEditor(PersonalityEditorMixin):
         self.build_social_preferences(partners)
         habits = ttk.Frame(sections, padding=6)
         sections.add(habits, text="Activity habits")
-        self.build_activity_habits(habits)
+        habit_sections = ttk.Notebook(habits)
+        habit_sections.pack(fill="both", expand=True)
+        habit_history = ttk.Frame(habit_sections)
+        habit_edit = ttk.Frame(habit_sections)
+        habit_sections.add(habit_history, text="Real experience")
+        habit_sections.add(habit_edit, text="Adjust Bias")
+        self.build_activity_habits(habit_history)
+        self.build_learned_page(habit_edit, ("habits",))
         rhythm = ttk.Frame(sections, padding=6)
         sections.add(rhythm, text="Daily rhythm")
         self.build_daily_rhythm(rhythm)
@@ -253,6 +270,10 @@ class ChaoEditor(PersonalityEditorMixin):
         ttk.Label(gestures, textvariable=self.gesture_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
         self.refresh_idle_gestures()
         self.refresh_voice()
+        section_choice.configure(values=[sections.tab(t, "text") for t in sections.tabs()])
+        section_choice.current(0)
+        section_choice.bind("<<ComboboxSelected>>", lambda _e: sections.select(section_choice.current()))
+        sections.bind("<<NotebookTabChanged>>", lambda _e: section_choice.current(sections.index(sections.select())))
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -526,7 +547,7 @@ class ChaoEditor(PersonalityEditorMixin):
             self.relation_met.set(relation[0])
             self.relation_score.set(relation[1])
 
-    def apply(self, personality_only=False):
+    def apply(self, personality_only=False, learned_only=False, drafts_only=False):
         if self.snapshot is None or self.pending is not None:
             return
         if self.snapshot["target"] != getattr(self, "selected", self.snapshot["target"]):
@@ -540,8 +561,9 @@ class ChaoEditor(PersonalityEditorMixin):
             if not any(chao["id"] == self.snapshot["target"] for chao in current["chao"]):
                 self.status.set("This Chao is no longer in the garden.")
                 return
+            scoped = personality_only or learned_only or drafts_only
             patch = {}
-            for key, old in ({} if personality_only else self.snapshot["parameters"]).items():
+            for key, old in ({} if scoped else self.snapshot["parameters"]).items():
                 if key in LEGACY:
                     continue
                 value = self.variables[key].get()
@@ -560,7 +582,7 @@ class ChaoEditor(PersonalityEditorMixin):
             relationship = {}
             old_relation = next((row for row in self.snapshot["relationships"]
                                  if row["id"] == self.relationship_peer), None)
-            if old_relation is not None and not personality_only:
+            if old_relation is not None and not scoped:
                 met = self.relation_met.get()
                 score = int(self.relation_score.get())
                 if not -100 <= score <= 100:
@@ -569,9 +591,10 @@ class ChaoEditor(PersonalityEditorMixin):
                     relationship["met"] = met
                 if score != old_relation["score"]:
                     relationship["score"] = score
-            statistics = {} if personality_only else self.statistics_patch()
-            personality = self.personality_patch()
-            if not patch and not relationship and not statistics and not personality:
+            statistics = {} if scoped else self.statistics_patch()
+            personality = {} if learned_only else self.personality_patch()
+            learned = {} if personality_only else self.learned_patch()
+            if not patch and not relationship and not statistics and not personality and not learned:
                 self.status.set("No changes to apply.")
                 return
             request_id = uuid4().hex
@@ -582,13 +605,18 @@ class ChaoEditor(PersonalityEditorMixin):
             if personality:
                 request["personality"] = personality
                 request["personalityRevision"] = self.active_personality_draft().revision
+            if learned:
+                request["learnedAdjustments"] = learned
+                request["learnedRevision"] = self.active_learned_draft().revision
             if relationship:
                 request["relationship"] = {"other": self.relationship_peer, **relationship}
             temporary.write_text(json.dumps(request, allow_nan=False), encoding="utf-8")
             temporary.replace(command)
-            self.pending_other_draft = self.unrelated_draft() if personality_only else None
+            self.pending_other_draft = self.unrelated_draft() if scoped else None
+            self.pending_sections = {key for key in ("personality", "learnedAdjustments") if key in request}
             self.pending = request_id
             self.refresh_personality_controls()
+            self.refresh_learned_controls()
             self.status.set("Waiting for the game…")
             self.window.after(400, lambda: self.check(16))
         except (OSError, ValueError) as error:
@@ -600,17 +628,21 @@ class ChaoEditor(PersonalityEditorMixin):
             if snapshot["session"] != self.snapshot["session"]:
                 self.pending = None
                 self.sync_personality_snapshot(snapshot)
+                self.sync_learned_snapshot(snapshot)
                 self.status.set("The game restarted. Draft retained. Read from game before applying.")
                 return
             if snapshot["lastRequest"] == self.pending:
                 self.pending = None
                 if snapshot["status"] == "Applied":
-                    self.sync_personality_snapshot(snapshot, confirmed=True)
+                    sent = getattr(self, "pending_sections", {"personality"})
+                    self.sync_personality_snapshot(snapshot, confirmed="personality" in sent)
+                    self.sync_learned_snapshot(snapshot, confirmed="learnedAdjustments" in sent)
                     self.reload(force=True)
                     if getattr(self, "pending_other_draft", None) is not None:
                         self.restore_unrelated_draft(self.pending_other_draft)
                 else:
                     self.refresh_personality_controls()
+                    self.refresh_learned_controls()
                 self.status.set(snapshot["status"])
                 return
         except (OSError, ValueError):
@@ -620,6 +652,7 @@ class ChaoEditor(PersonalityEditorMixin):
         else:
             self.pending = None
             self.refresh_personality_controls()
+            self.refresh_learned_controls()
             self.status.set("No reply. Check that Mori is still open.")
 
 

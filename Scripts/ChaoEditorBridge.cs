@@ -49,7 +49,7 @@ internal sealed class ChaoEditorBridge
                 {
                     lastRequest=id;
                     if(!processed.Add(id)){status="Duplicate request ignored.";Publish();return null;}
-                    if(request.Any(p=>p.Key is not ("session" or "id" or "target" or "patch" or "statistics" or "relationship" or "personality" or "personalityRevision")))
+                    if(request.Any(p=>p.Key is not ("session" or "id" or "target" or "patch" or "statistics" or "relationship" or "personality" or "personalityRevision" or "learnedAdjustments" or "learnedRevision")))
                         throw new ArgumentException("Unknown editor request section.");
                     string target=request["target"]?.GetValue<string>() ?? "main";
                     if (!roster.TryGetValue(target,out var current))
@@ -83,6 +83,7 @@ internal sealed class ChaoEditorBridge
                                 var destination=next.Stat(name);destination.Grade=updatedStat.Grade;destination.Level=updatedStat.Level;destination.Points=updatedStat.Points;destination.Progress=updatedStat.Progress;
                             }
                         ChaoPersonalityEditor.Apply(next,current,personality,revision,patch);
+                        ChaoLearnedEditor.Apply(next,current,Section("learnedAdjustments"),request["learnedRevision"]?.GetValue<string>());
                         // Prepare shared relationships independently, including resident-target requests.
                         List<ChaoRelationship>? preparedLinks=null;
                         ChaoRelationship? preparedLink=null;
@@ -134,6 +135,8 @@ internal sealed class ChaoEditorBridge
             personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
             personality=entry.Value.Personality,
             personalityRevision=ChaoPersonalityEditor.Revision(entry.Value),
+            learnedRevision=ChaoLearnedEditor.Revision(entry.Value),
+            learnedEditor=ChaoLearnedEditor.Capture(entry.Value),
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             activityHabits=entry.Value.ActivityHabitDiagnostics(),
             dailyRhythm=ChaoDailyRhythmScorer.Capture(entry.Value,RhythmFor(entry.Key,worldRhythm)),
