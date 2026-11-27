@@ -19,7 +19,8 @@ public partial class GardenGame
         ballGame.RebindPlayer(actor,updated,art);musicGroup.RebindPlayer(actor,updated,art);
     }
     private GardenActivityAdapter MainActivity=>mainActivity ??=new(friend,()=>friendArt,moriInterests,moriRest,moriLeisure,chaoMotion,"main");
-    internal GardenActivityContext ActivityContext=>new(world,zone==GardenZone.Garden,travel.AreaId(zone),FruitSlots(),world.GetChildren().OfType<ToyCar>(),activityClaims,SocialActivityTargets,StartSocialActivity);
+    private GardenRhythmContext EditorRhythmContext=>new(pet.GardenSeconds,travel.AreaId(zone),"main",GardenActivitiesEnabled);
+    internal GardenActivityContext ActivityContext=>new(world,zone==GardenZone.Garden,travel.AreaId(zone),FruitSlots(),world.GetChildren().OfType<ToyCar>(),activityClaims,SocialActivityTargets,StartSocialActivity,pet.GardenSeconds,GardenActivitiesEnabled);
     private GardenActivityAdapter AdapterFor(CharacterBody3D actor)=>actor is GardenEgg egg ? egg.ActivityAdapter : MainActivity;
     private bool SocialLeaseable(ChaoIntroductions.Candidate c)=>AdapterFor(c.Actor).Coordinator.CanJoinSocial;
     private int SocialActivityTargets(CharacterBody3D actor)

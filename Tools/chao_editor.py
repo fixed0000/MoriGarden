@@ -65,6 +65,7 @@ class ChaoEditor:
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
+        self.rhythm_rows = {chao["id"]: chao.get("dailyRhythm", {}) for chao in snapshot.get("chao", [])}
         self.habit_rows = {chao["id"]: chao.get("activityHabits", {}) for chao in snapshot.get("chao", [])}
         self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
         self.personality_rows = {chao["id"]: chao.get("personality") for chao in snapshot.get("chao", [])}
@@ -81,6 +82,7 @@ class ChaoEditor:
             snapshot = self.read()
             previous = self.selected
             self.update_roster(snapshot)
+            self.refresh_daily_rhythm()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 self.reload()
         except (OSError, ValueError):
@@ -110,6 +112,7 @@ class ChaoEditor:
                              placePreferences=self.place_rows.get(self.selected, {}),
                              socialPreferences=self.social_rows.get(self.selected, {}),
                              activityHabits=self.habit_rows.get(self.selected, {}),
+                             dailyRhythm=self.rhythm_rows.get(self.selected, {}),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -175,14 +178,17 @@ class ChaoEditor:
         panel = ttk.Frame(sections)
         sections.add(panel, text="Personality and items")
         places = ttk.Frame(sections, padding=6)
-        sections.add(places, text="Garden places — read-only")
+        sections.add(places, text="Garden places")
         self.build_place_preferences(places)
         partners = ttk.Frame(sections, padding=6)
-        sections.add(partners, text="Social partners — read-only")
+        sections.add(partners, text="Social partners")
         self.build_social_preferences(partners)
         habits = ttk.Frame(sections, padding=6)
         sections.add(habits, text="Activity habits")
         self.build_activity_habits(habits)
+        rhythm = ttk.Frame(sections, padding=6)
+        sections.add(rhythm, text="Daily rhythm")
+        self.build_daily_rhythm(rhythm)
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -205,6 +211,36 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def build_daily_rhythm(self, panel):
+        self.rhythm_text = tk.StringVar()
+        ttk.Label(panel, textvariable=self.rhythm_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
+        self.refresh_daily_rhythm()
+
+    def refresh_daily_rhythm(self):
+        if not hasattr(self, "rhythm_text"):
+            return
+        data = self.rhythm_rows.get(self.selected, {})
+        cycle = data.get("cycle") or {}
+        phase = cycle.get("CurrentPhase", "Inactive")
+        if isinstance(phase, int):
+            phase = ("Dawn", "Day", "Dusk", "Night")[phase]
+        lines = ["Daily rhythm — read-only · shared garden time", ""]
+        if data.get("active"):
+            lines += [f"Garden: {data['gardenSeconds']:.1f}s · cycle: {cycle['CyclePosition']:.2f}/600 · {phase}",
+                      f"Daylight: {cycle['DaylightIntensity']:.3f} · Night: {cycle['NightIntensity']:.3f}"]
+        else:
+            lines += ["Inactive outside permanent gardens"]
+        lines += [f"Personal phase offset: {data.get('personalPhaseOffset', 0):+.2f}s", f"Energy: {data.get('energy', 0):.1f}",
+                  (data.get("restEligibility") or {}).get("Reason", "Waiting for game context"),
+                  "Last safe-place probe: " + data.get("safePlace", "Not available"), "", "Activity       Rhythm adjustment"]
+        for row in data.get("adjustments", []):
+            lines.append(f"{row['Activity']:<14} {row['Adjustment']:+.4f}")
+        lines += ["", "Current learned habits (unchanged)"]
+        for row in (data.get("habits") or {}).get("entries", []):
+            lines.append(f"{row['activity']}: {row['effectiveBias']:+.4f}")
+        lines += ["", "Night rest also requires a safe, free dry place.", "No required schedule. Needs remain authoritative."]
+        self.rhythm_text.set("\n".join(lines))
 
     def build_activity_habits(self, panel):
         data = self.snapshot.get("activityHabits") or {}

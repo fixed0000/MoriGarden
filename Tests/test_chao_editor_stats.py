@@ -41,6 +41,25 @@ class EditorStatTests(unittest.TestCase):
         editor=self.editor();editor.stat_variables["Run"]["Progress"].set(45)
         self.assertEqual(editor.statistics_patch()["Run"]["Points"],1980)
 
+    def test_daily_rhythm_is_read_only_and_formats_live_context(self):
+        editor = module.ChaoEditor.__new__(module.ChaoEditor)
+        editor.selected = "main"
+        editor.rhythm_text = Value("")
+        editor.rhythm_rows = {"main": dict(active=True, gardenSeconds=360, personalPhaseOffset=3,
+            energy=70, cycle=dict(CurrentPhase=3, CyclePosition=505, DaylightIntensity=0, NightIntensity=1),
+            restEligibility=dict(Allowed=True, Reason="Mild night fatigue"), safePlace="safe available bed",
+            adjustments=[dict(Activity="Sleep", Adjustment=0.08)],
+            habits=dict(entries=[dict(activity="Play", effectiveBias=0.1)]))}
+        original = json.dumps(editor.rhythm_rows)
+        editor.refresh_daily_rhythm()
+        self.assertIn("Night", editor.rhythm_text.get())
+        self.assertIn("+0.0800", editor.rhythm_text.get())
+        self.assertIn("Play: +0.1000", editor.rhythm_text.get())
+        self.assertEqual(json.dumps(editor.rhythm_rows), original)
+        editor.rhythm_rows["main"]["active"] = False
+        editor.refresh_daily_rhythm()
+        self.assertIn("Inactive", editor.rhythm_text.get())
+
     def test_unrelated_patch_does_not_replace_personality(self):
         editor = module.ChaoEditor.__new__(module.ChaoEditor)
         personality = dict(Curious=-31, Kindness=12, Energetic=-75, Naive=-60,
@@ -49,7 +68,7 @@ class EditorStatTests(unittest.TestCase):
         editor.snapshot = dict(session="isolated-session", target="main", parameters=dict(Joy=60),
                                personality=personality.copy(), learnedPreferences={"entries": [{"id": "rattle", "effectiveBias": 0.2}]},
                                socialPreferences={"partners": [{"id": "peer", "score": {"PartnerWeight": 1.2}}]},
-                               activityHabits={"entries": [{"activity": "Play", "effectiveBias": 0.08}]}, relationships=[])
+                               activityHabits={"entries": [{"activity": "Play", "effectiveBias": 0.08}]}, dailyRhythm={"gardenSeconds": 360}, relationships=[])
         editor.variables = dict(Joy=Value(75))
         editor.stat_variables = {}
         editor.relationship_peer = None
@@ -67,6 +86,8 @@ class EditorStatTests(unittest.TestCase):
             self.assertNotIn("LearnedPreferences", request["patch"])
             self.assertNotIn("socialPreferences", request)
             self.assertNotIn("SocialSelection", request["patch"])
+            self.assertNotIn("dailyRhythm", request)
+            self.assertNotIn("GardenSeconds", request["patch"])
             self.assertNotIn("activityHabits", request)
             self.assertNotIn("ActivityHabits", request["patch"])
             self.assertEqual(editor.snapshot["activityHabits"]["entries"][0]["effectiveBias"], 0.08)

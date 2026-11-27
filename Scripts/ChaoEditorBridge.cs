@@ -14,6 +14,7 @@ internal sealed class ChaoEditorBridge
     private readonly string session=Guid.NewGuid().ToString("N");
     private string lastRequest="";
     private string status="Ready";
+    private readonly Dictionary<string,double> rhythmOffsets=new(StringComparer.Ordinal);
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
         .Where(p=>p.CanWrite && (p.PropertyType.IsPrimitive || p.PropertyType==typeof(string)) && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
             && p.Name!=nameof(PetState.SocialLinks) && p.Name!=nameof(PetState.Expedition) && p.Name!=nameof(PetState.CharacterRelationships) && p.Name!=nameof(PetState.GardenSeconds)
@@ -25,7 +26,13 @@ internal sealed class ChaoEditorBridge
 
     public string EditedTarget { get; private set; } = "main";
 
-    public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit)
+    private GardenRhythmContext? RhythmFor(string id,GardenRhythmContext? world)
+    {
+        if(world==null)return null;
+        if(!rhythmOffsets.TryGetValue(id,out double offset))rhythmOffsets[id]=offset=GardenRhythmContext.OffsetFor(id);
+        return world with{StableChaoId=id,PersonalPhaseOffset=offset};
+    }
+    public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit,GardenRhythmContext? worldRhythm=null)
     {
         foreach(var pet in roster.Values){pet.EnsureStatistics();pet.EnsurePersonality();}
         Directory.CreateDirectory(directory);
@@ -104,6 +111,7 @@ internal sealed class ChaoEditorBridge
             personality=entry.Value.Personality,
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             activityHabits=entry.Value.ActivityHabitDiagnostics(),
+            dailyRhythm=ChaoDailyRhythmScorer.Capture(entry.Value,RhythmFor(entry.Key,worldRhythm)),
             placePreferences=entry.Value.PlacePreferenceDiagnostics(),
             socialPreferences=entry.Value.SocialPreferenceDiagnostics(ownerState,entry.Key,roster),
             currentState=ChaoStateDiagnostics.Capture(entry.Value),

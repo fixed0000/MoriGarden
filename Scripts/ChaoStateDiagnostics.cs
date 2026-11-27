@@ -8,6 +8,7 @@ public static class ChaoStateDiagnostics
 {
     public static object Capture(PetState pet) => new
     {
+        dailyRhythm=ChaoDailyRhythmScorer.Capture(pet,pet.DailyRhythm),
         meters=new {pet.Fullness,Hunger=pet.Needs.Hunger,pet.Energy,Fatigue=pet.Needs.Fatigue,
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
         mood=pet.Mood.Snapshot,
@@ -23,6 +24,12 @@ public static class ChaoStateDiagnostics
     public static string Describe(PetState pet)
     {
         var mood=pet.Mood.Snapshot;var text=new StringBuilder();
+        if(pet.DailyRhythm is {Enabled:true} rhythm)
+        {
+            var d=GardenDayCycle.Evaluate(rhythm.GardenSeconds);
+            text.AppendLine($"Daily rhythm: garden {rhythm.GardenSeconds:F1}s / cycle {d.CyclePosition:F2} / {d.CurrentPhase}\nDaylight {d.DaylightIntensity:F3}, night {d.NightIntensity:F3}, personal offset {rhythm.PersonalPhaseOffset:+0.00;-0.00;0.00}s");
+            text.AppendLine("Sleep: "+ChaoDailyRhythmScorer.RestEligibility(pet.Energy,rhythm).Reason+" / "+pet.GardenSleepAvailability);
+        }
         text.AppendLine($"Fullness {pet.Fullness:F1} / Hunger {pet.Needs.Hunger:F1}");
         text.AppendLine($"Energy {pet.Energy:F1} / Fatigue {pet.Needs.Fatigue:F1}");
         text.AppendLine($"Fun {pet.Fun:F1} / Boredom {pet.Needs.Boredom:F1}");
@@ -43,10 +50,10 @@ public static class ChaoStateDiagnostics
         foreach(var group in Enum.GetValues<LearnedItemGroup>())
             foreach(var (id,entry) in group==LearnedItemGroup.Toy ? pet.LearnedPreferences.ToyPreferences : pet.LearnedPreferences.FruitPreferences)
                 text.AppendLine($"{group} / {id}: {pet.LearnedPreferences.EffectiveBias(group,id,pet.History.Seconds):+0.000;-0.000;0.000}, experiences {entry.ExperienceCount}, last credit {entry.LastCreditSeconds:0.0}s");
-        text.AppendLine("\nActivity habits — read-only");
+        text.AppendLine("\nActivity habits вЂ” read-only");
         foreach(var a in ChaoActivityHabits.Supported)
             text.AppendLine($"{a}: {pet.ActivityHabits.EffectiveBias(a,pet.History.Seconds):+0.000;-0.000;0.000}");
-        text.AppendLine($"Last credit: {pet.ActivityHabits.LastCreditedCategory?.ToString() ?? "None"} @ {pet.ActivityHabits.LastCreditTime?.ToString("0.0") ?? "—"}s\nLast rejected credit: {pet.ActivityHabits.LastRejectedReason}");
+        text.AppendLine($"Last credit: {pet.ActivityHabits.LastCreditedCategory?.ToString() ?? "None"} @ {pet.ActivityHabits.LastCreditTime?.ToString("0.0") ?? "вЂ”"}s\nLast rejected credit: {pet.ActivityHabits.LastRejectedReason}");
         text.AppendLine("\nLeisure destination preferences");
         var leisure=pet.LeisureSelection;
         text.AppendLine($"Current: {leisure?.CurrentId ?? "None"} / {LeisureDestinationCatalog.Find(leisure?.CurrentId)?.Type.ToString() ?? "None"}\nArea: {leisure?.AreaId ?? "Inactive"}\nLast outcome: {leisure?.Outcome ?? "None"}\nRecent route: {leisure?.RecentRoute ?? "None"}; sky: {leisure?.RecentSky ?? "None"}");
@@ -55,7 +62,7 @@ public static class ChaoStateDiagnostics
             text.AppendLine($"{score.Id} / {score.Type} / {(score.Available ? "available" : "unavailable")}\n  learned {score.LearnedBias:0.000}, spatial {score.SpatialBias:+0.000;-0.000;0.000}, total {score.TotalBias:+0.000;-0.000;0.000}, weight {score.SelectionWeight:0.000}");
         text.AppendLine($"\nSocial partner preferences\nInteraction: {pet.SocialSelection.LastInteraction}; choice: {pet.SocialSelection.LastChosenPartner ?? "None"}; last completed: {pet.SocialSelection.LastCompletedPartner ?? "None"}");
         foreach(var score in pet.SocialSelection.LastCandidates)
-            text.AppendLine($"{score.Id}: relation {score.Relationship} ({score.RelationshipContribution:+0.000;-0.000;0}), memory {score.PartnerBias:+0.000;-0.000;0} ({score.MemoryContribution:+0.000;-0.000;0})\n  eligible {score.Available}; partner {score.PartnerWeight:0.000} × distance {score.DistanceWeight:0.000} × recent {score.RecentMultiplier:0.00} = {score.FinalWeight:0.000}");
+            text.AppendLine($"{score.Id}: relation {score.Relationship} ({score.RelationshipContribution:+0.000;-0.000;0}), memory {score.PartnerBias:+0.000;-0.000;0} ({score.MemoryContribution:+0.000;-0.000;0})\n  eligible {score.Available}; partner {score.PartnerWeight:0.000} Г— distance {score.DistanceWeight:0.000} Г— recent {score.RecentMultiplier:0.00} = {score.FinalWeight:0.000}");
         return text.ToString();
     }
 }

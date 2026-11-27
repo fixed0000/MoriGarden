@@ -18,7 +18,7 @@ internal sealed class GardenActivityClaims
     {foreach(var key in targets.Where(p=>p.Value==actor || !GodotObject.IsInstanceValid(p.Value)).Select(p=>p.Key).ToArray())targets.Remove(key);resting.Remove(actor);}
 }
 internal sealed record GardenActivityContext(Node3D World,bool MainGarden,string AreaId,IEnumerable<FruitTree> Fruits,IEnumerable<ToyCar> Toys,
-    GardenActivityClaims Claims,Func<CharacterBody3D,int> SocialTargets,Func<CharacterBody3D,bool> StartSocial);
+    GardenActivityClaims Claims,Func<CharacterBody3D,int> SocialTargets,Func<CharacterBody3D,bool> StartSocial,double GardenSeconds=0,bool UseGardenTime=false);
 
 // Connects the pure selector to the same executors used by both old update paths.
 // Step/physics/animation remain in MoveFriend, GardenEgg and their components.
@@ -31,6 +31,8 @@ internal sealed class GardenActivityAdapter
     private readonly ChaoLeisure leisure;
     private readonly ChaoMotion motion;
     private readonly string stableId;
+    private readonly double phaseOffset;
+    internal GardenRhythmContext Rhythm { get; private set; }=new(0,"","",false);
     internal readonly ChaoActivityCoordinator Coordinator;
     private GardenActivityContext context=null!;
     private PetState pet=null!;
@@ -40,7 +42,7 @@ internal sealed class GardenActivityAdapter
     private NeedUrgency[] lastLevels=Array.Empty<NeedUrgency>();
     internal GardenActivityAdapter(CharacterBody3D actor,Func<Node3D> art,ChaoInterests interests,ChaoRest rest,ChaoLeisure leisure,ChaoMotion motion,string id)
     {
-        stableId=id;this.actor=actor;this.art=art;this.interests=interests;this.rest=rest;this.leisure=leisure;this.motion=motion;
+        stableId=id;phaseOffset=GardenRhythmContext.OffsetFor(id);this.actor=actor;this.art=art;this.interests=interests;this.rest=rest;this.leisure=leisure;this.motion=motion;
         int seed=17;foreach(char c in id)seed=unchecked(seed*31+c);Coordinator=new(new Random(seed));
     }
     internal bool Allows(ChaoActivity activity)=>Coordinator.SelectedActivity==activity;
@@ -48,6 +50,7 @@ internal sealed class GardenActivityAdapter
     internal void Begin(float dt,PetState state,GardenActivityContext scene,bool sleeping,bool controlled,bool shared,bool extraLeisure)
     {
         pet=state;context=scene;
+        Rhythm=new(scene.GardenSeconds,scene.AreaId,stableId,scene.UseGardenTime,phaseOffset);pet.DailyRhythm=Rhythm;
         leisure.BindContext(state,scene.AreaId,stableId);
         if(leisure.Active && (controlled || shared || motion.Airborne || motion.Recovering || !scene.MainGarden))leisure.Cancel(art());
         pet.GardenActivity=Coordinator;Coordinator.Advance(dt);asleep=sleeping;extra=extraLeisure;social=shared;
@@ -78,7 +81,7 @@ internal sealed class GardenActivityAdapter
         var levels=pet.Needs.Evaluate().Priorities.Select(n=>n.Level).ToArray();
         if(Coordinator.Now>=nextScan || available.Length==0 || Coordinator.SelectedActivity==null || !levels.SequenceEqual(lastLevels))
         {available=Probe();lastLevels=levels;nextScan=Coordinator.Now+1;}
-        if(Coordinator.ShouldInterrupt(pet,available))
+        if(Coordinator.ShouldInterrupt(pet,available,Rhythm))
         {
             interests.Cancel(actor,art());leisure.Cancel(art());context.Claims.Release(actor);
             Coordinator.Interrupt("Urgent physiological need");started=socialBall=false;
@@ -89,7 +92,7 @@ internal sealed class GardenActivityAdapter
         // A failed starter cools down only its category; immediately consider another.
         for(int attempt=0;attempt<6;attempt++)
         {
-            var choice=Coordinator.Choose(pet,available);if(choice==null)return;
+            var choice=Coordinator.Choose(pet,available,Rhythm);if(choice==null)return;
             bool success=choice switch
             {
                 ChaoActivity.Eat or ChaoActivity.Play=>BeginInterest(choice.Value),
@@ -130,10 +133,12 @@ internal sealed class GardenActivityAdapter
         int toys=dry && context.MainGarden ? ChaoInterests.CountTargets(ChaoActivity.Play,actor,pet,context.Fruits,context.Toys,Usable) : 0;
         bool ground=dry && SafeRestFloor(actor) && context.Claims.RestFree(actor) && (!context.MainGarden || actor.Position.DistanceTo(ChaoRest.Bed)>1.2f || actor.Position.Y<.15f);
         int beds=context.MainGarden && actor.Position.DistanceTo(ChaoRest.Bed)<10 ? rest.FreeSlots : 0;
-        int sleep=dry && pet.Energy<58 ? beds>0 ? beds : ground ? 1 : 0 : 0;
+        var eligibility=ChaoDailyRhythmScorer.RestEligibility(pet.Energy,Rhythm);
+        int sleep=dry && eligibility.Allowed ? beds>0 ? beds : ground ? 1 : 0 : 0;
+        pet.GardenSleepAvailability=!eligibility.Allowed ? eligibility.Reason : !dry ? "Swimming: no dry rest surface" : beds==0 && !ground ? "No safe free rest place" : eligibility.Reason+"; safe free rest place available";
         int peers=dry && context.MainGarden ? context.SocialTargets(actor) : 0;
         int routes=dry && context.MainGarden && actor.Position.Y<.15f ? leisure.InspectTargets(actor) : 0;
-        return new[]{A(ChaoActivity.Eat,food,"No reachable usable food",35,ActivityInterruptibility.Atomic),A(ChaoActivity.Sleep,sleep,"No safe free rest place or no rest need",35,ActivityInterruptibility.Atomic),
+        return new[]{A(ChaoActivity.Eat,food,"No reachable usable food",35,ActivityInterruptibility.Atomic),A(ChaoActivity.Sleep,sleep,pet.GardenSleepAvailability,35,ActivityInterruptibility.Atomic),
             A(ChaoActivity.Play,toys,"No free reachable suitable toy",60,ActivityInterruptibility.Atomic),A(ChaoActivity.Socialize,peers,"No eligible free social partner",22,ActivityInterruptibility.Atomic),
             A(ChaoActivity.Leisure,routes,"No available garden route on this surface",120,ActivityInterruptibility.LongOptional),A(ChaoActivity.Wander,1,"",5,ActivityInterruptibility.LongOptional)};
     }
@@ -161,5 +166,5 @@ internal sealed class GardenActivityAdapter
     }
     internal void ReserveSocial()
     {interests.Cancel(actor,art());leisure.Cancel(art());context?.Claims.Release(actor);Coordinator.Adopt(ChaoActivity.Socialize,"shared social executor",ActivityInterruptibility.Atomic);started=true;}
-    internal void Reset(){context?.Claims.Release(actor);Coordinator.Suspend("Garden transition");started=socialBall=false;nextScan=0;}
+    internal void Reset(){if(pet!=null){pet.DailyRhythm=null;pet.GardenSleepAvailability="Not probed in an active garden";}context?.Claims.Release(actor);Coordinator.Suspend("Garden transition");started=socialBall=false;nextScan=0;}
 }

@@ -105,19 +105,17 @@ internal partial class GardenSky : Node3D
         Advance(0,true);
     }
 
-    public void Advance(float seconds,bool garden)
+    public void Advance(double seconds,bool garden)
     {
-        float cycle=Mathf.PosMod(seconds+145,600);
-        float fraction=cycle<410 ? .5f*cycle/410 : .5f+.5f*(cycle-410)/190;
-        float angle=Mathf.Tau*fraction;
-        float altitude=Mathf.Sin(angle);
+        var day=GardenDayCycle.Evaluate(seconds);
+        float angle=day.Angle,altitude=day.Altitude;
         var sunDirection=new Vector3(Mathf.Cos(angle),altitude*.76f,-.25f).Normalized();
         var moonDirection=new Vector3(-sunDirection.X,-sunDirection.Y,.15f).Normalized();
-        float light=Mathf.SmoothStep(-.07f,.09f,altitude);
-        float dusk=1-Mathf.SmoothStep(.012f,.13f,Mathf.Abs(altitude));
+        float light=day.DaylightIntensity;
+        float dusk=day.Twilight;
         sky.SetShaderParameter("day",light);
         sky.SetShaderParameter("dusk",dusk);
-        sky.SetShaderParameter("seconds",seconds);
+        sky.SetShaderParameter("seconds",(float)seconds);
         sky.SetShaderParameter("sun_dir",sunDirection);
         sky.SetShaderParameter("moon_dir",moonDirection);
         sun.LookAt(-sunDirection);
@@ -128,7 +126,7 @@ internal partial class GardenSky : Node3D
         sun.LightColor=new Color("fff3dd").Lerp(new Color("ffad7a"),dusk*.55f);
         environment.AmbientLightColor=new Color("9dabdd").Lerp(new Color("eaf3ff"),light);
         environment.AmbientLightEnergy=Mathf.Lerp(.27f,.43f,light)+(natureAtmosphere ? .035f : 0);
-        float flight=Mathf.PosMod(seconds+51,83);
+        float flight=Mathf.PosMod((float)seconds+51,83);
         for (int i=0;i<gulls.Length;i++)
         {
             var gull=gulls[i];

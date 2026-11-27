@@ -15,6 +15,8 @@ public sealed partial class PetState
     private readonly System.Collections.Generic.Queue<string> contactOrder=new();
     private readonly System.Collections.Generic.HashSet<string> contacts=new(StringComparer.Ordinal);
     [JsonIgnore] public ChaoActivityCoordinator? GardenActivity { get; internal set; }
+    [JsonIgnore] public GardenRhythmContext? DailyRhythm { get; internal set; }
+    [JsonIgnore] public string GardenSleepAvailability { get; internal set; }="Not probed in an active garden";
     [JsonIgnore] public ChaoNeeds Needs => needs ??=new(this);
     [JsonIgnore] public ChaoMood Mood => mood ??=new(this);
 
@@ -27,7 +29,7 @@ public sealed partial class PetState
     {
         LearnedPreferences.KeepRuntimeFrom(source.LearnedPreferences);LeisureSelection=source.LeisureSelection;SocialSelection=source.SocialSelection;
         ActivityHabits.KeepRuntimeFrom(source.ActivityHabits);
-        needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this);GardenActivity=source.GardenActivity;contactSequence=source.contactSequence;
+        needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this);GardenActivity=source.GardenActivity;DailyRhythm=source.DailyRhythm;GardenSleepAvailability=source.GardenSleepAvailability;contactSequence=source.contactSequence;
         foreach(var id in source.contactOrder){contactOrder.Enqueue(id);contacts.Add(id);}
     }
     public string NewContactId(string source)=>source+":"+(++contactSequence).ToString(System.Globalization.CultureInfo.InvariantCulture);

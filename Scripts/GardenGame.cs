@@ -171,7 +171,7 @@ public partial class GardenGame : Node3D
         string? wildlifeMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--wildlife-check" or "--wildlife-review" or "--wildlife-inspect");
         string? personalityMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--personality-check" or "--personality-review" or "--personality-inspect");
         string? stadiumMode=OS.GetCmdlineUserArgs().FirstOrDefault(a=>a is "--stadium-check" or "--stadium-review" or "--stadium-inspect");
-        testMode = OS.GetCmdlineUserArgs().Contains("--activity-habits-check") || OS.GetCmdlineUserArgs().Contains("--partner-preferences-check") || OS.GetCmdlineUserArgs().Contains("--place-preferences-check") || OS.GetCmdlineUserArgs().Contains("--learned-check") || OS.GetCmdlineUserArgs().Contains("--personality-decisions-check") || OS.GetCmdlineUserArgs().Contains("--activity-check") || OS.GetCmdlineUserArgs().Contains("--needs-check") || OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
+        testMode = OS.GetCmdlineUserArgs().Contains("--daily-rhythm-check") || OS.GetCmdlineUserArgs().Contains("--activity-habits-check") || OS.GetCmdlineUserArgs().Contains("--partner-preferences-check") || OS.GetCmdlineUserArgs().Contains("--place-preferences-check") || OS.GetCmdlineUserArgs().Contains("--learned-check") || OS.GetCmdlineUserArgs().Contains("--personality-decisions-check") || OS.GetCmdlineUserArgs().Contains("--activity-check") || OS.GetCmdlineUserArgs().Contains("--needs-check") || OS.GetCmdlineUserArgs().Contains("--stats-inspect") || stadiumMode!=null || personalityMode!=null || wildlifeMode!=null || meadowReview || OS.GetCmdlineUserArgs().Contains("--smoke-test") || OS.GetCmdlineUserArgs().Contains("--team-review") || OS.GetCmdlineUserArgs().Contains("--discovery-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-review") || OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") || OS.GetCmdlineUserArgs().Contains("--greenhouse-check");
         savePath = ProjectSettings.GlobalizePath(personalityMode!=null ? $"user://{personalityMode[2..]}/pet.json" : wildlifeMode!=null ? $"user://{wildlifeMode[2..]}/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-check") ? "user://greenhouse-check/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-inspect") ? "user://greenhouse-inspect/pet.json" : OS.GetCmdlineUserArgs().Contains("--greenhouse-review") ? "user://greenhouse-review/pet.json" : OS.GetCmdlineUserArgs().Contains("--discovery-review") ? "user://discovery-review/pet.json" : testMode ? "user://smoke/pet.json" : "user://pet.json");
         string loadWarning = "";
         if(OS.GetCmdlineUserArgs().Contains("--stats-inspect"))savePath=ProjectSettings.GlobalizePath("user://stats-preview/pet.json");
@@ -255,6 +255,7 @@ public partial class GardenGame : Node3D
     public override void _Process(double delta)
     {
         UpdateNeedsDebug((float)delta);
+        if(OS.GetCmdlineUserArgs().Contains("--daily-rhythm-check")){RunDailyRhythmChecks();return;}
         if(OS.GetCmdlineUserArgs().Contains("--activity-habits-check") || OS.GetCmdlineUserArgs().Contains("--partner-preferences-check")){RunPartnerChecks();return;}
         if(OS.GetCmdlineUserArgs().Contains("--place-preferences-check")){RunPlaceChecks();return;}
         if(OS.GetCmdlineUserArgs().Contains("--learned-check")){RunLearnedCheckMode();return;}
@@ -351,7 +352,7 @@ public partial class GardenGame : Node3D
                 var roster=new Dictionary<string,PetState> { ["main"]=pet };
                 foreach (var egg in pet.GardenEggs)
                     if (egg.Hatched && egg.Chao!=null) roster.TryAdd(egg.Id,egg.Chao);
-                var edited=editor.Poll(roster,!introductions.Active && !racing && transition<0 && offerTime<=0 && thinkTime<=0 && eatTime<=0 && !moriInFlight);
+                var edited=editor.Poll(roster,!introductions.Active && !racing && transition<0 && offerTime<=0 && thinkTime<=0 && eatTime<=0 && !moriInFlight,EditorRhythmContext);
                 if (edited!=null)
                 {
                     if (editor.EditedTarget!="main")
@@ -399,7 +400,7 @@ public partial class GardenGame : Node3D
         }
         portalCooldown = Math.Max(0, portalCooldown - dt);
         time += dt; saveTimer += dt; messageTime -= dt;
-        gardenSky.Advance((float)pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
+        gardenSky.Advance(pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
         ImportedChao.ApplyDevelopment(friendArt,pet);
         petCooldown = Math.Max(0, petCooldown - dt);
         dashCooldown = Math.Max(0, dashCooldown - dt);
@@ -2357,7 +2358,7 @@ public partial class GardenGame : Node3D
         zone = next; EnsureGardenTrees(); world = new Node3D(); AddChild(world); travel.Build(world,zone,pet);
         chaoMotion.GardenPond=zone==GardenZone.Garden; moriWander.GardenLandmarks=zone==GardenZone.Garden;
         gardenSky.SetNatureAtmosphere(zone is GardenZone.Expedition or GardenZone.CoastalCove);
-        gardenSky.Advance((float)pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
+        gardenSky.Advance(pet.GardenSeconds,zone is GardenZone.Garden or GardenZone.CoastalCove);
         if (zone==GardenZone.Expedition) pet.Expedition.VisitedAreas.Add(travel.ExpeditionArea);
         if (zone==GardenZone.Garden)
             foreach (var tree in world.GetChildren().OfType<FruitTree>().Where(tree=>!tree.IsFeeder))
