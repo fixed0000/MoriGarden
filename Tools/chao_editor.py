@@ -65,6 +65,7 @@ class ChaoEditor:
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
+        self.voice_rows = {chao["id"]: chao.get("voice") for chao in snapshot.get("chao", [])}
         self.gesture_rows = {chao["id"]: chao.get("idleGestures") for chao in snapshot.get("chao", [])}
         self.expression_rows = {chao["id"]: chao.get("expression") for chao in snapshot.get("chao", [])}
         self.rhythm_rows = {chao["id"]: chao.get("dailyRhythm", {}) for chao in snapshot.get("chao", [])}
@@ -87,6 +88,7 @@ class ChaoEditor:
             self.refresh_daily_rhythm()
             self.refresh_expression()
             self.refresh_idle_gestures()
+            self.refresh_voice()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 self.reload()
         except (OSError, ValueError):
@@ -199,11 +201,17 @@ class ChaoEditor:
         self.expression_text = tk.StringVar()
         ttk.Label(expression, textvariable=self.expression_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
         self.refresh_expression()
+        voice_panel = ttk.Frame(self.tabs, padding=12)
+        self.tabs.add(voice_panel, text="Voice and vocal reactions")
+        self.voice_text = tk.StringVar()
+        ttk.Label(voice_panel, textvariable=self.voice_text, wraplength=650, justify="left").pack(anchor="w")
+        self.refresh_voice()
         gestures = ttk.Frame(sections, padding=6)
         sections.add(gestures, text="Idle gestures")
         self.gesture_text = tk.StringVar()
         ttk.Label(gestures, textvariable=self.gesture_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
         self.refresh_idle_gestures()
+        self.refresh_voice()
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -226,6 +234,15 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def refresh_voice(self):
+        if not hasattr(self, "voice_text"):
+            return
+        data = self.voice_rows.get(self.selected)
+        if not data:
+            self.voice_text.set("Voice and vocal reactions — read-only\nUnavailable: no active vocal executor.")
+            return
+        self.voice_text.set("Voice and vocal reactions — read-only · actual ChaoVocal\n\n" + "\n".join(f"{key}: {value}" for key, value in data.items()))
 
     def refresh_idle_gestures(self):
         if not hasattr(self, "gesture_text"):

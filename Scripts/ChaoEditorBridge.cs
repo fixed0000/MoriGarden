@@ -115,6 +115,7 @@ internal sealed class ChaoEditorBridge
             placePreferences=entry.Value.PlacePreferenceDiagnostics(),
             socialPreferences=entry.Value.SocialPreferenceDiagnostics(ownerState,entry.Key,roster),
             expression=expressions?.GetValueOrDefault(entry.Key),
+            voice=expressions?.GetValueOrDefault(entry.Key)?.Voice,
             idleGestures=expressions?.GetValueOrDefault(entry.Key)?.IdleGestures,
             currentState=ChaoStateDiagnostics.Capture(entry.Value,expressions?.GetValueOrDefault(entry.Key)),
             relationships=roster.Where(peer=>peer.Key!=entry.Key && !peer.Value.IsEgg).Select(peer=>

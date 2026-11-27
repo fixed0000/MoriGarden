@@ -29,7 +29,7 @@ public partial class ImportedChao
             var mood=personality?.Mood.Snapshot;var d=expressionDecision;
             return new(mood?.DominantEmotion,mood?.EmotionIntensity ?? 0,mood?.Valence ?? 0,mood?.Arousal ?? 0,
                 Expression.ToString(),PoseKind.ToString(),d?.Source.ToString() ?? "Neutral",d?.PersonalityMultiplier ?? 1,
-                d?.VisualIntensity ?? 0,visualIntensity,BlinkAmount,d?.ProtectedAnimation ?? !ChaoExpressionLayer.IsFree(PoseKind),d?.SuppressionReason ?? "Not yet presented",IdleGestureDiagnostics);
+                d?.VisualIntensity ?? 0,visualIntensity,BlinkAmount,d?.ProtectedAnimation ?? !ChaoExpressionLayer.IsFree(PoseKind),d?.SuppressionReason ?? "Not yet presented",IdleGestureDiagnostics,VocalDiagnostics);
         }
     }
     private Vector3? attention;
@@ -58,6 +58,7 @@ public partial class ImportedChao
             model.individualPhase=(float)model.microRandom.NextDouble()*Mathf.Tau;model.individualPace=.96f+(float)model.microRandom.NextDouble()*.08f;model.blinkAt=ChaoExpressiveness.BlinkDelay(model.microRandom,state);
         }
         if(model.idleGestures==null && !string.IsNullOrWhiteSpace(id))model.idleGestures=new(id);
+        if(!string.IsNullOrWhiteSpace(id))model.BindVocal(id);
         model.personality=state;model.heldExternally=held;
     }
     internal static void Pose(Node3D art,ChaoPoseKind kind){if(art is ImportedChao model){model.RestoreIdleGestureOffsets();if(kind!=ChaoPoseKind.Idle){model.idleGestures?.Cancel(model.presentationClock,"Protected "+kind);model.idleOffsets=default;}model.PoseKind=kind;model.poseSerial++;}}

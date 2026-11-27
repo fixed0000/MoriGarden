@@ -75,6 +75,20 @@ class EditorStatTests(unittest.TestCase):
         editor.refresh_expression()
         self.assertIn("No active visual model", editor.expression_text.get())
 
+    def test_voice_diagnostics_are_live_read_only_and_unavailable(self):
+        editor = module.ChaoEditor.__new__(module.ChaoEditor)
+        editor.selected = "main"
+        editor.voice_text = Value("")
+        editor.voice_rows = {"main": dict(StableChaoId="main", BasePitchMultiplier=1.03, CurrentVocalKind="Happy", CurrentAudioChannel="ChaoVoice", WhetherVocalIsPlaying=True)}
+        original = json.dumps(editor.voice_rows)
+        editor.refresh_voice()
+        self.assertIn("ChaoVoice", editor.voice_text.get())
+        self.assertIn("1.03", editor.voice_text.get())
+        self.assertEqual(json.dumps(editor.voice_rows), original)
+        editor.voice_rows = {}
+        editor.refresh_voice()
+        self.assertIn("Unavailable", editor.voice_text.get())
+
     def test_daily_rhythm_is_read_only_and_formats_live_context(self):
         editor = module.ChaoEditor.__new__(module.ChaoEditor)
         editor.selected = "main"
@@ -120,6 +134,7 @@ class EditorStatTests(unittest.TestCase):
             self.assertNotIn("LearnedPreferences", request["patch"])
             self.assertNotIn("socialPreferences", request)
             self.assertNotIn("SocialSelection", request["patch"])
+            self.assertNotIn("voice", request)
             self.assertNotIn("idleGestures", request)
             self.assertNotIn("IdleGestures", request["patch"])
             self.assertNotIn("expression", request)

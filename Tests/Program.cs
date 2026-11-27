@@ -18,6 +18,7 @@ ActivityHabitChecks.Run(Check);
 DailyRhythmChecks.Run(Check);
 ChaoExpressionIntegrationChecks.Run(Check);
 ChaoIdleGestureChecks.Run(Check);
+ChaoVocalChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

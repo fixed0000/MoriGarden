@@ -69,6 +69,7 @@ internal static class ChaoSounds
 
     public static void Play(Node3D owner,string cue,float start=0)
     {
+        if(owner is ImportedChao model && cue is "voice" or "angry" or "sniff" or "breath" or "snore" && model.PlayAnimationVoice(cue,start))return;
         var audio=owner.GetNodeOrNull<AudioStreamPlayer3D>("ChaoCue");
         if (audio==null)
         {
@@ -84,6 +85,22 @@ internal static class ChaoSounds
         audio.VolumeDb=cue is "breath" or "snore" ? -19 : -11;
         audio.Play(start);
     }
+
+    // Cached original procedural contours; no instrument stream or party is changed.
+    private static readonly AudioStreamWav Happy=VocalContour(.36f,450,410,.02f);
+    private static readonly AudioStreamWav Excited=VocalContour(.36f,460,780,.025f);
+    private static readonly AudioStreamWav CuriousVoice=VocalContour(.36f,390,600,.015f);
+    private static readonly AudioStreamWav SadVoice=VocalContour(.36f,430,-300,.014f);
+    private static readonly AudioStreamWav Startled=VocalContour(.24f,570,-560,.025f);
+    internal static AudioStreamWav VocalStream(ChaoVocalKind kind,bool sniff=false)=>sniff ? Sniff : kind switch {
+        ChaoVocalKind.Happy=>Happy,ChaoVocalKind.Excited=>Excited,ChaoVocalKind.Curious=>CuriousVoice,ChaoVocalKind.Sad=>SadVoice,
+        ChaoVocalKind.Frustrated=>Angry,ChaoVocalKind.Startled=>Startled,ChaoVocalKind.SleepBreath=>Breath,ChaoVocalKind.Snore=>Snore,_=>Voice};
+    private static AudioStreamWav VocalContour(float duration,float hz,float sweep,float noise)=>Render(duration,(t,n)=>
+    {
+        float envelope=Mathf.SmoothStep(0,.035f,t)*(1-Mathf.SmoothStep(duration*.62f,duration,t));
+        float phase=Mathf.Tau*(hz*t+sweep*t*t*.5f);
+        return envelope*(.45f*Mathf.Sin(phase)+.17f*Mathf.Sin(phase*2)+.08f*Mathf.Sin(phase*3)+noise*n);
+    });
 
     private static AudioStreamWav SleepSound(bool snore) => Render(.82f,(t,noise)=>
     {
@@ -127,34 +144,5 @@ internal static class ChaoSounds
             data[2*i+1]=(byte)(sample>>8);
         }
         return new AudioStreamWav { MixRate=rate,Format=AudioStreamWav.FormatEnum.Format16Bits,Data=data };
-    }
-}
-
-internal sealed class ChaoVocal
-{
-    private float delay=Mathf.Lerp(10f,23f,GD.Randf());
-    private bool wasSleeping;
-
-    public void Step(Node3D art,PetState chao,bool sleeping,float dt)
-    {
-        if (!chao.CanAct) return;
-        if (sleeping!=wasSleeping)
-        {
-            wasSleeping=sleeping;
-            delay=sleeping ? .8f : Mathf.Lerp(8f,14f,GD.Randf());
-        }
-        delay-=dt;
-        if (delay>0) return;
-        if (sleeping)
-        {
-            bool snores=chao.Glutton || chao.Aggressiveness>=25;
-            ChaoSounds.Play(art,snores ? "snore" : "breath");
-            delay=snores ? Mathf.Lerp(3.5f,5f,GD.Randf()) : Mathf.Lerp(5f,8f,GD.Randf());
-        }
-        else
-        {
-            ChaoSounds.Play(art,"voice");
-            delay=Mathf.Lerp(19f,39f,GD.Randf())-Mathf.Clamp(chao.Curiosity*.07f,-4,6);
-        }
     }
 }

@@ -253,10 +253,10 @@ public partial class GardenEgg : CharacterBody3D
         var state=Data.Chao!;
         ImportedChao.ApplyDevelopment(visual,state);
         if (nameLabel!=null) nameLabel.Text=state.Name;
+        voice.Step(visual,state,Asleep || islandNap.IsNapping,dt,reserved || Courtship?.IsPaired(this)==true);
         if (reserved || Courtship?.IsPaired(this)==true) { state.AdvanceCurrentState(dt,false); return false; }
         state.Tick(dt,Asleep || islandNap.IsNapping);
         if (!state.CanAct || distress.HoldPose(visual,state,dt)) return false;
-        voice.Step(visual,state,Asleep || islandNap.IsNapping,dt);
         bool inWater=motion.IsSwimmingAt(Position);
         if (rising.Active)
         {

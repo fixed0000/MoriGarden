@@ -12,6 +12,8 @@ public sealed partial class PetState
     private ChaoNeeds? needs;
     private ChaoMood? mood;
     private long contactSequence;
+    private ChaoVocalSignals vocalSignals=new();
+    internal ChaoVocalSignals VocalSignals=>vocalSignals;
     private readonly System.Collections.Generic.Queue<string> contactOrder=new();
     private readonly System.Collections.Generic.HashSet<string> contacts=new(StringComparer.Ordinal);
     [JsonIgnore] public ChaoActivityCoordinator? GardenActivity { get; internal set; }
@@ -29,6 +31,7 @@ public sealed partial class PetState
     {
         LearnedPreferences.KeepRuntimeFrom(source.LearnedPreferences);LeisureSelection=source.LeisureSelection;SocialSelection=source.SocialSelection;
         ActivityHabits.KeepRuntimeFrom(source.ActivityHabits);
+        vocalSignals=source.vocalSignals;
         needs=source.needs?.CopyFor(this);mood=source.mood?.CopyFor(this);GardenActivity=source.GardenActivity;DailyRhythm=source.DailyRhythm;GardenSleepAvailability=source.GardenSleepAvailability;contactSequence=source.contactSequence;
         foreach(var id in source.contactOrder){contactOrder.Enqueue(id);contacts.Add(id);}
     }
@@ -67,6 +70,7 @@ public sealed partial class PetState
             }
         }
         bool emotion=Mood.React(rule.Item1,rule.Item2,rule.Item3,kind+":"+source,rule.Item4);
+        if(emotion)vocalSignals.Accept(kind,source,contactId,Mood.Now);
         if(kind==ChaoStateEvent.WakeDisturbed)Mood.WakeDisturbed();
         return physical || emotion;
     }
