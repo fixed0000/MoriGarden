@@ -29,7 +29,7 @@ public partial class ImportedChao
             var mood=personality?.Mood.Snapshot;var d=expressionDecision;
             return new(mood?.DominantEmotion,mood?.EmotionIntensity ?? 0,mood?.Valence ?? 0,mood?.Arousal ?? 0,
                 Expression.ToString(),PoseKind.ToString(),d?.Source.ToString() ?? "Neutral",d?.PersonalityMultiplier ?? 1,
-                d?.VisualIntensity ?? 0,visualIntensity,BlinkAmount,d?.ProtectedAnimation ?? !ChaoExpressionLayer.IsFree(PoseKind),d?.SuppressionReason ?? "Not yet presented");
+                d?.VisualIntensity ?? 0,visualIntensity,BlinkAmount,d?.ProtectedAnimation ?? !ChaoExpressionLayer.IsFree(PoseKind),d?.SuppressionReason ?? "Not yet presented",IdleGestureDiagnostics);
         }
     }
     private Vector3? attention;
@@ -57,9 +57,10 @@ public partial class ImportedChao
             if(id!=null){int seed=17;foreach(char letter in id)seed=unchecked(seed*31+letter);model.microRandom=new(seed);}
             model.individualPhase=(float)model.microRandom.NextDouble()*Mathf.Tau;model.individualPace=.96f+(float)model.microRandom.NextDouble()*.08f;model.blinkAt=ChaoExpressiveness.BlinkDelay(model.microRandom,state);
         }
+        if(model.idleGestures==null && !string.IsNullOrWhiteSpace(id))model.idleGestures=new(id);
         model.personality=state;model.heldExternally=held;
     }
-    internal static void Pose(Node3D art,ChaoPoseKind kind){if(art is ImportedChao model){model.PoseKind=kind;model.poseSerial++;}}
+    internal static void Pose(Node3D art,ChaoPoseKind kind){if(art is ImportedChao model){model.RestoreIdleGestureOffsets();if(kind!=ChaoPoseKind.Idle){model.idleGestures?.Cancel(model.presentationClock,"Protected "+kind);model.idleOffsets=default;}model.PoseKind=kind;model.poseSerial++;}}
     internal static void Attend(Node3D art,Vector3 point,int priority=50,float seconds=.25f)
     {
         if(art is not ImportedChao model || !point.IsFinite())return;
@@ -103,6 +104,7 @@ public partial class ImportedChao
             blinkAge+=dt;BlinkAmount=Mathf.Clamp(Mathf.Sin(Mathf.Clamp(blinkAge/.19f,0,1)*Mathf.Pi),0,1);
             if(blinkAge>=.19f){blinkAge=-1;blinkAt=presentationClock+ChaoExpressiveness.BlinkDelay(microRandom,personality);}
         }
+        UpdateIdleGestures();
         RefreshEyes();
         UpdateHead(dt,actor);
         BlendLimbs(dt);
@@ -155,7 +157,7 @@ public partial class ImportedChao
         if(!headInitialized || !compatible || previousPose is ChaoPoseKind.Sleep or ChaoPoseKind.Rest or ChaoPoseKind.Rise or ChaoPoseKind.Water or ChaoPoseKind.Crawl)
             previousHead=desired;
         else previousHead=previousHead.Normalized().Slerp(desired.Normalized(),1-Mathf.Exp(-(personality==null ? 7 : ChaoExpressiveness.Response(personality))*dt)).Normalized();
-        head.Quaternion=previousHead;headInitialized=true;
+        head.Quaternion=previousHead;headInitialized=true;ApplyIdleHead(head);
     }
     private void BlendLimbs(float dt)
     {

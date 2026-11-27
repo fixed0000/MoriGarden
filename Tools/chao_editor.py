@@ -65,6 +65,7 @@ class ChaoEditor:
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
+        self.gesture_rows = {chao["id"]: chao.get("idleGestures") for chao in snapshot.get("chao", [])}
         self.expression_rows = {chao["id"]: chao.get("expression") for chao in snapshot.get("chao", [])}
         self.rhythm_rows = {chao["id"]: chao.get("dailyRhythm", {}) for chao in snapshot.get("chao", [])}
         self.habit_rows = {chao["id"]: chao.get("activityHabits", {}) for chao in snapshot.get("chao", [])}
@@ -85,6 +86,7 @@ class ChaoEditor:
             self.update_roster(snapshot)
             self.refresh_daily_rhythm()
             self.refresh_expression()
+            self.refresh_idle_gestures()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 self.reload()
         except (OSError, ValueError):
@@ -197,6 +199,11 @@ class ChaoEditor:
         self.expression_text = tk.StringVar()
         ttk.Label(expression, textvariable=self.expression_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
         self.refresh_expression()
+        gestures = ttk.Frame(sections, padding=6)
+        sections.add(gestures, text="Idle gestures")
+        self.gesture_text = tk.StringVar()
+        ttk.Label(gestures, textvariable=self.gesture_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
+        self.refresh_idle_gestures()
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -219,6 +226,24 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def refresh_idle_gestures(self):
+        if not hasattr(self, "gesture_text"):
+            return
+        data = self.gesture_rows.get(self.selected)
+        if not data:
+            self.gesture_text.set("Idle gestures — read-only\nUnavailable: no active visual controller.")
+            return
+        self.gesture_text.set("Idle gestures — read-only · actual visual model\n\n" +
+            f"Gesture: {data['CurrentIdleGesture']}\nElapsed: {data['GestureElapsed']:.2f}s / {data['GestureDuration']:.2f}s\n" +
+            f"Next eligible attempt: {data['TimeUntilNextGesture']:.2f}s\nAmplitude: {data['CurrentGestureAmplitude']:.4f} rad\n\n" +
+            f"Curious chance contribution: {data['CuriousContribution']:+.3f}\n" +
+            f"Energetic chance contribution: {data['EnergeticContribution']:+.3f}\n" +
+            f"Carefree chance contribution: {data['CarefreeContribution']:+.3f}\n" +
+            f"Solitude pose adjustment: {data['SolitudePoseAdjustment']:.4f} rad\n\n" +
+            f"Pose: {data['CurrentPose']}\nSuppressed: {data['Suppressed']}\nReason: {data['SuppressionReason'] or 'None'}\n" +
+            f"Started: {data['Started']} · Completed: {data['Completed']}\n\n" +
+            "Decorative only. No activity, needs, emotion or memory credit.")
 
     def refresh_expression(self):
         if not hasattr(self, "expression_text"):

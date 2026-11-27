@@ -39,6 +39,7 @@ public static class ChaoStateDiagnostics
         text.AppendLine($"Valence {mood.Valence:F2} / Arousal {mood.Arousal:F2}\n");
         if(expression!=null)text.AppendLine($"Expression: {expression.CurrentExpression} / {expression.CurrentPose} / {expression.Source}\nVisual {expression.FinalVisualIntensity:F3} (smoothed {expression.SmoothedVisualIntensity:F3}) × personality {expression.AppliedPersonalityMultiplier:F3}\nBlink {expression.BlinkAmount:F3}; protected {expression.ProtectedAnimation}\n{expression.SuppressionReason}\n");
         else text.AppendLine("Expression: no active visual model\n");
+        if(expression?.IdleGestures is {} gesture)text.AppendLine($"Idle gesture: {gesture.CurrentIdleGesture} / {gesture.CurrentPose}\nElapsed {gesture.GestureElapsed:F2}s / {gesture.GestureDuration:F2}s, next attempt {gesture.TimeUntilNextGesture:F2}s\nAmplitude {gesture.CurrentGestureAmplitude:F4}, C/E/F bonuses {gesture.CuriousContribution:F3}/{gesture.EnergeticContribution:F3}/{gesture.CarefreeContribution:F3}\nSolitude {gesture.SolitudePoseAdjustment:F4}; suppressed {gesture.Suppressed}: {gesture.SuppressionReason}\n");
         text.AppendLine("Need urgency and interruption eligibility");
         foreach(var need in pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities)
             text.AppendLine($"{need.Need}: {need.Level} / {need.Weight:F2}\n  {need.LevelSeconds:F0}s; interrupt long optional: {need.CanInterruptCurrentAction}");

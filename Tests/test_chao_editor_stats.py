@@ -41,6 +41,23 @@ class EditorStatTests(unittest.TestCase):
         editor=self.editor();editor.stat_variables["Run"]["Progress"].set(45)
         self.assertEqual(editor.statistics_patch()["Run"]["Points"],1980)
 
+    def test_idle_gesture_view_is_read_only_and_handles_unavailable_models(self):
+        editor = module.ChaoEditor.__new__(module.ChaoEditor)
+        editor.selected = "main"
+        editor.gesture_text = Value("")
+        editor.gesture_rows = {"main": dict(CurrentIdleGesture="PawFidget", GestureElapsed=0.6, GestureDuration=1.8,
+            TimeUntilNextGesture=7, CurrentGestureAmplitude=0.07, CuriousContribution=0, EnergeticContribution=0.22,
+            CarefreeContribution=0, SolitudePoseAdjustment=0, CurrentPose="Idle", Suppressed=False,
+            SuppressionReason="", Started=3, Completed=2)}
+        original = json.dumps(editor.gesture_rows)
+        editor.refresh_idle_gestures()
+        self.assertIn("PawFidget", editor.gesture_text.get())
+        self.assertIn("0.0700", editor.gesture_text.get())
+        self.assertEqual(json.dumps(editor.gesture_rows), original)
+        editor.gesture_rows = {}
+        editor.refresh_idle_gestures()
+        self.assertIn("Unavailable", editor.gesture_text.get())
+
     def test_expression_view_is_read_only_live_model_data(self):
         editor = module.ChaoEditor.__new__(module.ChaoEditor)
         editor.selected = "main"
@@ -103,6 +120,8 @@ class EditorStatTests(unittest.TestCase):
             self.assertNotIn("LearnedPreferences", request["patch"])
             self.assertNotIn("socialPreferences", request)
             self.assertNotIn("SocialSelection", request["patch"])
+            self.assertNotIn("idleGestures", request)
+            self.assertNotIn("IdleGestures", request["patch"])
             self.assertNotIn("expression", request)
             self.assertNotIn("expression", request["patch"])
             self.assertNotIn("dailyRhythm", request)

@@ -44,10 +44,11 @@ public partial class ImportedChao : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        RestoreIdleGestureOffsets();
         if (softBody==null || GetParent() is not Node3D actor) return;
         float dt=(float)delta;
         if (dt<=0) return;
-        if(sportMotionDriven){softBody.Rotation=Vector3.Zero;softBody.Scale=development;return;}
+        if(sportMotionDriven){idleGestures?.Cancel(presentationClock,"Sports animation");idleOffsets=default;softBody.Rotation=Vector3.Zero;softBody.Scale=development;return;}
         Vector3 at=actor.GlobalPosition;
         Vector3 shift=at-lastPosition;
         Vector3 velocity=tracked && shift.Length()<.5f ? shift/dt : Vector3.Zero;
@@ -99,6 +100,7 @@ public partial class ImportedChao : Node3D
                 ConformStanceFeet();
             }
         }
+        ApplyIdleGestureVisuals();
     }
     private readonly System.Collections.Generic.Dictionary<Node3D,Vector3> feet=new();
     private readonly System.Collections.Generic.Dictionary<Node3D,(Vector3 Position,Vector3 Scale)> paddleRest=new();

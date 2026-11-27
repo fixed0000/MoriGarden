@@ -64,6 +64,15 @@ public partial class GardenGame
             return result;
         }
     }
+    private void PauseIdleGesturePresentations(bool value)
+    {
+        if(expeditionTeam!=null){foreach(var member in expeditionTeam.Members)ImportedChao.PauseIdleGestures(member.Art,value);}
+        else
+        {
+            if(friendArt!=null)ImportedChao.PauseIdleGestures(friendArt,value);
+            if(world!=null)foreach(var egg in world.GetChildren().OfType<GardenEgg>())ImportedChao.PauseIdleGestures(egg.Art,value);
+        }
+    }
     private void AdvanceChaoMemories(float dt)
     {
         string area=travel.AreaId(zone),title=ChaoExperience.AreaTitle(area);

@@ -10,6 +10,7 @@ public partial class ImportedChao
     private readonly Dictionary<string,(Node3D Node,Transform3D Home)> sportJoints=new();
     internal static void PrepareSportRig(ImportedChao art)
     {
+        art.RestoreIdleGestureOffsets(); // Capture/use the authored rig, never a decorative Idle offset.
         if(art.sportJoints.Count>0)return;art.sportBaseScale=art.Scale;
         foreach(string name in new[]{"PaddleL","PaddleR","FootL","FootR","HeadPivot"})
             if(art.FindChild(name,true,false) is Node3D joint)art.sportJoints[name]=(joint,joint.Transform);

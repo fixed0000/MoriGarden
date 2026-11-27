@@ -36,7 +36,7 @@ internal sealed record ChaoExpressionDecision(ChaoExpression Expression,ChaoExpr
     float PersonalityMultiplier,float VisualIntensity,bool ProtectedAnimation,string SuppressionReason);
 public sealed record ChaoExpressionDiagnostic(ChaoEmotion? DominantEmotion,float EmotionIntensity,float Valence,float Arousal,
     string CurrentExpression,string CurrentPose,string Source,float AppliedPersonalityMultiplier,
-    float FinalVisualIntensity,float SmoothedVisualIntensity,float BlinkAmount,bool ProtectedAnimation,string SuppressionReason);
+    float FinalVisualIntensity,float SmoothedVisualIntensity,float BlinkAmount,bool ProtectedAnimation,string SuppressionReason,IdleGestureDiagnostic? IdleGestures=null);
 
 // Pure arbitration only. No needs, mood writes, movement, random source or saved state.
 internal static class ChaoExpressionLayer
