@@ -49,6 +49,21 @@ public partial class GardenGame
         else if(important.Length==0)lines.Add("Your Chao will remember meaningful moments as you spend time together.");
         memoryText.Text=string.Join("\n",lines);
     }
+    private Dictionary<string,ChaoExpressionDiagnostic> ExpressionDiagnostics
+    {
+        get
+        {
+            var result=new Dictionary<string,ChaoExpressionDiagnostic>(StringComparer.Ordinal);
+            void Add(string id,Node3D art){if(art is ImportedChao model)result[id]=model.ExpressionDiagnostics;}
+            if(expeditionTeam!=null){foreach(var member in expeditionTeam.Members)Add(member.Pet.Id,member.Art);}
+            else
+            {
+                if(friend.Visible)Add("main",friendArt);
+                foreach(var egg in world.GetChildren().OfType<GardenEgg>())if(egg.Chao!=null)Add(egg.Data.Id,egg.Art);
+            }
+            return result;
+        }
+    }
     private void AdvanceChaoMemories(float dt)
     {
         string area=travel.AreaId(zone),title=ChaoExperience.AreaTitle(area);

@@ -6,8 +6,9 @@ namespace Mori;
 
 public static class ChaoStateDiagnostics
 {
-    public static object Capture(PetState pet) => new
+    public static object Capture(PetState pet,ChaoExpressionDiagnostic? expression=null) => new
     {
+        expression,
         dailyRhythm=ChaoDailyRhythmScorer.Capture(pet,pet.DailyRhythm),
         meters=new {pet.Fullness,Hunger=pet.Needs.Hunger,pet.Energy,Fatigue=pet.Needs.Fatigue,
             pet.Fun,Boredom=pet.Needs.Boredom,pet.Joy,pet.SocialNeed},
@@ -21,7 +22,7 @@ public static class ChaoStateDiagnostics
         reactions=pet.Mood.ActiveReactions.Select(r=>new{r.Emotion,r.Intensity,r.Source,r.Priority,
             r.Duration,r.ExpiresAt,Remaining=Math.Max(0,r.ExpiresAt-pet.Mood.Now)}).ToArray()
     };
-    public static string Describe(PetState pet)
+    public static string Describe(PetState pet,ChaoExpressionDiagnostic? expression=null)
     {
         var mood=pet.Mood.Snapshot;var text=new StringBuilder();
         if(pet.DailyRhythm is {Enabled:true} rhythm)
@@ -36,6 +37,8 @@ public static class ChaoStateDiagnostics
         text.AppendLine($"Joy {pet.Joy:F1} / SocialNeed {pet.SocialNeed:F1}\n");
         text.AppendLine($"Emotion: {mood.DominantEmotion} ({mood.EmotionIntensity:F2})");
         text.AppendLine($"Valence {mood.Valence:F2} / Arousal {mood.Arousal:F2}\n");
+        if(expression!=null)text.AppendLine($"Expression: {expression.CurrentExpression} / {expression.CurrentPose} / {expression.Source}\nVisual {expression.FinalVisualIntensity:F3} (smoothed {expression.SmoothedVisualIntensity:F3}) × personality {expression.AppliedPersonalityMultiplier:F3}\nBlink {expression.BlinkAmount:F3}; protected {expression.ProtectedAnimation}\n{expression.SuppressionReason}\n");
+        else text.AppendLine("Expression: no active visual model\n");
         text.AppendLine("Need urgency and interruption eligibility");
         foreach(var need in pet.Needs.Evaluate(NeedActionContext.LongOptional).Priorities)
             text.AppendLine($"{need.Need}: {need.Level} / {need.Weight:F2}\n  {need.LevelSeconds:F0}s; interrupt long optional: {need.CanInterruptCurrentAction}");

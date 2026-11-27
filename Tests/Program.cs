@@ -16,6 +16,7 @@ PlacePreferenceChecks.Run(Check);
 SocialPartnerPreferenceChecks.Run(Check);
 ActivityHabitChecks.Run(Check);
 DailyRhythmChecks.Run(Check);
+ChaoExpressionIntegrationChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);

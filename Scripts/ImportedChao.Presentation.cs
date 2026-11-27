@@ -13,9 +13,25 @@ public partial class ImportedChao
     internal float PresentationClock=>presentationClock;
     private Random microRandom=new(Guid.NewGuid().GetHashCode());
     private float presentationClock,blinkAt,blinkAge=-1,nextIdleLook,idleYaw,idlePitch;
-    private float happyWeight,sleepWeight,squintWeight,lidWeight;
+    private float happyWeight,sleepWeight,squintWeight,lidWeight,sadWeight,curiousWeight,fearWeight,surpriseWeight,delightWeight;
     private ChaoExpression requestedExpression;
-    private float expressionUntil,expressionIntensity=1;
+    private float expressionUntil,expressionIntensity=1,visualIntensity;
+    private ChaoPoseKind expressionPose;
+    private bool blinkSuppressed;
+    private ChaoExpressionDecision? expressionDecision;
+    internal float HappyWeight=>happyWeight;
+    internal float BlinkDeadline=>blinkAt;
+    internal PetState? PresentationState=>personality;
+    internal ChaoExpressionDiagnostic ExpressionDiagnostics
+    {
+        get
+        {
+            var mood=personality?.Mood.Snapshot;var d=expressionDecision;
+            return new(mood?.DominantEmotion,mood?.EmotionIntensity ?? 0,mood?.Valence ?? 0,mood?.Arousal ?? 0,
+                Expression.ToString(),PoseKind.ToString(),d?.Source.ToString() ?? "Neutral",d?.PersonalityMultiplier ?? 1,
+                d?.VisualIntensity ?? 0,visualIntensity,BlinkAmount,d?.ProtectedAnimation ?? !ChaoExpressionLayer.IsFree(PoseKind),d?.SuppressionReason ?? "Not yet presented");
+        }
+    }
     private Vector3? attention;
     private int attentionPriority;
     private float attentionUntil;
@@ -37,6 +53,7 @@ public partial class ImportedChao
         if(art is not ImportedChao model)return;
         if(model.personality==null)
         {
+            model.blinkAge=-1;model.BlinkAmount=0;
             if(id!=null){int seed=17;foreach(char letter in id)seed=unchecked(seed*31+letter);model.microRandom=new(seed);}
             model.individualPhase=(float)model.microRandom.NextDouble()*Mathf.Tau;model.individualPace=.96f+(float)model.microRandom.NextDouble()*.08f;model.blinkAt=ChaoExpressiveness.BlinkDelay(model.microRandom,state);
         }
@@ -52,34 +69,38 @@ public partial class ImportedChao
     internal static void Express(Node3D art,ChaoExpression expression,float seconds=.3f,float intensity=1)
     {
         if(art is not ImportedChao model)return;
-        model.requestedExpression=expression;model.expressionUntil=model.presentationClock+seconds;model.expressionIntensity=Mathf.Clamp(intensity,.3f,1);
+        model.expressionPose=model.PoseKind;model.requestedExpression=expression;model.expressionUntil=model.presentationClock+seconds;model.expressionIntensity=Mathf.Clamp(intensity,0,1);
     }
     private static float Ease(float value,float target,float speed,float dt)=>Mathf.Lerp(value,target,1-Mathf.Exp(-speed*dt));
     private void UpdatePresentation(float dt,Node3D actor)
     {
         presentationClock+=dt;
         presentationPoseWritten=poseSerial!=lastPresentationPose;
-        var request=presentationClock<expressionUntil ? requestedExpression : PoseKind==ChaoPoseKind.Thought ? ChaoExpression.Curious : PoseKind==ChaoPoseKind.Interaction || PoseKind==ChaoPoseKind.Grip ? ChaoExpression.Focused : ChaoExpression.Neutral;
-        if(presentationClock>=expressionUntil && request==ChaoExpression.Neutral && PoseKind==ChaoPoseKind.Idle && personality!=null)
-        {
-            var mood=personality.Mood.Snapshot;request=ChaoExpressiveness.FromMood(mood);
-            if(request!=ChaoExpression.Neutral)expressionIntensity=mood.EmotionIntensity;
-        }
-        Expression=ChaoExpressiveness.Resolve(eyesClosed && PoseKind is ChaoPoseKind.Sleep or ChaoPoseKind.Rest,
-            eyesSquint && PoseKind==ChaoPoseKind.Water,eyesHalf || eyesSquint && PoseKind==ChaoPoseKind.Distress,eyesHappy,personality?.Energy ?? 90,request);
+        expressionDecision=ChaoExpressionLayer.Evaluate(PoseKind,eyesClosed,eyesSquint,eyesHalf,eyesHappy,heldExternally,
+            personality?.Mood.Snapshot,personality?.Personality,presentationClock<expressionUntil ? requestedExpression : null,expressionIntensity,expressionPose);
+        Expression=expressionDecision.Expression;
         if(Expression!=previousExpression){emotionSince=presentationClock;previousExpression=Expression;}
-        if(Expression is ChaoExpression.Annoyed or ChaoExpression.Afraid)expressionIntensity=1;
         float speed=personality==null ? 7 : ChaoExpressiveness.Response(personality);
-        happyWeight=Ease(happyWeight,Expression is ChaoExpression.Happy or ChaoExpression.Delighted ? 1 : 0,speed,dt);
-        sleepWeight=Ease(sleepWeight,eyesClosed ? 1 : 0,10,dt);
+        visualIntensity=Ease(visualIntensity,expressionDecision.VisualIntensity,speed,dt);
+        happyWeight=Ease(happyWeight,Expression is ChaoExpression.Happy or ChaoExpression.Delighted ? expressionDecision.VisualIntensity : 0,speed,dt);
+        sadWeight=Ease(sadWeight,Expression==ChaoExpression.Sad ? expressionDecision.VisualIntensity : 0,speed,dt);
+        curiousWeight=Ease(curiousWeight,Expression==ChaoExpression.Curious ? expressionDecision.VisualIntensity : 0,speed,dt);
+        fearWeight=Ease(fearWeight,Expression==ChaoExpression.Afraid ? expressionDecision.VisualIntensity : 0,speed,dt);
+        surpriseWeight=Ease(surpriseWeight,Expression==ChaoExpression.Surprised ? expressionDecision.VisualIntensity : 0,speed,dt);
+        delightWeight=Ease(delightWeight,Expression==ChaoExpression.Delighted ? expressionDecision.VisualIntensity : 0,speed,dt);
+        sleepWeight=eyesClosed ? 1 : Ease(sleepWeight,0,10,dt);
         squintWeight=Ease(squintWeight,eyesSquint ? 1 : 0,10,dt);
         float lidsTarget=Expression is ChaoExpression.Annoyed or ChaoExpression.Sleepy ? .5f : Expression==ChaoExpression.Sad ? .25f : Expression==ChaoExpression.Focused ? .22f : 0;
-        lidWeight=Ease(lidWeight,lidsTarget,7,dt);
-        if(presentationClock>=blinkAt && blinkAge<0 && !eyesClosed && !eyesSquint && happyWeight<.6f)blinkAge=0;
+        lidWeight=Ease(lidWeight,lidsTarget*expressionDecision.VisualIntensity,7,dt);
+        bool suppress=eyesClosed || eyesSquint;
+        if(suppress)blinkAge=-1;
+        else if(blinkSuppressed)blinkAt=presentationClock+ChaoExpressiveness.BlinkDelay(microRandom,personality);
+        blinkSuppressed=suppress;
+        if(presentationClock>=blinkAt && blinkAge<0 && !suppress && happyWeight<.6f)blinkAge=0;
         BlinkAmount=0;
         if(blinkAge>=0)
         {
-            blinkAge+=dt;BlinkAmount=Mathf.Sin(Mathf.Clamp(blinkAge/.19f,0,1)*Mathf.Pi);
+            blinkAge+=dt;BlinkAmount=Mathf.Clamp(Mathf.Sin(Mathf.Clamp(blinkAge/.19f,0,1)*Mathf.Pi),0,1);
             if(blinkAge>=.19f){blinkAge=-1;blinkAt=presentationClock+ChaoExpressiveness.BlinkDelay(microRandom,personality);}
         }
         RefreshEyes();
@@ -93,17 +114,16 @@ public partial class ImportedChao
         }
         if(!heldExternally && PoseKind==ChaoPoseKind.Idle && personality!=null && poseSerial!=lastPresentationPose)
         {
-            float amount=ChaoExpressiveness.Intensity(personality)*expressionIntensity;
-            float joy=happyWeight*(Expression==ChaoExpression.Delighted ? 1.4f : .5f);
+            float joy=happyWeight*.5f+delightWeight*.9f;
             float age=presentationClock-emotionSince;
             if(softBody!=null)
             {
-                float tilt=Expression==ChaoExpression.Afraid ? .09f : Expression==ChaoExpression.Sad ? .11f : Expression==ChaoExpression.Curious ? .035f : Expression==ChaoExpression.Surprised ? -.08f*Mathf.Exp(-age*4) : 0;
-                softBody.Rotation+=new Vector3(tilt*amount,0,0);
-                if(Expression==ChaoExpression.Delighted && age<1.2f){softBody.Position+=Vector3.Up*Mathf.Abs(Mathf.Sin(age*Mathf.Tau/1.2f))*.025f*amount;alignSoles=false;}
+                float tilt=.09f*fearWeight+.11f*sadWeight+.035f*curiousWeight-.08f*surpriseWeight*Mathf.Exp(-age*4);
+                softBody.Rotation+=new Vector3(tilt,0,0);
+                if(Expression==ChaoExpression.Delighted && age<1.2f){softBody.Position+=Vector3.Up*Mathf.Abs(Mathf.Sin(age*Mathf.Tau/1.2f))*.025f*delightWeight;alignSoles=false;}
             }
             foreach(var (name,side) in new[]{("PaddleL",-1),("PaddleR",1)})
-                if(FindChild(name,true,false) is Node3D paw)paw.Rotation+=new Vector3(-joy*.16f-(Expression==ChaoExpression.Surprised ? .2f*Mathf.Exp(-age*3) : 0),0,side*(joy*.14f+(Expression==ChaoExpression.Afraid ? -.07f : 0)));
+                if(FindChild(name,true,false) is Node3D paw)paw.Rotation+=new Vector3(-joy*.16f-surpriseWeight*.2f*Mathf.Exp(-age*3),0,side*(joy*.14f+(-.07f*fearWeight)));
         }
         lastPresentationPose=poseSerial;
     }
@@ -115,8 +135,8 @@ public partial class ImportedChao
         if(free && presentationClock<attentionUntil && attention is {} target)
         {
             var local=actor.ToLocal(target)-Vector3.Up*.27f;
-            float tilt=Expression==ChaoExpression.Curious ? -.035f-.055f*((personality?.Curiosity ?? 0)+100)/200f : 0;
-            desired=Quaternion.FromEuler(new(Mathf.Clamp(-Mathf.Atan2(local.Y,new Vector2(local.X,local.Z).Length())+(Expression==ChaoExpression.Sad ? .1f : 0),-.4f,.35f),Mathf.Clamp(Mathf.Atan2(local.X,local.Z),-.55f,.55f),tilt));
+            float tilt=ChaoExpressionLayer.IsFree(PoseKind) && !heldExternally ? -.06f*curiousWeight : 0;
+            desired=Quaternion.FromEuler(new(Mathf.Clamp(-Mathf.Atan2(local.Y,new Vector2(local.X,local.Z).Length()),-.4f,.35f),Mathf.Clamp(Mathf.Atan2(local.X,local.Z),-.55f,.55f),tilt));
         }
         else if(PoseKind==ChaoPoseKind.Idle && !heldExternally)
         {
@@ -125,8 +145,11 @@ public partial class ImportedChao
                 nextIdleLook=presentationClock+2.5f+(float)microRandom.NextDouble()*4;
                 idleYaw=((float)microRandom.NextDouble()-.5f)*.42f;idlePitch=-.06f+(float)microRandom.NextDouble()*.09f;
             }
-            desired=Quaternion.FromEuler(new(idlePitch,idleYaw,0));
+            float lively=1+.1f*happyWeight;
+            desired=Quaternion.FromEuler(new(idlePitch+(.1f*sadWeight),idleYaw*lively,-.06f*curiousWeight));
         }
+        else if(PoseKind==ChaoPoseKind.Walk && !heldExternally)
+            desired=Quaternion.FromEuler(new(.1f*sadWeight,0,-.06f*curiousWeight));
         // Preserve the deliberately inverted swimming/crawling neck and the lying/rising choreography.
         bool compatible=free || PoseKind==ChaoPoseKind.Thought;
         if(!headInitialized || !compatible || previousPose is ChaoPoseKind.Sleep or ChaoPoseKind.Rest or ChaoPoseKind.Rise or ChaoPoseKind.Water or ChaoPoseKind.Crawl)
@@ -150,22 +173,27 @@ public partial class ImportedChao
     }
     private void ApplyEyeSurfaces()
     {
-        float closed=Mathf.Max(sleepWeight,Mathf.SmoothStep(.75f,1,BlinkAmount));
-        float covered=Mathf.Max(BlinkAmount,lidWeight),line=Mathf.Max(happyWeight,Mathf.Max(closed,squintWeight));
+        float closed=eyesClosed ? 1 : Mathf.Max(sleepWeight,Mathf.SmoothStep(.75f,1,BlinkAmount));
+        bool protectedPose=!ChaoExpressionLayer.IsFree(PoseKind) || heldExternally;
+        float smile=protectedPose && Expression is not (ChaoExpression.Happy or ChaoExpression.Delighted) ? 0 : happyWeight;
+        float sad=protectedPose && Expression!=ChaoExpression.Sad ? 0 : sadWeight;
+        float curious=protectedPose && Expression!=ChaoExpression.Curious ? 0 : curiousWeight;
+        float squint=eyesSquint ? 1 : squintWeight;
+        float covered=Mathf.Max(BlinkAmount,lidWeight),line=Mathf.Max(smile,Mathf.Max(closed,squint));
         foreach(var (mesh,lid) in lids)
         {
-            float curiosity=Expression==ChaoExpression.Curious && ToLocal(mesh.GlobalPosition).X<0 ? .12f : 0;
+            float curiosity=ToLocal(mesh.GlobalPosition).X<0 ? .12f*curious : 0;
             float opening=1-Mathf.Max(covered,curiosity);
             mesh.MaterialOverride=opening<.999f || line>.001f ? lid.Half : lid.Original;
             lid.Half.SetShaderParameter("openness",opening);lid.Half.SetShaderParameter("opacity",1-line);
-            if(PoseKind!=ChaoPoseKind.Distress)lid.Half.SetShaderParameter("slant",Expression==ChaoExpression.Sad ? (ToLocal(mesh.GlobalPosition).X<0 ? -.18f : .18f) : 0f);
+            if(PoseKind!=ChaoPoseKind.Distress)lid.Half.SetShaderParameter("slant",(ToLocal(mesh.GlobalPosition).X<0 ? -.18f : .18f)*sad);
         }
         foreach(var (eye,shapes) in eyeShapes)
         {
             eye.Visible=line<.995f;
             if(!eyeScales.TryGetValue(eye,out var rest))eyeScales[eye]=rest=eye.Scale;
-            eye.Scale=rest*new Vector3(1,1+(Expression is ChaoExpression.Surprised or ChaoExpression.Afraid ? .07f : 0),1);
-            Line(shapes.Happy,happyWeight*(1-Mathf.Max(closed,squintWeight)));Line(shapes.Sleep,closed);Line(shapes.Squint,squintWeight*(1-closed));
+            eye.Scale=rest*new Vector3(1,1+(.07f*Mathf.Max(fearWeight,surpriseWeight)),1);
+            Line(shapes.Happy,smile*(1-Mathf.Max(closed,squint)));Line(shapes.Sleep,closed);Line(shapes.Squint,squint*(1-closed));
         }
     }
     private void Line(Node3D root,float amount)

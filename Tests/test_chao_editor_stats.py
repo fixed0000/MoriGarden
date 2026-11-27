@@ -41,6 +41,23 @@ class EditorStatTests(unittest.TestCase):
         editor=self.editor();editor.stat_variables["Run"]["Progress"].set(45)
         self.assertEqual(editor.statistics_patch()["Run"]["Points"],1980)
 
+    def test_expression_view_is_read_only_live_model_data(self):
+        editor = module.ChaoEditor.__new__(module.ChaoEditor)
+        editor.selected = "main"
+        editor.expression_text = Value("")
+        editor.expression_rows = {"main": dict(DominantEmotion="Happy", EmotionIntensity=0.7,
+            Valence=0.6, Arousal=0.8, CurrentExpression="Happy", CurrentPose="Walk", Source="Mood",
+            AppliedPersonalityMultiplier=1.12, FinalVisualIntensity=0.784, SmoothedVisualIntensity=0.78,
+            BlinkAmount=0, ProtectedAnimation=False, SuppressionReason="")}
+        original = json.dumps(editor.expression_rows)
+        editor.refresh_expression()
+        self.assertIn("Walk", editor.expression_text.get())
+        self.assertIn("0.784", editor.expression_text.get())
+        self.assertEqual(json.dumps(editor.expression_rows), original)
+        editor.expression_rows = {}
+        editor.refresh_expression()
+        self.assertIn("No active visual model", editor.expression_text.get())
+
     def test_daily_rhythm_is_read_only_and_formats_live_context(self):
         editor = module.ChaoEditor.__new__(module.ChaoEditor)
         editor.selected = "main"
@@ -68,7 +85,7 @@ class EditorStatTests(unittest.TestCase):
         editor.snapshot = dict(session="isolated-session", target="main", parameters=dict(Joy=60),
                                personality=personality.copy(), learnedPreferences={"entries": [{"id": "rattle", "effectiveBias": 0.2}]},
                                socialPreferences={"partners": [{"id": "peer", "score": {"PartnerWeight": 1.2}}]},
-                               activityHabits={"entries": [{"activity": "Play", "effectiveBias": 0.08}]}, dailyRhythm={"gardenSeconds": 360}, relationships=[])
+                               activityHabits={"entries": [{"activity": "Play", "effectiveBias": 0.08}]}, dailyRhythm={"gardenSeconds": 360}, expression={"CurrentExpression": "Happy"}, relationships=[])
         editor.variables = dict(Joy=Value(75))
         editor.stat_variables = {}
         editor.relationship_peer = None
@@ -86,6 +103,8 @@ class EditorStatTests(unittest.TestCase):
             self.assertNotIn("LearnedPreferences", request["patch"])
             self.assertNotIn("socialPreferences", request)
             self.assertNotIn("SocialSelection", request["patch"])
+            self.assertNotIn("expression", request)
+            self.assertNotIn("expression", request["patch"])
             self.assertNotIn("dailyRhythm", request)
             self.assertNotIn("GardenSeconds", request["patch"])
             self.assertNotIn("activityHabits", request)

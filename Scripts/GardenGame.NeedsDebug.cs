@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 
@@ -39,6 +40,6 @@ public partial class GardenGame
         if(selected<0)selected=0;
         if(roster.Length==0){needsDebugText.Text="No active Chao.";return;}
         needsDebugPicker.Select(selected);needsDebugId=roster[selected].Id;
-        needsDebugText.Text=ChaoStateDiagnostics.Describe(roster[selected].State);
+        needsDebugText.Text=ChaoStateDiagnostics.Describe(roster[selected].State,ExpressionDiagnostics.GetValueOrDefault(needsDebugId));
     }
 }

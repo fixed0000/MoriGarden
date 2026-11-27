@@ -65,6 +65,7 @@ class ChaoEditor:
         # Canonical personality is carried by the game; the editor sends only patches.
         self.place_rows = {chao["id"]: chao.get("placePreferences", {}) for chao in snapshot.get("chao", [])}
         self.social_rows = {chao["id"]: chao.get("socialPreferences", {}) for chao in snapshot.get("chao", [])}
+        self.expression_rows = {chao["id"]: chao.get("expression") for chao in snapshot.get("chao", [])}
         self.rhythm_rows = {chao["id"]: chao.get("dailyRhythm", {}) for chao in snapshot.get("chao", [])}
         self.habit_rows = {chao["id"]: chao.get("activityHabits", {}) for chao in snapshot.get("chao", [])}
         self.learned_rows = {chao["id"]: chao.get("learnedPreferences", {}) for chao in snapshot.get("chao", [])}
@@ -83,6 +84,7 @@ class ChaoEditor:
             previous = self.selected
             self.update_roster(snapshot)
             self.refresh_daily_rhythm()
+            self.refresh_expression()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 self.reload()
         except (OSError, ValueError):
@@ -113,6 +115,7 @@ class ChaoEditor:
                              socialPreferences=self.social_rows.get(self.selected, {}),
                              activityHabits=self.habit_rows.get(self.selected, {}),
                              dailyRhythm=self.rhythm_rows.get(self.selected, {}),
+                             expression=self.expression_rows.get(self.selected),
                              relationships=self.relationship_rows.get(self.selected, []))
         tab_index = self.tabs.index("current") if self.tabs.select() else 1
         for widget in self.tabs.winfo_children():
@@ -189,6 +192,11 @@ class ChaoEditor:
         rhythm = ttk.Frame(sections, padding=6)
         sections.add(rhythm, text="Daily rhythm")
         self.build_daily_rhythm(rhythm)
+        expression = ttk.Frame(sections, padding=6)
+        sections.add(expression, text="Expression")
+        self.expression_text = tk.StringVar()
+        ttk.Label(expression, textvariable=self.expression_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
+        self.refresh_expression()
         ttk.Label(panel, text="Innate personality — read-only").pack(anchor="w")
         traits = self.snapshot.get("personality") or {}
         ttk.Label(panel, text=", ".join(f"{name}: {value}" for name, value in traits.items()), wraplength=690).pack(anchor="w", pady=(3, 10))
@@ -211,6 +219,23 @@ class ChaoEditor:
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def refresh_expression(self):
+        if not hasattr(self, "expression_text"):
+            return
+        data = self.expression_rows.get(self.selected)
+        if not data:
+            self.expression_text.set("Expression — read-only\nNo active visual model for this Chao.")
+            return
+        self.expression_text.set("Expression — read-only · current live model\n\n" +
+            f"Mood: {data['DominantEmotion']} · intensity: {data['EmotionIntensity']:.3f}\n" +
+            f"Valence: {data['Valence']:.3f} · Arousal: {data['Arousal']:.3f}\n\n" +
+            f"Expression: {data['CurrentExpression']}\nPose: {data['CurrentPose']}\nSource: {data['Source']}\n" +
+            f"Personality multiplier: {data['AppliedPersonalityMultiplier']:.3f}\n" +
+            f"Target visual intensity: {data['FinalVisualIntensity']:.3f}\nSmoothed intensity: {data['SmoothedVisualIntensity']:.3f}\n" +
+            f"Blink: {data['BlinkAmount']:.3f}\nProtected animation: {data['ProtectedAnimation']}\n" +
+            f"Mood suppression: {data['SuppressionReason'] or 'None'}\n\n" +
+            "Visual state belongs to the active model; it is not saved or editable.")
 
     def build_daily_rhythm(self, panel):
         self.rhythm_text = tk.StringVar()
