@@ -1,12 +1,16 @@
 import json
 import os
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
 from uuid import uuid4
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chao_personality_editor import PersonalityEditorMixin, LEGACY
 
 
-class ChaoEditor:
+class ChaoEditor(PersonalityEditorMixin):
     def __init__(self, window):
         self.window = window
         personal = Path(os.environ["APPDATA"]) / "Godot" / "app_userdata" / "Mori · маленький сад"
@@ -21,6 +25,7 @@ class ChaoEditor:
         self.relationship_rows = {}
         self.relationship_peer = None
         self.selected = None
+        self.personality_drafts = {}
         self.pending = None
         self.status = tk.StringVar(value="Start Mori, then click Read from game.")
         window.title("Mori — Chao Editor · " + profile)
@@ -45,12 +50,20 @@ class ChaoEditor:
         self.list.bind("<<ListboxSelect>>", self.select_chao)
         self.tabs = ttk.Notebook(content)
         self.tabs.pack(fill="both", expand=True)
+        self.tabs.enable_traversal()
         ttk.Label(window, textvariable=self.status, padding=12, wraplength=550).pack(fill="x")
         self.reload()
         self.window.after(1000, self.refresh_roster)
 
     def read(self):
-        snapshot = json.loads((self.directory / "chao-editor-state.json").read_text(encoding="utf-8"))
+        for attempt in range(4):
+            try:
+                snapshot = json.loads((self.directory / "chao-editor-state.json").read_text(encoding="utf-8"))
+                break
+            except PermissionError:
+                if attempt == 3:
+                    raise
+                time.sleep(.01)  # Windows/OneDrive can briefly hold the atomic snapshot replacement.
         if snapshot.get("profileDirectory") and Path(snapshot["profileDirectory"]).resolve() != self.directory.resolve():
             raise ValueError("This snapshot belongs to a different garden profile.")
         return snapshot
@@ -75,10 +88,15 @@ class ChaoEditor:
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
         self.roster = roster
         self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
-        if self.selected not in roster:
+        draft = self.active_personality_draft()
+        if self.selected not in roster and not (draft and draft.dirty):
             self.selected = next(iter(roster), None)
-        if self.selected is not None:
-            self.list.selection_set(list(roster).index(self.selected))
+        if self.selected in roster:
+            index = list(roster).index(self.selected)
+            if self.list.curselection() != (index,):
+                self.list.selection_clear(0, "end")
+                self.list.selection_set(index)
+        self.sync_personality_snapshot(snapshot)
 
     def refresh_roster(self):
         try:
@@ -90,18 +108,37 @@ class ChaoEditor:
             self.refresh_idle_gestures()
             self.refresh_voice()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
-                self.reload()
+                draft = self.active_personality_draft()
+                if draft is None or not draft.dirty:
+                    self.reload(force=True)
+                else:
+                    self.status.set("Game restarted. Unsaved personality draft retained; Read from game to continue.")
         except (OSError, ValueError):
             pass
         self.window.after(1000, self.refresh_roster)
 
     def select_chao(self, _event):
         selection = self.list.curselection()
+        if self.pending is not None:
+            self.list.selection_clear(0, "end")
+            if self.selected in self.roster:
+                self.list.selection_set(list(self.roster).index(self.selected))
+            self.status.set("Wait for the current request before switching Chao.")
+            return
         if selection and self.pending is None:
-            self.selected = list(self.roster)[selection[0]]
-            self.reload()
+            target = list(self.roster)[selection[0]]
+            if target == self.selected:
+                return
+            if target != self.selected and not self.guard_personality_navigation():
+                self.list.selection_clear(0, "end")
+                self.list.selection_set(list(self.roster).index(self.selected))
+                return
+            self.selected = target
+            self.reload(force=True)
 
-    def reload(self):
+    def reload(self, force=False):
+        if not force and not self.guard_personality_navigation():
+            return
         try:
             snapshot = self.read()
             self.update_roster(snapshot)
@@ -148,7 +185,10 @@ class ChaoEditor:
             row, pair = divmod(index, 2)
             column = pair * 2
             ttk.Label(fields, text=name).grid(row=row, column=column, sticky="w", pady=4)
-            if isinstance(value, bool):
+            if name in LEGACY:
+                var = tk.StringVar(value=str(value))
+                control = ttk.Label(fields, text=f"{value} (Personality — read-only adapter)", wraplength=180)
+            elif isinstance(value, bool):
                 var = tk.BooleanVar(value=value)
                 control = ttk.Checkbutton(fields, variable=var)
             else:
@@ -172,6 +212,7 @@ class ChaoEditor:
             control.grid(row=row, column=column + 1, sticky="w", padx=(10, 24), pady=4)
             self.variables[name] = var
         self.build_statistics(pages["Stats"])
+        self.build_personality()
         self.build_relationships()
         self.build_learned_preferences()
         self.tabs.select(tab_index)
@@ -458,8 +499,38 @@ class ChaoEditor:
         except ValueError:
             pass
 
-    def apply(self):
+    def unrelated_draft(self):
+        values = {k: var.get() for k, var in self.variables.items() if k not in LEGACY and var.get() != (self.snapshot["parameters"][k] if isinstance(self.snapshot["parameters"][k], bool) else str(self.snapshot["parameters"][k] if self.snapshot["parameters"][k] is not None else ""))}
+        stats = {}
+        for name, fields in self.stat_variables.items():
+            for key, var in fields.items():
+                old = self.snapshot["statistics"][name][key]
+                expected = "EDCBAS"[old] if key == "Grade" and name not in ("Luck", "Intelligence") else str(old)
+                if var.get() != expected:
+                    stats[(name, key)] = var.get()
+        relation = None
+        old = next((r for r in self.snapshot["relationships"] if r["id"] == self.relationship_peer), None)
+        if old and (self.relation_met.get() != old["met"] or self.relation_score.get() != str(old["score"])):
+            relation = (self.relation_met.get(), self.relation_score.get())
+        return values, stats, relation
+
+    def restore_unrelated_draft(self, draft):
+        values, stats, relation = draft
+        for key, value in values.items():
+            if key in self.variables:
+                self.variables[key].set(value)
+        for (name, key), value in stats.items():
+            if name in self.stat_variables:
+                self.stat_variables[name][key].set(value)
+        if relation:
+            self.relation_met.set(relation[0])
+            self.relation_score.set(relation[1])
+
+    def apply(self, personality_only=False):
         if self.snapshot is None or self.pending is not None:
+            return
+        if self.snapshot["target"] != getattr(self, "selected", self.snapshot["target"]):
+            self.status.set("Selected Chao changed. Read its values before applying.")
             return
         try:
             current = self.read()
@@ -470,7 +541,9 @@ class ChaoEditor:
                 self.status.set("This Chao is no longer in the garden.")
                 return
             patch = {}
-            for key, old in self.snapshot["parameters"].items():
+            for key, old in ({} if personality_only else self.snapshot["parameters"]).items():
+                if key in LEGACY:
+                    continue
                 value = self.variables[key].get()
                 if isinstance(old, bool):
                     value = bool(value)
@@ -487,7 +560,7 @@ class ChaoEditor:
             relationship = {}
             old_relation = next((row for row in self.snapshot["relationships"]
                                  if row["id"] == self.relationship_peer), None)
-            if old_relation is not None:
+            if old_relation is not None and not personality_only:
                 met = self.relation_met.get()
                 score = int(self.relation_score.get())
                 if not -100 <= score <= 100:
@@ -496,8 +569,9 @@ class ChaoEditor:
                     relationship["met"] = met
                 if score != old_relation["score"]:
                     relationship["score"] = score
-            statistics = self.statistics_patch()
-            if not patch and not relationship and not statistics:
+            statistics = {} if personality_only else self.statistics_patch()
+            personality = self.personality_patch()
+            if not patch and not relationship and not statistics and not personality:
                 self.status.set("No changes to apply.")
                 return
             request_id = uuid4().hex
@@ -505,11 +579,16 @@ class ChaoEditor:
             temporary = command.with_suffix(".tmp")
             request = {"session": current["session"], "id": request_id,
                        "target": self.snapshot["target"], "patch": patch, "statistics": statistics}
+            if personality:
+                request["personality"] = personality
+                request["personalityRevision"] = self.active_personality_draft().revision
             if relationship:
                 request["relationship"] = {"other": self.relationship_peer, **relationship}
             temporary.write_text(json.dumps(request, allow_nan=False), encoding="utf-8")
             temporary.replace(command)
+            self.pending_other_draft = self.unrelated_draft() if personality_only else None
             self.pending = request_id
+            self.refresh_personality_controls()
             self.status.set("Waiting for the game…")
             self.window.after(400, lambda: self.check(16))
         except (OSError, ValueError) as error:
@@ -518,10 +597,20 @@ class ChaoEditor:
     def check(self, attempts):
         try:
             snapshot = self.read()
+            if snapshot["session"] != self.snapshot["session"]:
+                self.pending = None
+                self.sync_personality_snapshot(snapshot)
+                self.status.set("The game restarted. Draft retained. Read from game before applying.")
+                return
             if snapshot["lastRequest"] == self.pending:
                 self.pending = None
                 if snapshot["status"] == "Applied":
-                    self.reload()
+                    self.sync_personality_snapshot(snapshot, confirmed=True)
+                    self.reload(force=True)
+                    if getattr(self, "pending_other_draft", None) is not None:
+                        self.restore_unrelated_draft(self.pending_other_draft)
+                else:
+                    self.refresh_personality_controls()
                 self.status.set(snapshot["status"])
                 return
         except (OSError, ValueError):
@@ -530,6 +619,7 @@ class ChaoEditor:
             self.window.after(400, lambda: self.check(attempts - 1))
         else:
             self.pending = None
+            self.refresh_personality_controls()
             self.status.set("No reply. Check that Mori is still open.")
 
 

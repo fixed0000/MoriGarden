@@ -21,6 +21,7 @@ ChaoIdleGestureChecks.Run(Check);
 ChaoVocalChecks.Run(Check);
 NeedsMoodChecks.Run(Check);
 PersonalityModelChecks.Run(Check);
+PersonalityEditorChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);
 SaveRecoveryChecks.Run(Check);
 var pet = new PetState { Fullness = 90, Energy = 90 };

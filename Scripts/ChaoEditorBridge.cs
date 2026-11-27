@@ -14,6 +14,7 @@ internal sealed class ChaoEditorBridge
     private readonly string session=Guid.NewGuid().ToString("N");
     private string lastRequest="";
     private string status="Ready";
+    private readonly HashSet<string> processed=new(StringComparer.Ordinal);
     private readonly Dictionary<string,double> rhythmOffsets=new(StringComparer.Ordinal);
     private static readonly PropertyInfo[] fields=typeof(PetState).GetProperties()
         .Where(p=>p.CanWrite && (p.PropertyType.IsPrimitive || p.PropertyType==typeof(string)) && p.Name!=nameof(PetState.SpecialFruitBag) && p.Name!=nameof(PetState.SeedBag) && p.Name!=nameof(PetState.GardenTrees) && p.Name!=nameof(PetState.Version) && p.Name!=nameof(PetState.ManualLocation) && p.Name!=nameof(PetState.GardenEggs)
@@ -47,6 +48,9 @@ internal sealed class ChaoEditorBridge
                 if (request["session"]?.GetValue<string>()==session && id.Length>0 && id!=lastRequest)
                 {
                     lastRequest=id;
+                    if(!processed.Add(id)){status="Duplicate request ignored.";Publish();return null;}
+                    if(request.Any(p=>p.Key is not ("session" or "id" or "target" or "patch" or "statistics" or "relationship" or "personality" or "personalityRevision")))
+                        throw new ArgumentException("Unknown editor request section.");
                     string target=request["target"]?.GetValue<string>() ?? "main";
                     if (!roster.TryGetValue(target,out var current))
                         status="This Chao is no longer in the garden.";
@@ -55,7 +59,9 @@ internal sealed class ChaoEditorBridge
                     {
                         var values=JsonSerializer.SerializeToNode(current)!.AsObject();
                         var next=values.Deserialize<PetState>() ?? throw new ArgumentException("Empty editor update");
-                        var patch=request["patch"]!.AsObject();
+                        JsonObject Section(string key)=>!request.ContainsKey(key) || request[key]==null && key is "statistics" or "relationship" ? new() : request[key] as JsonObject ?? throw new ArgumentException("Invalid editor section: "+key);
+                        var patch=Section("patch");var stats=Section("statistics");var personality=Section("personality");var relation=Section("relationship");
+                        string? revision=request["personalityRevision"]?.GetValue<string>();
                         foreach (var (key,value) in patch)
                         {
                             if (!fields.Any(field=>field.Name==key)) throw new ArgumentException("Unknown parameter: "+key);
@@ -63,8 +69,7 @@ internal sealed class ChaoEditorBridge
                             if(value==null && field.PropertyType!=typeof(string))throw new ArgumentException("Missing parameter: "+key);
                             field.SetValue(next,value?.Deserialize(field.PropertyType));
                         }
-                        if(request["statistics"] is JsonObject statPatch)
-                            foreach(var (name,record) in statPatch)
+                        foreach(var (name,record) in stats)
                             {
                                 var old=JsonSerializer.SerializeToNode(next.Stat(name))!.AsObject();
                                 if(record is not JsonObject changes)throw new ArgumentException("Invalid stat update");
@@ -77,22 +82,38 @@ internal sealed class ChaoEditorBridge
                                 ChaoStatistics.ValidateEditor(name,updatedStat,next.Stat(name));
                                 var destination=next.Stat(name);destination.Grade=updatedStat.Grade;destination.Level=updatedStat.Level;destination.Points=updatedStat.Points;destination.Progress=updatedStat.Progress;
                             }
-                        next.Validate();
-                        if (request["relationship"] is JsonObject relationship)
+                        ChaoPersonalityEditor.Apply(next,current,personality,revision,patch);
+                        // Prepare shared relationships independently, including resident-target requests.
+                        List<ChaoRelationship>? preparedLinks=null;
+                        ChaoRelationship? preparedLink=null;
+                        if(relation.Count>0)
                         {
-                            string other=relationship["other"]?.GetValue<string>() ?? "";
-                            if (other==target || !roster.ContainsKey(other))
-                                throw new ArgumentException("Choose a different Chao in the garden.");
-                            bool? met=relationship["met"]?.GetValue<bool>();
-                            int? score=relationship["score"]?.GetValue<int>();
-                            var owner=target=="main" ? next : roster["main"];
-                            var link=owner.SocialLink(target,other,create:true)!;
-                            if (met is bool flag) { link.Met=flag; link.Introduced|=flag; }
-                            if (score is int value) link.SetScoreFrom(target,value);
+                            if(relation.Any(p=>p.Key is not ("other" or "met" or "score")))throw new ArgumentException("Unknown relationship field");
+                            string other=relation["other"]?.GetValue<string>() ?? "";
+                            if(other==target || !roster.ContainsKey(other))throw new ArgumentException("Choose a different Chao in the garden.");
+                            bool? met=relation.ContainsKey("met") ? relation["met"]?.GetValue<bool>() ?? throw new ArgumentException("Invalid introduction flag") : null;
+                            int? score=relation.ContainsKey("score") ? relation["score"]?.GetValue<int>() ?? throw new ArgumentException("Invalid relationship score") : null;
+                            if(score is < -100 or >100)throw new ArgumentException("Affinity must be between -100 and 100.");
+                            preparedLinks=JsonSerializer.Deserialize<List<ChaoRelationship>>(JsonSerializer.Serialize(roster["main"].SocialLinks))!;
+                            var link=preparedLinks.Find(item=>item.Matches(target,other));
+                            if(link==null){link=new ChaoRelationship{First=target,Second=other};preparedLinks.Add(link);}
+                            if(met is bool flag){link.Met=flag;link.Introduced|=flag;}
+                            if(score is int n)link.SetScoreFrom(target,n);
+                            preparedLink=link;
                         }
+                        next.Validate();
+                        if(target=="main" && preparedLinks!=null)next.SocialLinks=preparedLinks;
                         next.GardenEggs=current.GardenEggs;
                         next.GardenTrees=current.GardenTrees;
                         next.KeepCurrentRuntimeFrom(current);
+                        // Commit only after all validation/runtime preparation. Preserve existing link
+                        // identities used by the garden's relation views and social executors.
+                        if(target!="main" && preparedLink!=null)
+                        {
+                            var live=roster["main"].SocialLinks.Find(item=>item.Matches(preparedLink.First,preparedLink.Second));
+                            if(live==null)roster["main"].SocialLinks.Add(preparedLink);
+                            else {live.Score=preparedLink.Score;live.ReverseScore=preparedLink.ReverseScore;live.Met=preparedLink.Met;live.Introduced=preparedLink.Introduced;live.Partner=preparedLink.Partner;}
+                        }
                         updated=next;
                         EditedTarget=target;
                         roster[target]=next;
@@ -103,12 +124,16 @@ internal sealed class ChaoEditorBridge
             catch(Exception ex) when (ex is IOException or JsonException or ArgumentException or InvalidOperationException)
             { status=ex.Message; }
         }
+        Publish();return updated;
+        void Publish()
+        {
         var ownerState=roster["main"];
         var chao=roster.Select(entry=>new { id=entry.Key,
             parameters=fields.ToDictionary(field=>field.Name,field=>field.GetValue(entry.Value)),
             statistics=entry.Value.Statistics,
             personalitySchemaVersion=entry.Value.PersonalitySchemaVersion,
             personality=entry.Value.Personality,
+            personalityRevision=ChaoPersonalityEditor.Revision(entry.Value),
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             activityHabits=entry.Value.ActivityHabitDiagnostics(),
             dailyRhythm=ChaoDailyRhythmScorer.Capture(entry.Value,RhythmFor(entry.Key,worldRhythm)),
@@ -132,6 +157,6 @@ internal sealed class ChaoEditorBridge
         try{File.WriteAllText(path+".tmp",snapshotJson);File.Move(path+".tmp",path,true);}
         catch(IOException) { }
         catch(UnauthorizedAccessException) { }
-        return updated;
+        }
     }
 }
