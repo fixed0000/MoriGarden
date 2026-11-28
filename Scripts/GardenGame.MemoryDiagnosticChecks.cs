@@ -21,7 +21,8 @@ public partial class GardenGame
             string input=OS.GetEnvironment("MORI_MEMORY_INPUT");if(!File.Exists(input))throw new Exception("An isolated audited input copy is required.");
             pet=SaveStore.Load(input,out _);var all=new[]{pet}.Concat(pet.GardenEggs.Where(e=>e.Chao!=null).Select(e=>e.Chao!)).ToArray();
             string innate=JsonSerializer.Serialize(all.Select(s=>s.Personality));
-            foreach(var state in all){state.Run=180;state.Fullness=80;state.Energy=90;state.Fun=100;state.Joy=70;}
+            // This route fixture must not inherit an unrelated active courtship from its safe input copy.
+            foreach(var state in all){state.CourtshipReadiness=0;state.BloomRemaining=0;state.Run=180;state.Fullness=80;state.Energy=90;state.Fun=100;state.Joy=70;}
             string peerId=pet.GardenEggs.First(e=>e.Chao!=null && e.Hatched).Id;
             pet.Expedition.LastTeamIds=new(){"main",peerId};travel.ExpeditionArea=WorldCatalog.Meadow;
             SwitchZone(GardenZone.Expedition,restoring:true);await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
@@ -44,7 +45,7 @@ public partial class GardenGame
             const string routeId="garden/leisure/route-1";
             double beforeRoute=pet.History.Events.Where(e=>e.Source==routeId).Select(e=>e.LastAt).DefaultIfEmpty(-1).Max();pet.History.Advance(121);
             for(int f=0;f<18000 && !pet.History.Events.Any(e=>e.Source==routeId && e.LastAt>beforeRoute);f++)
-            {pet.Tick(1f/60,false);MoveFriend(1f/60);if(f%120==0)await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);if(!moriLeisure.Active && moriLeisure.LastFailureReason.Length>0)throw new Exception(moriLeisure.LastFailureReason);}
+            {pet.Tick(1f/60,false);MoveFriend(1f/60);if(f%120==0)await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);if(!moriLeisure.Active && moriLeisure.LastFailureReason.Length>0)throw new Exception($"{moriLeisure.LastFailureReason}; position={friend.Position}, speed={chaoMotion.GroundSpeed}, level={pet.Stat("Run").Level}, social={GardenSocialUses(friend)}, coordinator={MainActivity.Coordinator.CurrentExecutor}");}
             Check(pet.History.Events.Any(e=>e.Source==routeId && e.Place==LeisureDestinationCatalog.Find(routeId)!.End),"real Leisure route and final pause record source/area/position");
             var resident=world.GetChildren().OfType<GardenEgg>().Single(e=>e.Data.Id==peerId);var peer=resident.Chao!;
             friend.Position=new(20,0,14);resident.Position=new(21.2f,0,14);

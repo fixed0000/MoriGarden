@@ -90,6 +90,7 @@ class ChaoEditor(MemoryEditorMixin, LearnedEditorMixin, PersonalityEditorMixin):
         self.statistics_rows = {chao["id"]: chao.get("statistics", {}) for chao in snapshot.get("chao", [])}
         self.roster = roster
         self.relationship_rows = {chao["id"]: chao.get("relationships", []) for chao in snapshot.get("chao", [])}
+        self.casual_rows = {chao["id"]: chao.get("casualSocial") for chao in snapshot.get("chao", [])}
         draft = self.active_personality_draft()
         if self.selected not in roster and not self.editor_dirty():
             self.selected = next(iter(roster), None)
@@ -111,6 +112,7 @@ class ChaoEditor(MemoryEditorMixin, LearnedEditorMixin, PersonalityEditorMixin):
             self.refresh_expression()
             self.refresh_idle_gestures()
             self.refresh_voice()
+            self.refresh_casual_social()
             if self.snapshot is None or previous != self.selected or snapshot["session"] != self.snapshot["session"]:
                 draft = self.active_personality_draft()
                 if not self.editor_dirty():
@@ -273,6 +275,13 @@ class ChaoEditor(MemoryEditorMixin, LearnedEditorMixin, PersonalityEditorMixin):
         ttk.Label(gestures, textvariable=self.gesture_text, wraplength=660, justify="left").pack(anchor="w", pady=8)
         self.refresh_idle_gestures()
         self.refresh_voice()
+        casual = ttk.Frame(sections, padding=6)
+        sections.add(casual, text="Casual social encounters")
+        self.casual_text = tk.StringVar()
+        self.casual_label = ttk.Label(casual, textvariable=self.casual_text, wraplength=440, justify="left")
+        self.casual_label.pack(anchor="w", fill="x")
+        casual.bind("<Configure>", lambda e: self.casual_label.configure(wraplength=max(240,e.width-12)))
+        self.refresh_casual_social()
         section_choice.configure(values=[sections.tab(t, "text") for t in sections.tabs()])
         section_choice.current(0)
         section_choice.bind("<<ComboboxSelected>>", lambda _e: sections.select(section_choice.current()))
@@ -299,6 +308,19 @@ class ChaoEditor(MemoryEditorMixin, LearnedEditorMixin, PersonalityEditorMixin):
         for entry in data.get("entries", []):
             last = entry.get("lastCreditSeconds")
             table.insert("", "end", values=(entry["group"], entry["id"], f"{entry['effectiveBias']:+.3f}", entry["experienceCount"], "—" if last is None else f"{last:.1f}", "Yes" if entry["fixedFavorite"] else ""))
+
+    def refresh_casual_social(self):
+        if not hasattr(self, "casual_text"):
+            return
+        data = getattr(self, "casual_rows", {}).get(self.selected)
+        if not data:
+            self.casual_text.set("Casual social encounters — read-only\nUnavailable: no current garden executor snapshot.")
+            return
+        labels = {"Active": "Active", "InitiatorId": "Initiator ID", "PartnerId": "Partner ID", "Phase": "Phase", "Elapsed": "Elapsed (s)",
+                  "Distance": "Distance", "CurrentAvailability": "Availability / last check", "LastCompletedPair": "Last completed pair (executor)",
+                  "PairCooldownRemaining": "Pair cooldown (s)", "ActorCooldownRemaining": "Actor cooldown (s)", "LastCancellationReason": "Last cancellation reason",
+                  "SuccessfulEncounters": "Successful encounters (executor)", "CancelledEncounters": "Cancelled encounters (executor)"}
+        self.casual_text.set("Casual social encounters — read-only\n"+"\n".join(f"{label}: {data.get(key, 'Unavailable')}" for key,label in labels.items()))
 
     def refresh_voice(self):
         if not hasattr(self, "voice_text"):

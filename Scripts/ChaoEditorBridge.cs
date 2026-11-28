@@ -34,7 +34,7 @@ internal sealed class ChaoEditorBridge
         if(!rhythmOffsets.TryGetValue(id,out double offset))rhythmOffsets[id]=offset=GardenRhythmContext.OffsetFor(id);
         return world with{StableChaoId=id,PersonalPhaseOffset=offset};
     }
-    public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit,GardenRhythmContext? worldRhythm=null,IReadOnlyDictionary<string,ChaoExpressionDiagnostic>? expressions=null)
+    public PetState? Poll(Dictionary<string,PetState> roster,bool canEdit,GardenRhythmContext? worldRhythm=null,IReadOnlyDictionary<string,ChaoExpressionDiagnostic>? expressions=null,IReadOnlyDictionary<string,CasualSocialDiagnostic>? casual=null)
     {
         foreach(var pet in roster.Values){pet.EnsureStatistics();pet.EnsurePersonality();}
         Directory.CreateDirectory(directory);
@@ -139,6 +139,7 @@ internal sealed class ChaoEditorBridge
             learnedRevision=ChaoLearnedEditor.Revision(entry.Value),
             learnedEditor=ChaoLearnedEditor.Capture(entry.Value),
             memoryDiagnostics=ChaoMemoryDiagnostics.Capture(entry.Value,entry.Key,roster),
+            casualSocial=casual?.GetValueOrDefault(entry.Key),
             learnedPreferences=entry.Value.LearnedPreferenceDiagnostics(),
             activityHabits=entry.Value.ActivityHabitDiagnostics(),
             dailyRhythm=ChaoDailyRhythmScorer.Capture(entry.Value,RhythmFor(entry.Key,worldRhythm)),

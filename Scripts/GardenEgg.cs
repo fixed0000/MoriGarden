@@ -425,6 +425,7 @@ public partial class GardenEgg : CharacterBody3D
 
     public void RefreshArt()
     {
+        if(GetTree().CurrentScene is GardenGame game)game.CancelCasualSocial(this,"Visual model replaced");
         RemoveChild(visual);
         visual.QueueFree();
         if (nameLabel!=null)

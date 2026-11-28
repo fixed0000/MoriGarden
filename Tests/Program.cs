@@ -24,6 +24,7 @@ PersonalityModelChecks.Run(Check);
 PersonalityEditorChecks.Run(Check);
 LearnedEditorChecks.Run(Check);
 ChaoMemoryDiagnosticChecks.Run(Check);
+ChaoCasualSocialChecks.Run(Check);
 StatDevelopmentChecks.Run(Check);
 SaveRecoveryChecks.Run(Check);
 var pet = new PetState { Fullness = 90, Energy = 90 };

@@ -203,6 +203,10 @@ public partial class GardenGame
                 throw new Exception("Preferred protected partner was stolen");introductions.Cancel();
             foreach(var l in pet.SocialLinks)l.Introduced=true;ClearLeases();
             foreach(var t in world.GetChildren().OfType<ToyCar>())t.Free();
+            if(SocialActivityTargets(friend)==0)throw new Exception("Familiar nearby pair did not offer the new casual greeting");
+            // With 1.8A an introduced nearby pair is repeatable even without toys.
+            // Keep the original no-eligible-action assertion using genuinely satisfied social needs.
+            foreach(var c in actors)c.Pet.SocialNeed=0;
             if(SocialActivityTargets(friend)!=0)throw new Exception("No-repeatable-activity fixture invented social availability");
             MainActivity.Select(true);if(MainActivity.Coordinator.SelectedActivity==ChaoActivity.Socialize)throw new Exception("No eligible social activity did not fall back");
             GD.Print("PARTNER_SAFETY_OK: reserved actor protected, no repeatable social activity remains unavailable");
